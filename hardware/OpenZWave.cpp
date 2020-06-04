@@ -905,13 +905,13 @@ bool COpenZWave::OpenSerialConnector()
 	OpenZWave::Options::Get()->AddOptionBool("AutoUpdateConfigFile", false);
 
 	//Set network key for security devices
-	std::string sValue = "0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10";
+	std::string sValue = "0x11, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10";
 	m_sql.GetPreferencesVar("ZWaveNetworkKey", sValue);
 	std::vector<std::string> splitresults;
 	StringSplit(sValue, ",", splitresults);
 	if (splitresults.size() != 16)
 	{
-		sValue = "0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10";
+		sValue = "0x11, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10";
 		m_sql.UpdatePreferencesVar("ZWaveNetworkKey", sValue);
 	}
 	OpenZWave::Options::Get()->AddOptionString("NetworkKey", sValue, false);
@@ -2278,7 +2278,10 @@ void COpenZWave::AddValue(NodeInfo* pNode, const OpenZWave::ValueID& vID)
 					return;
 			}
 			if ((lValue == 0) || (lValue == 2)) // CentralSceneMask_KeyReleased
-				return;
+            {
+                printf("\n[PK] %s(%d) lValue: %d\n", __FUNCTION__, __LINE__, lValue);
+				//return;
+            }
 			//if (lValue != 1)
 				//return; //only accept CentralSceneMask_KeyPressed1time
 
@@ -3442,8 +3445,9 @@ void COpenZWave::UpdateValue(NodeInfo* pNode, const OpenZWave::ValueID& vID)
 				int32 listValue = 0;
 				if (m_pManager->GetValueListSelection(vID, &listValue))
 				{
-					if ((lValue == 0) || (lValue == 2)) // CentralSceneMask_KeyReleased
-						return;
+                    printf("\n[PK] %s(%d) lValue: %d\n", __FUNCTION__, __LINE__, lValue);
+					// if ((lValue == 0) || (lValue == 2)) // CentralSceneMask_KeyReleased
+						// return;
 					pDevice->intvalue = lValue;
 				}
 			}

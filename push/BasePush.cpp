@@ -605,11 +605,11 @@ std::string CBasePush::ProcessSendValue(const std::string &rawsendValue, const i
 		{
 			strcpy(szData, rawsendValue.c_str());
 		}
-		else if (vType == "Status")
+		else if (vType == "Status" || vType == "Alert")
 		{
 			sprintf(szData, "%d", nValue);
 		}
-		else if ((vType == "Current 1") || (vType == "Current 2") || (vType == "Current 3"))
+		else if ((vType == "Current 1") || (vType == "Current 2") || (vType == "Current 3") || (vType == "Current"))
 		{
 			sprintf(szData, "%g", std::stof(rawsendValue));
 		}
@@ -792,11 +792,11 @@ std::string CBasePush::getUnit(const int delpos, const int metertypein)
 	{
 		strcpy(szData, "dB");
 	}
-	else if (vType == "Status")
+	else if (vType == "Status" || vType == "Alert")
 	{
 		strcpy(szData, "");
 	}
-	else if ((vType == "Current 1") || (vType == "Current 2") || (vType == "Current 3"))
+	else if ((vType == "Current 1") || (vType == "Current 2") || (vType == "Current 3") || (vType == "Current"))
 	{
 		strcpy(szData, "");
 	}

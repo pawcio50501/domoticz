@@ -3,7 +3,7 @@
 <!-- Please See https://github.com/OpenZWave/open-zwave/wiki/Config-Options for details about this file -->
 <Options xmlns='https://github.com/OpenZWave/open-zwave'>
   <!-- Should Logging be enabled. -->
-  <Option name="logging" value="true" />
+  <Option name="logging" value="false" />
   
   <!-- Should we Output Log Messages on the Console. Set to True for Foreground Processes -->
   <!-- <Option name="ConsoleOutput" value="false" /> -->
