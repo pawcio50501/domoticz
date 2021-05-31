@@ -247,6 +247,31 @@ enum {
 	TEMPERATURE_CONTROL_DIMENSION_END_DATE_HOLIDAY_SCENARIO = 30
 };
 
+// temperature WHAT Mode
+enum
+{
+	TEMPERATURE_WHAT_MODE_CONDITIONING = 0,
+	TEMPERATURE_WHAT_MODE_HEATING = 1,
+	TEMPERATURE_WHAT_MODE_ANTIFREEZE = 102,
+	TEMPERATURE_WHAT_MODE_THERMAL_PROTECTION = 202,
+	TEMPERATURE_WHAT_MODE_GENERIC_OFF = 303
+};
+
+// temperature SELECTOR status
+enum
+{
+	TEMPERATURE_SELECTOR_0_NORMAL = 0,
+	TEMPERATURE_SELECTOR_01 = 1,
+	TEMPERATURE_SELECTOR_02 = 2,
+	TEMPERATURE_SELECTOR_03 = 3,
+	TEMPERATURE_SELECTOR_11 = 11,
+	TEMPERATURE_SELECTOR_12 = 12,
+	TEMPERATURE_SELECTOR_13 = 13,
+	TEMPERATURE_SELECTOR_4 = 4,
+	TEMPERATURE_SELECTOR_5 = 5
+};
+
+
 // Load Control dimension
 enum{
 	LOAD_CONTROL_WHAT_ALL_DIMENSIONS = 0,
@@ -371,7 +396,7 @@ private:
   std::string DeleteControlCharacters(const std::string& in_frame);
   std::string FirstToken(const std::string& text, const std::string& delimiter);
   static std::string vectorToString(const std::vector<std::string>& strings);
-  void tokenize(const std::string& strToTokenize, const char token, std::string& out_firstToken, std::vector<std::string>& out_otherTokens);
+  void tokenize(const std::string &strToTokenize, char token, std::string &out_firstToken, std::vector<std::string> &out_otherTokens);
 
   //fields description
   static std::string getDimensionsDescription(const std::string& who, const std::string& dimension, const std::vector<std::string>& values);
@@ -409,7 +434,6 @@ public:
   // constructors
   bt_openwebnet();
   explicit bt_openwebnet(const std::string& message);
-  bt_openwebnet(int who, int what, int where, int group);
   bt_openwebnet(const std::string& who, const std::string& what, const std::string& where, const std::string& when);
 
   void CreateNullMsgOpen();
@@ -476,6 +500,5 @@ public:
   std::string Extract_frame() const;
 
   // destructor
-  ~bt_openwebnet();
-
+  ~bt_openwebnet() = default;
 };

@@ -23,7 +23,7 @@ SET(DOMO_MIN_LIBBOOST_VERSION 1.66.0)
 option(USE_BUILTIN_JSONCPP "Use builtin JSonCPP" YES)
 option(USE_BUILTIN_MINIZIP "Use builtin Minizip" YES)
 option(USE_BUILTIN_MQTT "Use builtin Mosquitto library" YES)
-option(USE_BUILTIN_SQLITE "Use builtin sqlite library" YES)
+option(USE_BUILTIN_SQLITE "Use builtin sqlite library" NO)
 
 # Optional dependencies
 option(USE_PYTHON "Use Python for Plugins and Event-Scripts" YES)
@@ -45,11 +45,9 @@ option(GIT_SUBMODULE "Check submodules during build" ON)
 ### COMPILER SETTINGS
 #
 #
-IF(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(CMAKE_CXX_STANDARD 11)
-  set(CMAKE_CXX_STANDARD_REQUIRED ON)
-  set(CXX_EXTENSIONS NO)
-ENDIF()
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-switch -Wno-parentheses-equality -Wno-deprecated-declarations -Wno-tautological-compare -Wno-unused-value -Wno-comment -Wno-unsequenced -Wno-logical-op-parentheses -Wno-literal-conversion")
@@ -62,7 +60,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ENDIF()
 IF(CMAKE_COMPILER_IS_GNUCXX)
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wno-psabi -rdynamic")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi -rdynamic")
   #SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-switch")
   #ADD_DEFINITIONS( -Wall -O0 -ggdb )
   #ADD_DEFINITIONS( -Wfatal-errors -Wformat=2 -Werror=format-security )
@@ -182,6 +180,7 @@ hardware/1Wire/1WireByKernel.cpp
 hardware/1Wire/1WireCommon.cpp
 hardware/1Wire/1WireForWindows.cpp
 hardware/AccuWeather.cpp
+hardware/AirconWithMe.cpp
 hardware/AnnaThermostat.cpp
 hardware/Arilux.cpp
 hardware/ASyncSerial.cpp
@@ -219,6 +218,8 @@ hardware/EnOceanESP3.cpp
 hardware/EnphaseAPI.cpp
 hardware/Ec3kMeterTCP.cpp
 hardware/eVehicles/TeslaApi.cpp
+hardware/eVehicles/MercApi.cpp
+hardware/eVehicles/TestcarApi.cpp
 hardware/eVehicles/eVehicle.cpp
 hardware/EvohomeBase.cpp
 hardware/EvohomeRadio.cpp
@@ -309,6 +310,7 @@ hardware/TE923.cpp
 hardware/TE923Tool.cpp
 hardware/TeleinfoBase.cpp
 hardware/TeleinfoSerial.cpp
+hardware/TeleinfoTCP.cpp
 hardware/Tellstick.cpp
 hardware/TellstickFactory.cpp
 hardware/Thermosmart.cpp
@@ -321,6 +323,7 @@ hardware/Winddelen.cpp
 hardware/WOL.cpp
 hardware/Wunderground.cpp
 hardware/XiaomiGateway.cpp
+hardware/XiaomiDeviceSupport.cpp
 hardware/Yeelight.cpp
 hardware/YouLess.cpp
 hardware/ZiBlueBase.cpp
@@ -496,12 +499,15 @@ ENDIF(${BIGENDIAN})
 
 # jsoncpp
 IF(USE_BUILTIN_JSONCPP)
-  set(JSONCPP_LIB_BUILD_SHARED OFF CACHE BOOL "Enable jsoncpp shared library" FORCE)
+  MESSAGE(STATUS "Using builtin jsoncpp library")
+#  set(JSONCPP_LIB_BUILD_SHARED OFF CACHE BOOL "Enable jsoncpp shared library" FORCE)
+  set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build jsoncpp_lib as a shared library." FORCE)
+  set(BUILD_STATIC_LIBS ON CACHE BOOL "Build jsoncpp_lib as a static library." FORCE)
   set(JSONCPP_WITH_TESTS OFF CACHE BOOL "Enable jsoncpp tests" FORCE)
   set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL "Enable jsoncpp post build unit tests" FORCE)
   set(JSONCPP_WITH_PKGCONFIG_SUPPORT OFF CACHE BOOL "Enable jsoncpp pkgconfig support" FORCE)
   add_subdirectory (extern/jsoncpp EXCLUDE_FROM_ALL)
-  target_link_libraries(domoticz jsoncpp_lib)
+  target_link_libraries(domoticz jsoncpp_static)
   INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/extern/jsoncpp/include)
 ELSE(USE_BUILTIN_JSONCPP)
   find_package(PkgConfig)
@@ -520,8 +526,10 @@ ENDIF(USE_BUILTIN_JSONCPP)
 IF(USE_BUILTIN_MQTT)
   MESSAGE(STATUS "Using builtin Mosquitto library")
   option(WITH_STATIC_LIBRARIES "Build static versions of the libmosquitto/pp libraries?" ON)
+  option(DOCUMENTATION "Build documentation?" OFF)
   add_subdirectory (extern/mosquitto EXCLUDE_FROM_ALL)
   target_link_libraries(domoticz libmosquitto_static)
+  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/extern/mosquitto/include)
   INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/extern/mosquitto/lib)
 ELSE(USE_BUILTIN_MQTT)
   find_library(MQTT_LIBRARIES NAMES libmosquitto.so)
@@ -686,6 +694,8 @@ ENDIF(WITH_LIBUSB)
 #
 IF(USE_STATIC_OPENZWAVE)
   find_library(OpenZWave NAMES libopenzwave.a HINTS "../open-zwave-read-only" "../open-zwave-read-only/cpp/build")
+  get_filename_component(OpenZWave_dir ${OpenZWave} DIRECTORY)
+  find_path(OPENZWAVE_INCLUDE_DIRS NAMES OZWException.h HINTS "${OpenZWave_dir}/cpp/src")
   set(OPENZWAVE_LIB ${OpenZWave})
 ELSE()
   pkg_check_modules(OPENZWAVE libopenzwave)
@@ -699,16 +709,12 @@ IF(OpenZWave)
   message(STATUS "OpenZWave library found at: ${OpenZWave}")
   target_link_libraries(domoticz ${OpenZWave})
 
-  find_path(OPENZWAVE_INCLUDE_DIRS NAMES openzwave/Manager.h)
+  find_path(OPENZWAVE_INCLUDE_DIRS NAMES OZWException.h)
   IF (OPENZWAVE_INCLUDE_DIRS)
-    IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
-      include_directories(${OPENZWAVE_INCLUDE_DIRS})
-    ELSE()
-      include_directories(${OPENZWAVE_INCLUDE_DIRS}/openzwave)
-    ENDIF()
+    include_directories(${OPENZWAVE_INCLUDE_DIRS})
     message(STATUS "OpenZWave includes found at: ${OPENZWAVE_INCLUDE_DIRS}")
   ELSE()
-    message(FATAL_ERROR "OpenZWave includes not found. Did you not issue 'sudo make install' after building OpenZWave?")
+    message(FATAL_ERROR "OpenZWave includes not found.")
   ENDIF (OPENZWAVE_INCLUDE_DIRS)
   add_definitions(-DWITH_OPENZWAVE)
 ELSE()

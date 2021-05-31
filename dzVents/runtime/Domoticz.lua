@@ -29,8 +29,8 @@ local function Domoticz(settings)
 
 	-- check if the user set a lat/lng
 	-- if not, then daytime, nighttime is incorrect
-	if (_G.timeofday['SunriseInMinutes'] == 0 and _G.timeofday['SunsetInMinutes'] == 0) then
-		utils.log('No information about sunrise and sunset available. Please set lat/lng information in settings.', utils.LOG_ERROR)
+	if not(globalvariables.locationSet) then
+		utils.log('No information about longitude / latitude available. Please set lat/lng information in settings.', utils.LOG_ERROR)
 	end
 
 	nowTime['isDayTime'] = timeofday['Daytime']
@@ -39,6 +39,7 @@ local function Domoticz(settings)
 	nowTime['isNightTime'] = timeofday['Nighttime']
 	nowTime['sunriseInMinutes'] = timeofday['SunriseInMinutes']
 	nowTime['sunsetInMinutes'] = timeofday['SunsetInMinutes']
+	nowTime['solarnoonInMinutes'] = timeofday['SunAtSouthInMinutes']
 	nowTime['civTwilightStartInMinutes'] = timeofday['CivTwilightStartInMinutes']
 	nowTime['civTwilightEndInMinutes'] = timeofday['CivTwilightEndInMinutes']
 
@@ -71,16 +72,19 @@ local function Domoticz(settings)
 	merge(self, constants)
 	merge(self.utils, utils)
 
-	-- add domoticz commands to the commandArray
-	function self.sendCommand(command, value)
-		table.insert(self.commandArray, { [command] = value })
-
+	-- add domoticz commands to the commandArray or delay
+	function self.sendCommand(command, value, delay)
+		if delay and tonumber(delay) then
+			self.emitEvent('___' .. command .. '__' , value ).afterSec(delay)
+		else
+			table.insert(self.commandArray, { [command] = value })
+		end
 		-- return a reference to the newly added item
-		return self.commandArray[#self.commandArray], command, value
+		return self.commandArray[#self.commandArray], command, value, delay
 	end
 
 	-- have domoticz send a push notification
-	function self.notify(subject, message, priority, sound, extra, subSystems)
+	function self.notify(subject, message, priority, sound, extra, subSystems, delay)
 		-- set defaults
 		if (priority == nil) then priority = self.PRIORITY_NORMAL end
 		if (message == nil) then message = '' end
@@ -118,19 +122,33 @@ local function Domoticz(settings)
 				.. '#' .. strip(sound)
 				.. '#' .. strip(extra)
 				.. '#' .. strip(_subSystem)
-				self.sendCommand('SendNotification', data)
+				self.sendCommand('SendNotification', data, delay)
 
 	end
 
 	-- have domoticz send an email
-	function self.email(subject, message, mailTo)
+	function self.email(subject, message, mailTo, delay)
 		if (mailTo == nil) then
 			utils.log('No mail-to is provided', utils.LOG_ERROR)
 		else
 			if (subject == nil) then subject = '' end
 			if (message == nil) then message = '' end
-			self.sendCommand('SendEmail', subject .. '#' .. message .. '#' .. mailTo)
+			self.sendCommand('SendEmail', subject .. '#' .. message .. '#' .. mailTo, delay)
 		end
+	end
+
+	function self.triggershellCommandResponse(shellCommandResponse, delay, message)
+		local shellCommandResponse = shellCommandResponse or _G.moduleLabel
+		local delay = delay or 0
+		local message = 'triggerShellCommandResponse: ' .. (message or shellCommandResponse)
+		local command = 'echo '..message
+		self.executeShellCommand
+		(
+			{
+				command = command,
+				callback = shellCommandResponse,
+			}
+		).afterSec(delay)
 	end
 
 	function self.triggerHTTPResponse(httpResponse, delay, message)
@@ -138,27 +156,41 @@ local function Domoticz(settings)
 		local delay = delay or 0
 		local message = 'triggerHTTPResponse: ' .. (message or httpResponse)
 		local url = self.settings['Domoticz url'] .. '/json.htm?type=command&param=addlogmessage&message=' .. self.utils.urlEncode(message)
-				self.openURL
-				(
-					{
-						url = url,
-						callback = httpResponse,
-					}
-				).afterSec(delay)
+		self.openURL
+		(
+			{
+				url = url,
+				callback = httpResponse,
+			}
+		).afterSec(delay)
 	end
 
 	-- have domoticz send snapshot
-	function self.snapshot(cameraID, subject)
-		if tostring(cameraID):match("%a") then
-			cameraID = self.cameras(cameraID).id
+	function self.snapshot(cameraIDS, subject)
+		local subject = subject or 'domoticz'
+		local cameraIDS = cameraIDS or 1
+
+		local cameraIDS = ( type(cameraIDS) == 'table' and cameraIDS ) or utils.stringSplit(cameraIDS,'%p')
+
+		for index, camera in ipairs(cameraIDS) do
+			if tostring(camera):match('%a') then
+				cameraIDS[index] = self.cameras(camera).id
+			end
 		end
-		local snapshotCommand = "SendCamera:" .. cameraID
-		return TimedCommand(self, snapshotCommand , subject, 'camera') -- works with afterXXX
+
+		if not( cameraIDS[2] ) then
+			local snapshotCommand = "SendCamera:" .. cameraIDS[1]
+			return TimedCommand(self, snapshotCommand , subject, 'camera')
+		else
+			cameraIDS = table.concat(cameraIDS, ';')
+			subject = self.utils.urlEncode(subject)
+			return TimedCommand(self, 'OpenURL', self.settings['Domoticz url'] .. "/json.htm?type=command&param=emailcamerasnapshot&camidx=" .. cameraIDS .. '&subject=' .. subject , 'camera')
+		end
 	end
 
 	-- have domoticz send an sms
-	function self.sms(message)
-		self.sendCommand('SendSMS', message)
+	function self.sms(message, delay)
+		self.sendCommand('SendSMS', message, delay)
 	end
 
 	function self.emitEvent(eventname, data)
@@ -176,6 +208,39 @@ local function Domoticz(settings)
 		return TimedCommand(self, 'CustomEvent', eventinfo, 'emitEvent')
 	end
 
+	-- have domoticz execute a script
+	function self.executeShellCommand(options)
+		if (type(options)== 'string') then
+			options = {
+				command = options,
+			}
+		end
+		if (type(options)=='table') then
+			local command = options.command
+			local callback = options.callback
+			local sep = '/'
+			local dataFolderPath = _G.dataFolderPath or ""  -- or needed for testing
+			if dataFolderPath:find(string.char(92)) then sep = string.char(92) end -- Windows \
+			local path = dataFolderPath .. sep
+
+			local request = {
+				command = options.command,
+				callback = options.callback,
+				timeout = options.timeout,
+				path = path
+			}
+
+			utils.log('ExecuteShellCommand: command = ' .. utils.toStr(request.command), utils.LOG_DEBUG)
+			utils.log('ExecuteShellCommand: callback = ' .. utils.toStr(request.callback), utils.LOG_DEBUG)
+			utils.log('ExecuteShellCommand: timeout = ' .. utils.toStr(request.timeout), utils.LOG_DEBUG)
+			utils.log('ExecuteShellcommand: path = ' .. utils.toStr(request.path),utils.LOG_DEBUG)
+			return TimedCommand(self, 'ExecuteShellCommand', request, 'updatedevice')
+		else
+			utils.log('executeShellCommand: Invalid arguments, use either a string or a table with options', utils.LOG_ERROR)
+		end
+
+	end
+
 	-- have domoticz open a url
 	function self.openURL(options)
 
@@ -191,13 +256,13 @@ local function Domoticz(settings)
 			local url = options.url
 			local method = string.upper(options.method or 'GET')
 			local callback = options.callback
-			local postData
+			local postData, headers
 
 			-- process body data
-			if (method ~= 'GET') then
+			if method ~= 'GET' then
 				postData = ''
-				if (options.postData ~= nil) then
-					if (type(options.postData) == 'table') then
+				if options.postData then
+					if type(options.postData) == 'table' then
 						postData = utils.toJSON(options.postData)
 
 						if (options.headers == nil) then
@@ -209,19 +274,30 @@ local function Domoticz(settings)
 				end
 			end
 
+			-- process headers
+			if options.headers then
+				if type(options.headers) == 'string' then
+					option.headers = utils.fromJSON(options.headers)
+				end
+				headers = ''
+				for key, value in pairs(options.headers) do
+					headers = headers .. '!#' .. key .. ': ' .. tostring(value)
+				end
+			end
+
 			local request = {
 				URL = url,
 				method = method,
-				headers = options.headers,
+				headers = headers,
 				postdata = postData,
 				_trigger = callback,
 			}
 
-			utils.log('OpenURL: url = ' .. _.str(request.URL), utils.LOG_DEBUG)
-			utils.log('OpenURL: method = ' .. _.str(request.method), utils.LOG_DEBUG)
-			utils.log('OpenURL: post data = ' .. _.str(request.postdata), utils.LOG_DEBUG)
-			utils.log('OpenURL: headers = ' .. _.str(request.headers), utils.LOG_DEBUG)
-			utils.log('OpenURL: callback = ' .. _.str(request._trigger), utils.LOG_DEBUG)
+			utils.log('OpenURL: url = ' .. utils.toStr(request.URL), utils.LOG_DEBUG)
+			utils.log('OpenURL: method = ' .. utils.toStr(request.method), utils.LOG_DEBUG)
+			utils.log('OpenURL: post data = ' .. utils.toStr(request.postdata), utils.LOG_DEBUG)
+			utils.log('OpenURL: headers = ' .. utils.toStr(request.headers), utils.LOG_DEBUG)
+			utils.log('OpenURL: callback = ' .. utils.toStr(request._trigger), utils.LOG_DEBUG)
 
 			return TimedCommand(self, 'OpenURL', request, 'updatedevice')
 
@@ -314,16 +390,8 @@ local function Domoticz(settings)
 		self.utils.dumpTable(settings, '> ', file)
 	end
 
-	function self.logDevice(device, file)
-		self.utils.dumpTable(device, '> ', file)
-	end
-
-	function self.logCamera(camera, file)
-		self.utils.dumpTable(camera, '> ', file)
-	end
-
-	function self.logHardware(hardware, file)
-		self.utils.dumpTable(hardware, '> ', file)
+	function self.logObject(object, file, objectType )
+		self.utils.dumpTable(object, objectType .. '> ', file)
 	end
 
 	self.__cameras = {}
@@ -406,15 +474,15 @@ local function Domoticz(settings)
 		utils.log(noObjectMessage, utils.LOG_ERROR)
 	end
 
-	function self._setIterators(collection, initial, baseType, filterForChanged, initalCollection)
+	function self._setIterators(collection, initial, baseType, filterForChanged, initialCollection)
 
 		local _collection
 
 		if (initial) then
-			if (initalCollection == nil) then
+			if (initialCollection == nil) then
 				_collection = _G.domoticzData
 			else
-				_collection = initalCollection
+				_collection = initialCollection
 			end
 		else
 			_collection = collection

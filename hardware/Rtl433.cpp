@@ -33,21 +33,17 @@ CRtl433::CRtl433(const int ID, const std::string& cmdline) :
 			if (!ParseJsonLine(line))
 			{
 				// this is also logged when parsed data is invalid
-				_log.Log(LOG_STATUS, "Rtl433: Unhandled sensor reading, please report: (%s)", line.c_str());
+				Log(LOG_STATUS, "Unhandled sensor reading, please report: (%s)", line.c_str());
 			}
 		#endif
 	*/
-}
-
-CRtl433::~CRtl433()
-{
 }
 
 bool CRtl433::StartHardware()
 {
 	RequestStart();
 
-	m_thread = std::make_shared<std::thread>(&CRtl433::Do_Work, this);
+	m_thread = std::make_shared<std::thread>([this] { Do_Work(); });
 	SetThreadNameInt(m_thread->native_handle());
 	m_bIsStarted = true;
 	sOnConnected(this);
@@ -80,9 +76,15 @@ bool CRtl433::ParseJsonLine(const std::string& sLine)
 		size_t totFields = root.size();
 		for (size_t ii = 0; ii < totFields; ii++)
 		{
-			std::string vname = root.getMemberNames()[ii];
-			std::string vvalue = root[root.getMemberNames()[ii]].asString();
-			_Field[vname] = vvalue;
+			if (
+				(!root[root.getMemberNames()[ii]].isObject())
+				&& (!root[root.getMemberNames()[ii]].isArray())
+				)
+			{
+				std::string vname = root.getMemberNames()[ii];
+				std::string vvalue = root[root.getMemberNames()[ii]].asString();
+				_Field[vname] = vvalue;
+			}
 		}
 		return ParseData(_Field);
 	}
@@ -149,8 +151,9 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 	bool haveUV = false;
 	float uvi = 0;
 
-	bool haveSnr = false;  // rtl_433 uses automatic gain, better to use SNR instead of RSSI to report received RF Signal quality
-	int snr = 0;
+	int snr = 12;  // Set to show "-" if no snr is received. rtl_433 uses automatic gain, better to use SNR instead of RSSI to report received RF Signal quality
+
+	int code = 0;
 
 	if (FindField(data, "id"))
 	{
@@ -212,7 +215,7 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 	}
 	if (FindField(data, "pressure_kPa"))
 	{
-		pressure = 10.0f * (float)atof(data["pressure_kPa"].c_str()); // convert to hPA
+		pressure = 10.0F * (float)atof(data["pressure_kPa"].c_str()); // convert to hPA
 		havePressure = true;
 	}
 	if (FindField(data, "rain_mm"))
@@ -227,7 +230,7 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 	}
 	if (FindField(data, "wind_avg_km_h")) // wind speed average (converting into m/s note that internal storage if 10.0f*m/s) 
 	{
-		wind_speed = ((float)atof(data["wind_avg_km_h"].c_str())) / 3.6f;
+		wind_speed = ((float)atof(data["wind_avg_km_h"].c_str())) / 3.6F;
 		haveWind_Speed = true;
 	}
 	if (FindField(data, "wind_avg_m_s")) // wind speed average
@@ -242,7 +245,7 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 	}
 	if (FindField(data, "wind_max_km_h")) // idem, converting to m/s
 	{
-		wind_gust = ((float)atof(data["wind_max_km_h"].c_str())) / 3.6f;
+		wind_gust = ((float)atof(data["wind_max_km_h"].c_str())) / 3.6F;
 		haveWind_Gust = true;
 	}
 	if (FindField(data, "wind_max_m_s"))
@@ -282,11 +285,14 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 		   We use better resolution at low snr. snr=5-10dB map to rssi=1-6, snr=11-20dB map to rssi=6-11, snr>20dB map to rssi=11
 		*/
 		snr = std::stoi(data["snr"]) - 4;
-		haveSnr = true;
 
 		if (snr > 5) snr -= (int)(snr - 5) / 2;
 		if (snr > 11) snr = 11; // Domoticz RSSI field can only be 0-11, 12 is used for non-RF received devices
 		if (snr < 0) snr = 0; // In case snr actually was below 4 dB
+	}
+	if (FindField(data, "code"))
+	{
+		code = strtoul(data["code"].c_str(), nullptr, 16);
 	}
 
 	std::string model = data["model"]; // new model format normalized from the 201 different devices presently supported by rtl_433
@@ -305,8 +311,7 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 			(const uint8_t)unit,
 			batterylevel,
 			bOn,
-			0,
-			model);
+			0, model, m_Name, snr);
 		bDone = true;
 	}
 	if (FindField(data, "switch1") && FindField(data, "id"))
@@ -327,8 +332,7 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 					(const uint8_t)unit,
 					batterylevel,
 					bOn,
-					0,
-					model);
+					0, model, m_Name, snr);
 			}
 			bDone = true;
 		}
@@ -390,7 +394,16 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 	}
 	if (haveMoisture)
 	{
-		SendMoistureSensor(sensoridx, batterylevel, moisture, model, snr);
+		//moisture is in percentage
+		if (haveChannel)	// Channel is used to identify each sensor
+		{
+			SendCustomSensor((uint8_t)sensoridx, (uint8_t)channel, batterylevel, static_cast<float>(moisture), model, "%", snr);
+		}
+		else
+		{
+			SendCustomSensor((uint8_t)sensoridx, (uint8_t)unit, batterylevel, static_cast<float>(moisture), model, "%", snr);
+		}
+		//SendMoistureSensor(sensoridx, batterylevel, moisture, model, snr);
 		bHandled = true;
 	}
 	if (havePower)
@@ -405,9 +418,9 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 	}
 	if (haveEnergy && havePower)
 	{
-		//can remove this comment : _log.Log(LOG_STATUS, "Rtl433: : CM180 haveSequence(%d) sensoridx(%d) havePower(%d) haveEnergy(%d))", haveSequence, sensoridx, havePower, haveEnergy);
+		//can remove this comment : Log(LOG_STATUS, ": CM180 haveSequence(%d) sensoridx(%d) havePower(%d) haveEnergy(%d))", haveSequence, sensoridx, havePower, haveEnergy);
 		sensoridx = sensoridx + 1;
-		//can rmeove this comment : _log.Log(LOG_STATUS, "Rtl433: : CM180 sensoridx(%d) unit(%d) batterylevel(%d) power(%f) energy(%f) model(%s)", sensoridx, unit, batterylevel, power, energy, model.c_str());
+		//can rmeove this comment : Log(LOG_STATUS, ": CM180 sensoridx(%d) unit(%d) batterylevel(%d) power(%f) energy(%f) model(%s)", sensoridx, unit, batterylevel, power, energy, model.c_str());
 		SendKwhMeter(sensoridx, unit, batterylevel, power, energy, model, snr);
 		bHandled = true;
 	}
@@ -417,6 +430,102 @@ bool CRtl433::ParseData(std::map<std::string, std::string>& data)
 		bHandled = true;
 	}
 
+	if (!strcmp(model.c_str(), "X10-Security"))
+	{
+		// More X10 sensors can be added if their codes are known
+		uint8_t x10_device = 0;
+		uint8_t x10_status = 0;
+
+		bHandled = true;
+
+		switch (code & 0xfe) // The last bit is indicating low battery and is already handled
+		{
+		case 0x00:
+			x10_status = sStatusAlarmDelayed; // Door open, Delay switch set to MAX on DS18
+			x10_device = sTypeSecX10;
+			break;
+		case 0x04:
+			x10_status = sStatusAlarm;  // Door open, Delay switch set to MIN on DS18
+			x10_device = sTypeSecX10;
+			break;
+		case 0x40:
+			x10_status = sStatusAlarmDelayedTamper;
+			x10_device = sTypeSecX10;
+			break;
+		case 0x44:
+			x10_status = sStatusAlarmTamper;
+			x10_device = sTypeSecX10;
+			break;
+		case 0x80:
+			x10_status = sStatusNormalDelayed;
+			x10_device = sTypeSecX10;
+			break;
+		case 0x84:
+			x10_status = sStatusNormal;
+			x10_device = sTypeSecX10;
+			break;
+		case 0xc0:
+			x10_status = sStatusNormalDelayedTamper;
+			x10_device = sTypeSecX10;
+			break;
+		case 0xc4:
+			x10_status = sStatusNormalTamper;
+			x10_device = sTypeSecX10;
+			break;
+		case 0x8c:
+			x10_status = sStatusNoMotion;
+			x10_device = sTypeSecX10M;
+			break;
+		case 0xcc:
+			x10_status = sStatusNoMotionTamper;
+			x10_device = sTypeSecX10M;
+			break;
+		case 0x0c:
+			x10_status = sStatusMotion;
+			x10_device = sTypeSecX10M;
+			break;
+		case 0x4c:
+			x10_status = sStatusMotionTamper;
+			x10_device = sTypeSecX10M;
+			break;
+		case 0x26:
+		case 0x88:
+		case 0x98:
+			x10_status = sStatusPanic;
+			x10_device = sTypeSecX10R;
+			break;
+		case 0x42:
+			x10_status = sStatusLightOn;
+			x10_device = sTypeSecX10R;
+			break;
+		case 0x46:
+			x10_status = sStatusLight2On;
+			x10_device = sTypeSecX10R;
+			break;
+		case 0xc2:
+			x10_status = sStatusLightOff;
+			x10_device = sTypeSecX10R;
+			break;
+		case 0xc6:
+			x10_status = sStatusLight2Off;
+			x10_device = sTypeSecX10R;
+			break;
+		case 0x06:
+			x10_status = sStatusArmAway;
+			x10_device = sTypeSecX10R;
+			break;
+		case 0x82:
+		case 0x86:
+			x10_status = sStatusDisarm;
+			x10_device = sTypeSecX10R;
+			break;
+		default:
+			bHandled = false;
+			break;
+		}
+		if (bHandled)
+			SendSecurity1Sensor(strtoul(data["id"].c_str(), nullptr, 16), x10_device, batterylevel, x10_status, model, m_Name, snr);
+	} // End of X10-Security section
 
 	return bHandled; //not handled (Yet!)
 }
@@ -448,16 +557,16 @@ void CRtl433::Do_Work()
 {
 	sleep_milliseconds(1000);
 	if (!m_cmdline.empty())
-		_log.Log(LOG_STATUS, "Rtl433: Worker started... (Extra Arguments: %s)", m_cmdline.c_str());
+		Log(LOG_STATUS, "Worker started... (Extra Arguments: %s)", m_cmdline.c_str());
 	else
-		_log.Log(LOG_STATUS, "Rtl433: Worker started...");
+		Log(LOG_STATUS, "Worker started...");
 
 	std::string szLastLine;
 	FILE* _hPipe = nullptr;
 
 	while (!IsStopRequested(0))
 	{
-		std::string szFlags = "-F json -M newmodel -C si -M level" + m_cmdline; // newmodel used (-M newmodel) and international system used (-C si) -f 433.92e6 -f 868.24e6 -H 60 -d 0
+		std::string szFlags = "-F json -M newmodel -C si -M level " + m_cmdline; // newmodel used (-M newmodel) and international system used (-C si) -f 433.92e6 -f 868.24e6 -H 60 -d 0
 #ifdef WIN32
 		std::string szCommand = "C:\\rtl_433.exe " + szFlags;
 		_hPipe = _popen(szCommand.c_str(), "r");
@@ -471,9 +580,9 @@ void CRtl433::Do_Work()
 			{
 				// sleep 30 seconds before retrying
 #ifdef WIN32
-				_log.Log(LOG_STATUS, "Rtl433: rtl_433 startup failed. Make sure it's properly installed. (%s)  https://cognito.me.uk/computers/rtl_433-windows-binary-32-bit)", szCommand.c_str());
+				Log(LOG_STATUS, "rtl_433 startup failed. Make sure it's properly installed. (%s)  https://cognito.me.uk/computers/rtl_433-windows-binary-32-bit)", szCommand.c_str());
 #else
-				_log.Log(LOG_STATUS, "Rtl433: rtl_433 startup failed. Make sure it's properly installed (%s). https://github.com/merbanan/rtl_433", szCommand.c_str());
+				Log(LOG_STATUS, "rtl_433 startup failed. Make sure it's properly installed (%s). https://github.com/merbanan/rtl_433", szCommand.c_str());
 #endif
 				for (int i = 0; i < 30; i++)
 				{
@@ -511,7 +620,7 @@ void CRtl433::Do_Work()
 					if (!ParseJsonLine(sLine))
 					{
 						// this is also logged when parsed data is invalid
-						_log.Log(LOG_STATUS, "Rtl433: Unhandled sensor reading, please report: (%s)", sLine.c_str());
+						Log(LOG_STATUS, "Unhandled sensor reading, please report: (%s)", sLine.c_str());
 					}
 				}
 			}
@@ -543,7 +652,7 @@ void CRtl433::Do_Work()
 					if (!ParseJsonLine(sLine))
 					{
 						// this is also logged when parsed data is invalid
-						_log.Log(LOG_STATUS, "Rtl433: Unhandled sensor reading, please report: (%s)", sLine.c_str());
+						Log(LOG_STATUS, "Unhandled sensor reading, please report: (%s)", sLine.c_str());
 					}
 				}
 				line_offset = 0;
@@ -570,7 +679,7 @@ void CRtl433::Do_Work()
 				break;
 		}
 	} // while !IsStopRequested()
-	_log.Log(LOG_STATUS, "Rtl433: Worker stopped...");
+	Log(LOG_STATUS, "Worker stopped...");
 }
 
 bool CRtl433::WriteToHardware(const char* /*pdata*/, const unsigned char /*length*/)
