@@ -19,11 +19,6 @@ P1MeterTCP::P1MeterTCP(const int ID, const std::string &IPAddress, const unsigne
 	}
 }
 
-P1MeterTCP::~P1MeterTCP(void)
-{
-}
-
-
 bool P1MeterTCP::StartHardware()
 {
 	RequestStart();
@@ -31,7 +26,7 @@ bool P1MeterTCP::StartHardware()
 	m_bIsStarted = true;
 
 	//Start worker thread
-	m_thread = std::make_shared<std::thread>(&P1MeterTCP::Do_Work, this);
+	m_thread = std::make_shared<std::thread>([this] { Do_Work(); });
 	SetThreadNameInt(m_thread->native_handle());
 	return (m_thread != nullptr);
 }
@@ -53,19 +48,19 @@ bool P1MeterTCP::StopHardware()
 void P1MeterTCP::Do_Work()
 {
 	int sec_counter = 0;
-	_log.Log(LOG_STATUS, "P1MeterTCP: attempt connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "attempt connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	connect(m_szIPAddress, m_usIPPort);
 	while (!IsStopRequested(1000))
 	{
 		sec_counter++;
 
 		if (sec_counter % 12 == 0) {
-			m_LastHeartbeat = mytime(NULL);
+			m_LastHeartbeat = mytime(nullptr);
 		}
 	}
 	terminate();
 
-	_log.Log(LOG_STATUS, "P1MeterTCP: TCP/IP Worker stopped...");
+	Log(LOG_STATUS, "TCP/IP Worker stopped...");
 }
 
 
@@ -80,18 +75,18 @@ void P1MeterTCP::OnConnect()
 {
 	// reset all values and buffers - they may contain invalid data
 	Init();
-	_log.Log(LOG_STATUS, "P1MeterTCP: connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 
 	if (m_bDisableCRC)
 	{
-		_log.Log(LOG_STATUS, "P1 Smart Meter: CRC validation disabled through hardware control");
+		Log(LOG_STATUS, "P1 Smart Meter: CRC validation disabled through hardware control");
 	}
 }
 
 
 void P1MeterTCP::OnDisconnect()
 {
-	_log.Log(LOG_STATUS, "P1MeterTCP: disconnected");
+	Log(LOG_STATUS, "disconnected");
 }
 
 
@@ -111,18 +106,18 @@ void P1MeterTCP::OnError(const boost::system::error_code& error)
 		(error == boost::asio::error::timed_out)
 		)
 	{
-		_log.Log(LOG_ERROR, "P1MeterTCP: Can not connect to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+		Log(LOG_ERROR, "Can not connect to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	}
 	else if (
 		(error == boost::asio::error::eof) ||
 		(error == boost::asio::error::connection_reset)
 		)
 	{
-		_log.Log(LOG_STATUS, "P1MeterTCP: Connection reset!");
+		Log(LOG_STATUS, "Connection reset!");
 	}
 	else
 	{
-		_log.Log(LOG_ERROR, "P1MeterTCP: %s", error.message().c_str());
+		Log(LOG_ERROR, "%s", error.message().c_str());
 	}
 }
 

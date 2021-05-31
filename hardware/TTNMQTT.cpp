@@ -60,13 +60,16 @@ CTTNMQTT::CTTNMQTT(const int ID, const std::string &IPAddress, const unsigned sh
 	m_IsConnected = false;
 	m_bDoReconnect = false;
 
+	m_DomLat = 1;
+	m_DomLon = 1;
+
 	m_usIPPort = usIPPort;
 	m_TopicIn = Username + "/devices/+/up";
 
 #ifdef DEBUG_TTN_R
-	std::string sResult = ReadFile("ttn_mqtt.json");
+	std::string sResult = ReadFile("ttn_mqtt_stringfields.json");
 	mosquitto_message mqtt_msg;
-	mqtt_msg.topic = "domo_rob/devices/lopy4/up";
+	mqtt_msg.topic = "ttnmqtt/devices/tektelic_khs/up";
 	mqtt_msg.payload = (void*)sResult.c_str();
 	mqtt_msg.payloadlen = sResult.size();
 	on_message(&mqtt_msg);
@@ -75,7 +78,7 @@ CTTNMQTT::CTTNMQTT(const int ID, const std::string &IPAddress, const unsigned sh
 	mosqdz::lib_init();
 }
 
-CTTNMQTT::~CTTNMQTT(void)
+CTTNMQTT::~CTTNMQTT()
 {
 	mosqdz::lib_cleanup();
 }
@@ -86,13 +89,45 @@ bool CTTNMQTT::StartHardware()
 
 	StartHeartbeatThread();
 
+	int nValue;
+	std::string sValue;
+	std::string Latitude;
+	std::string Longitude;
+
+	// Let's get the 'home' Location of this Domoticz instance from the Preferences
+	if (m_sql.GetPreferencesVar("Location", nValue, sValue))
+	{
+		std::vector<std::string> strarray;
+		StringSplit(sValue, ";", strarray);
+
+		if (strarray.size() == 2)
+		{
+			Latitude = strarray[0];
+			Longitude = strarray[1];
+
+			if (!((Latitude == "1") && (Longitude == "1")))
+			{
+				m_DomLat = std::stod(Latitude);
+				m_DomLon = std::stod(Longitude);
+			}
+			else
+			{
+				Log(LOG_ERROR, "Invalid Location found in Settings! (Check your Latitude/Longitude!)");
+			}
+		}
+		else
+		{
+			Log(LOG_ERROR, "Invalid Location found in Settings! (Check your Latitude/Longitude!)");
+		}
+	}
+
 	//force connect the next first time
 	m_IsConnected = false;
 
 	m_bIsStarted = true;
 
 	//Start worker thread
-	m_thread = std::make_shared<std::thread>(&CTTNMQTT::Do_Work, this);
+	m_thread = std::make_shared<std::thread>([this] { Do_Work(); });
 	SetThreadNameInt(m_thread->native_handle());
 	return (m_thread != nullptr);
 }
@@ -118,7 +153,7 @@ bool CTTNMQTT::StopHardware()
 
 void CTTNMQTT::on_subscribe(int mid, int qos_count, const int *granted_qos)
 {
-	_log.Log(LOG_STATUS, "TTN_MQTT: Subscribed");
+	Log(LOG_STATUS, "Subscribed");
 	m_IsConnected = true;
 }
 
@@ -133,17 +168,17 @@ void CTTNMQTT::on_connect(int rc)
 
 	if (rc == 0) {
 		if (m_IsConnected) {
-			_log.Log(LOG_STATUS, "TTN_MQTT: re-connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+			Log(LOG_STATUS, "Re-connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 		}
 		else {
-			_log.Log(LOG_STATUS, "TTN_MQTT: connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+			Log(LOG_STATUS, "Connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 			m_IsConnected = true;
 			sOnConnected(this);
 		}
-		subscribe(NULL, m_TopicIn.c_str());
+		subscribe(nullptr, m_TopicIn.c_str());
 	}
 	else {
-		_log.Log(LOG_ERROR, "TTN_MQTT: Connection failed!, restarting (rc=%d)", rc);
+		Log(LOG_ERROR, "Connection failed!, restarting (rc=%d)", rc);
 		m_bDoReconnect = true;
 	}
 }
@@ -156,17 +191,16 @@ void CTTNMQTT::on_disconnect(int rc)
 		{
 			if (rc == 5)
 			{
-				_log.Log(LOG_ERROR, "TTN_MQTT: disconnected, Invalid Username/Password (rc=%d)", rc);
+				Log(LOG_ERROR, "Disconnected, Invalid Username/Password (rc=%d)", rc);
 			}
 			else
 			{
-				_log.Log(LOG_ERROR, "TTN_MQTT: disconnected, restarting (rc=%d)", rc);
+				Log(LOG_ERROR, "Disconnected, restarting (rc=%d)", rc);
 			}
 			m_bDoReconnect = true;
 		}
 	}
 }
-
 
 bool CTTNMQTT::ConnectInt()
 {
@@ -177,29 +211,28 @@ bool CTTNMQTT::ConnectInt()
 bool CTTNMQTT::ConnectIntEx()
 {
 	m_bDoReconnect = false;
-	_log.Log(LOG_STATUS, "TTN_MQTT: Connecting to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Connecting to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 
 	int rc;
 	int keepalive = 60;
 
 	if (!m_CAFilename.empty()) {
 		rc = tls_set(m_CAFilename.c_str());
+		rc = tls_insecure_set(true);
 
 		if (rc != MOSQ_ERR_SUCCESS)
 		{
-			_log.Log(LOG_ERROR, "TTN_MQTT: Failed enabling TLS mode, return code: %d (CA certificate: '%s')", rc, m_CAFilename.c_str());
+			Log(LOG_ERROR, "Failed enabling TLS mode, return code: %d (CA certificate: '%s')", rc, m_CAFilename.c_str());
 			return false;
 		}
-		else {
-			_log.Log(LOG_STATUS, "TTN_MQTT: enabled TLS mode");
-		}
+		Log(LOG_STATUS, "Enabled TLS mode");
 	}
-	rc = username_pw_set((!m_UserName.empty()) ? m_UserName.c_str() : NULL, (!m_Password.empty()) ? m_Password.c_str() : NULL);
+	rc = username_pw_set((!m_UserName.empty()) ? m_UserName.c_str() : nullptr, (!m_Password.empty()) ? m_Password.c_str() : nullptr);
 
 	rc = connect(m_szIPAddress.c_str(), m_usIPPort, keepalive);
 	if (rc != MOSQ_ERR_SUCCESS)
 	{
-		_log.Log(LOG_ERROR, "TTN_MQTT: Failed to start, return code: %d (Check IP/Port)", rc);
+		Log(LOG_ERROR, "Failed to start, return code: %d (Check IP/Port)", rc);
 		m_bDoReconnect = true;
 		return false;
 	}
@@ -239,7 +272,7 @@ void CTTNMQTT::Do_Work()
 			sec_counter++;
 
 			if (sec_counter % 12 == 0) {
-				m_LastHeartbeat = mytime(NULL);
+				m_LastHeartbeat = mytime(nullptr);
 			}
 
 			if (bFirstTime)
@@ -266,7 +299,7 @@ void CTTNMQTT::Do_Work()
 	if (isConnected())
 		disconnect();
 
-	_log.Log(LOG_STATUS, "TTN_MQTT: Worker stopped...");
+	Log(LOG_STATUS, "Worker stopped...");
 }
 
 void CTTNMQTT::SendHeartbeat()
@@ -279,14 +312,14 @@ void CTTNMQTT::SendMessage(const std::string &Topic, const std::string &Message)
 	try {
 		if (!m_IsConnected)
 		{
-			_log.Log(LOG_STATUS, "TTN_MQTT: Not Connected, failed to send message: %s", Message.c_str());
+			Log(LOG_STATUS, "Not Connected, failed to send message: %s", Message.c_str());
 			return;
 		}
-		publish(NULL, Topic.c_str(), Message.size(), Message.c_str());
+		publish(nullptr, Topic.c_str(), Message.size(), Message.c_str());
 	}
 	catch (...)
 	{
-		_log.Log(LOG_ERROR, "TTN_MQTT: Failed to send message: %s", Message.c_str());
+		Log(LOG_ERROR, "Failed to send message: %s", Message.c_str());
 	}
 }
 
@@ -299,29 +332,29 @@ void CTTNMQTT::WriteInt(const std::string &sendStr)
 	//SendMessage(m_TopicOut, sMessage);
 }
 
-Json::Value CTTNMQTT::GetSensorWithChannel(const Json::Value &root, const int sChannel)
+Json::Value CTTNMQTT::GetSensorWithChannel(const Json::Value &root, const uint8_t sChannel)
 {
 	Json::Value ret;
-	for (auto itt = root.begin(); itt != root.end(); ++itt)
+	for (const auto &r : root)
 	{
-		uint8_t channel = (uint8_t)(*itt)["channel"].asInt();
+		uint8_t channel = (uint8_t)r["channel"].asInt();
 
-		if ((channel == sChannel) && !(*itt)["used"])
-			return (*itt);
+		if ((channel == sChannel) && !r["used"])
+			return r;
 	}
 	return ret;
 }
 
-void CTTNMQTT::FlagSensorWithChannelUsed(Json::Value &root, const std::string &stype, const int sChannel)
+void CTTNMQTT::FlagSensorWithChannelUsed(Json::Value &root, const std::string &stype, const uint8_t sChannel)
 {
-	for (auto itt = root.begin(); itt != root.end(); ++itt)
+	for (auto &r : root)
 	{
-		uint8_t channel = (uint8_t)(*itt)["channel"].asInt();
-		std::string type = (*itt)["type"].asString();
+		uint8_t channel = (uint8_t)r["channel"].asInt();
+		std::string type = r["type"].asString();
 
 		if ((type == stype) && (channel == sChannel))
 		{
-			(*itt)["used"] = true;
+			r["used"] = true;
 			return;
 		}
 	}
@@ -329,7 +362,7 @@ void CTTNMQTT::FlagSensorWithChannelUsed(Json::Value &root, const std::string &s
 
 void CTTNMQTT::UpdateUserVariable(const std::string &varName, const std::string &varValue)
 {
-	std::string szLastUpdate = TimeToString(NULL, TF_DateTime);
+	std::string szLastUpdate = TimeToString(nullptr, TF_DateTime);
 
 	int ID;
 
@@ -357,7 +390,7 @@ int CTTNMQTT::GetAddDeviceAndSensor(const int m_HwdID, const std::string &Device
 {
 	int DeviceID = 0;
 	
-	//_log.Log(LOG_NORM, "TTN_MQTT: Looking for Device and Sensor (%i): .%s. , .%s.", m_HwdID, DeviceName.c_str(), MacAddress.c_str());
+	//Debug(DEBUG_NORM, "Looking for Device and Sensor (%d): .%s. , .%s.", m_HwdID, DeviceName.c_str(), MacAddress.c_str());
 
 	//Get our internal device_id, if not found, add it
 	std::vector<std::vector<std::string> > result;
@@ -369,7 +402,7 @@ int CTTNMQTT::GetAddDeviceAndSensor(const int m_HwdID, const std::string &Device
 		result = m_sql.safe_query("SELECT ID FROM WOLNodes WHERE (HardwareID==%d) AND (MacAddress=='%q')", m_HwdID, MacAddress.c_str());
 		if (result.empty())
 		{
-			_log.Log(LOG_ERROR, "TTN_MQTT: Problem adding new Device with MacAddress %s !!", MacAddress.c_str());
+			Log(LOG_ERROR, "Problem adding new Device with MacAddress %s !!", MacAddress.c_str());
 		}
 	}
 
@@ -380,6 +413,114 @@ int CTTNMQTT::GetAddDeviceAndSensor(const int m_HwdID, const std::string &Device
 	}
 
 	return DeviceID;
+}
+
+bool CTTNMQTT::ConvertField2Payload(const std::string &sType, const std::string &sValue, const uint8_t channel, const uint8_t index, Json::Value &payload)
+{
+	bool ret = false;
+
+	if (sType == "temp" || sType == "temperature") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "temp";
+		payload[index]["value"] = std::stof(sValue);
+		ret = true;
+	}
+	else if (sType == "hum" || sType == "humidity") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "humidity";
+		payload[index]["value"] = std::stof(sValue);
+		ret = true;
+	}
+	else if (sType == "baro") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "baro";
+		payload[index]["value"] = std::stof(sValue);
+		ret = true;
+	}
+	else if (sType == "gps") {
+		std::vector<std::string> strarray;
+		StringSplit(sValue, ";", strarray);
+
+		if (strarray.size() == 3)
+		{
+			payload[index]["channel"] = channel;
+			payload[index]["type"] = "gps";
+			payload[index]["lat"] = std::stod(strarray[0]);
+			payload[index]["lon"] = std::stod(strarray[1]);
+			payload[index]["alt"] = std::stof(strarray[2]);
+			ret = true;
+		}
+	}
+	else if (sType == "digital_input") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "digital_input";
+		payload[index]["value"] = std::stoi(sValue);
+		ret = true;
+	}
+	else if (sType == "digital_output") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "digital_output";
+		payload[index]["value"] = std::stoi(sValue);
+		ret = true;
+	}
+	else if (sType == "analog_input") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "analog_input";
+		payload[index]["value"] = std::stof(sValue);
+		ret = true;
+	}
+	else if (sType == "analog_output") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "analog_output";
+		payload[index]["value"] = std::stof(sValue);
+		ret = true;
+	}
+	else if (sType == "presense") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "presence";
+		payload[index]["value"] = std::stof(sValue);
+		ret = true;
+	}
+	else if (sType == "luminosity") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "luminosity";
+		payload[index]["value"] = std::stof(sValue);
+		ret = true;
+	}
+
+	// The following IS NOT conforming to the CayenneLPP specification
+	// but a 'hack'; When using the TTN External Custom Decoder a payload_fields array is added
+	// and within these fields a 'batterylevel' can be created (integer range between 0 and 100)
+	if (sType == "batterylevel") {
+		payload[index]["channel"] = channel;
+		payload[index]["type"] = "batterylevel";
+		payload[index]["value"] = std::stoi(sValue);
+		ret = true;
+	}
+
+	return ret;
+}
+
+bool CTTNMQTT::ConvertFields2Payload(const Json::Value &fields, Json::Value &payload)
+{
+	bool ret = false;
+	uint8_t index = 0;
+
+	if (!fields.empty())
+	{
+		Debug(DEBUG_NORM, "Processing fields payload for %d fields!", fields.size());
+		for (const auto &id : fields.getMemberNames())
+		{
+			if (!(fields[id].isNull()) && ConvertField2Payload(id, fields[id].asString(), index + 1, index, payload))
+			{
+				Debug(DEBUG_NORM, "Converted field %s !", id.c_str());
+				index++;
+				ret = true;
+			}
+		}
+	}
+
+	return ret;
 }
 
 int CTTNMQTT::CalcDomoticsRssiFromLora(const int gwrssi, const float gwsnr)
@@ -437,7 +578,10 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 	SaveString2Disk(qMessage, "ttn_mqtt.json");
 #endif
 
-	//_log.Log(LOG_NORM, "TTN_MQTT: Topic: %s", topic.c_str());
+#ifdef DEBUG_TTN_R
+	Log(LOG_NORM, "Topic: %s", topic.c_str());
+	Log(LOG_NORM, "qmsg: %s", qMessage.c_str());
+#endif
 
 	if (qMessage.empty())
 		return;
@@ -456,12 +600,12 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 		bool ret = ParseJSon(qMessage, root);
 		if ((!ret) || (!root.isObject()))
 		{
-			_log.Log(LOG_ERROR, "TTN_MQTT: Invalid data received from %s ! Unable to parse JSON!", MQTTDeviceName.c_str());
+			Log(LOG_ERROR, "Invalid data received from %s ! Unable to parse JSON!", MQTTDeviceName.c_str());
 			return;
 		}
 		if (root["payload_raw"].empty())
 		{
-			_log.Log(LOG_ERROR, "TTN_MQTT: Invalid data received from %s ! No payload_raw found in JSON data!", MQTTDeviceName.c_str());
+			Log(LOG_ERROR, "Invalid data received from %s ! No payload_raw found in JSON data!", MQTTDeviceName.c_str());
 			return;
 		}
 
@@ -469,7 +613,7 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 		std::string DeviceName = root["dev_id"].asString();
 		std::string AppId = root["app_id"].asString();
 		std::string DeviceSerial = root["hardware_serial"].asString();
-		int MessagePort = root["port"].asInt();
+		uint8_t MessagePort = root["port"].asInt();
 		std::string lpp = base64_decode(root["payload_raw"].asString());
 
 		//Check if the payload_raw contains valid CayenneLPP structured data
@@ -477,20 +621,55 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 		//       The LoRa FramePort should be checked to find out which type of patload structure is used. Port 1 is Dynamic, Port 2 is Packed, etc.
 		//       But as for LoRa mostly port 2 is used as the default and Dynamic the most implemented CatenneLPP payload structure, we stick with these assumptions
 		Json::Value payload;
+		bool Decoded = false;
 
-		if (!CayenneLPPDec::ParseLPP((const uint8_t*)lpp.c_str(), lpp.size(), payload))
+		switch (MessagePort) {
+			case 2:
+				if (false) //if (CayenneLPPDec::ParseLPP_Packed((const uint8_t*)lpp.c_str(), lpp.size(), payload))
+				{
+					Decoded = true;
+				}
+				break;
+			case 10:
+				if (false) //if (Tektelic::ParseKHS((const uint8_t*)lpp.c_str(), lpp.size(), payload))
+				{
+					Decoded = true;
+				}
+				break;
+			case 1:
+			default:
+				if(CayenneLPPDec::ParseLPP((const uint8_t*)lpp.c_str(), lpp.size(), payload))
+				{
+					Decoded = true;
+				}
+		}
+
+		if (!Decoded)
 		{
-			_log.Log(LOG_ERROR, "TTN_MQTT: Invalid data received! The payload_raw does not contain a valid CayenneLPP payload!");
-			return;
+			if (!root["payload_fields"].empty())
+			{
+				// Maybe we received a pre-decoded message? TTN has the option for custom decoders where the decoding is done by TTN already
+				if (!ConvertFields2Payload(root["payload_fields"], payload))
+				{
+					Log(LOG_ERROR, "Invalid data received! Unable to decode the raw payload and the fields payload does not contain any (valid) data!");
+					return;
+				}
+				Log(LOG_STATUS, "Converted payload_fields to regular payload for processing!");
+			}
+			else
+			{
+				Log(LOG_ERROR, "Invalid data received! The payload_raw does not contain a payload that could be decoded (Port %d)!", MessagePort);
+				return;
+			}
 		}
 
 		if ((payload.empty()) || (!payload.isArray()))
 		{
-			_log.Log(LOG_ERROR, "TTN_MQTT: Invalid data received! The CayenneLPP payload doesn't contain (valid) data!");
+			Log(LOG_ERROR, "Invalid data received! The payload doesn't contain (valid) data!");
 			return;
 		}
 
-		int DeviceID = GetAddDeviceAndSensor(m_HwdID, DeviceName.c_str(), DeviceSerial.c_str());
+		int DeviceID = GetAddDeviceAndSensor(m_HwdID, DeviceName, DeviceSerial);
 		if (DeviceID == 0) // Unable to find the Device and/or Add the new Device
 		{
 			return;
@@ -528,7 +707,7 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 
 				UTCttntime = MetaData["time"].asString().c_str();
 				sscanf(UTCttntime, "%d-%d-%dT%d:%d:%fZ", &y, &M, &d, &h, &m, &s);
-				constructTime(msgtime, t, y, M, d, h, m, s);
+				constructTime(msgtime, t, y, M, d, h, m, (int)floor(s));
 			}
 			if (!(MetaData["latitude"].empty() || MetaData["longitude"].empty()))
 			{
@@ -641,13 +820,27 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 
 		// Walk over the payload to find all used channels. Each channel represents a single sensor.
 		uint8_t chanSensors [65] = {};	// CayenneLPP Data Channel ranges from 0 to 64
-		for (auto itt = payload.begin(); itt != payload.end(); ++itt)
+		for (const auto &p : payload)
 		{
-			uint8_t channel = (uint8_t)(*itt)["channel"].asInt();
-			std::string type = (*itt)["type"].asString();
+			std::string type = p["type"].asString();
+			uint8_t channel = (uint8_t)p["channel"].asInt();
 
-			chanSensors[channel]++;
-			//_log.Log(LOG_STATUS, "TTN_MQTT: Increased count for channel %i (%s)!", channel, type.c_str());
+			// The following IS NOT part of the CayenneLPP specification
+			// But a 'hack'; when using the payload_fields (using the TTN external payload decoder)
+			// a 'batterylevel' field can be created (integer range between 0 and 100)
+			// Also, we do skip this reading for further processing
+			if (type == "batterylevel") {
+				if (p["value"].isNumeric())
+				{
+					BatteryLevel = (int)p["value"].asInt();
+				}
+			}
+			else
+			{
+				// Add 1 reading to this channel
+				chanSensors[channel]++;
+			}
+			Debug(DEBUG_RECEIVED, "Increased count for channel %d (%s)!", channel, type.c_str());
 		}
 
 		// Now walk over each channel/sensor to find the different measurement types and values
@@ -657,7 +850,7 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 		do {
 			if(chanSensors[channel] > 0)
 			{
-				//_log.Log(LOG_STATUS, "TTN_MQTT: Processing %i Sensorvalues for channel %i!", chanSensors[channel],channel);
+				Debug(DEBUG_RECEIVED, "Processing %d Sensorvalues for channel %d!", chanSensors[channel],channel);
 				bool bTemp = false, bHumidity = false, bBaro = false, bDin = false, bDout = false, bAin = false, bAout = false, bPresense = false, bLuminosity = false;
 				float temp = 0, hum = 0, baro = 0, lat = 0, lon = 0, alt = 0, ain = 0, aout = 0, presence = 0, luminocity = 0;
 				int din = 0, dout = 0;
@@ -670,7 +863,7 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 					if ( vSensor.isObject() )
 					{
 						std::string type = vSensor["type"].asString();
-						//_log.Log(LOG_STATUS, "TTN_MQTT: Processing Sensor of type %s for channel %i!", type.c_str(),channel);
+						Debug(DEBUG_RECEIVED, "Processing Sensor of type %s for channel %d!", type.c_str(),channel);
 
 						if (type == "temp") {
 							temp = vSensor["value"].asFloat();
@@ -700,11 +893,11 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 
 						}
 						else if (type == "digital_input") {
-							SendGeneralSwitch(DeviceID, channel, BatteryLevel, vSensor["value"].asInt(), 0, DeviceName, rssi);
+							SendGeneralSwitch(DeviceID, channel, BatteryLevel, vSensor["value"].asInt(), 0, DeviceName, m_Name, rssi);
 							bDin = true;
 						}
 						else if (type == "digital_output") {
-							SendGeneralSwitch(DeviceID, channel, BatteryLevel, vSensor["value"].asInt(), 0, DeviceName, rssi);
+							SendGeneralSwitch(DeviceID, channel, BatteryLevel, vSensor["value"].asInt(), 0, DeviceName, m_Name, rssi);
 							bDout = true;
 						}
 						else if (type == "analog_input") {
@@ -724,23 +917,23 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 							bLuminosity = true;
 						}
 						else if (type == "accel") {
-							_log.Log(LOG_STATUS, "TTN_MQTT: Sensortype %s not implemented!", type.c_str());
+							Log(LOG_STATUS, "Sensortype %s not implemented!", type.c_str());
 						}
 						else if (type == "gyro") {
-							_log.Log(LOG_STATUS, "TTN_MQTT: Sensortype %s not implemented!", type.c_str());
+							Log(LOG_STATUS, "Sensortype %s not implemented!", type.c_str());
 						}
 						else if (type == "unixtime") {
-							_log.Log(LOG_STATUS, "TTN_MQTT: Sensortype %s not implemented!", type.c_str());
+							Log(LOG_STATUS, "Sensortype %s not implemented!", type.c_str());
 						}
 						else {
-							_log.Log(LOG_STATUS, "TTN_MQTT: Unhandled Sensortype %s!", type.c_str());
+							Log(LOG_STATUS, "Unhandled Sensortype %s!", type.c_str());
 						}
 
 						FlagSensorWithChannelUsed(payload, type, channel);
 					}
 					else
 					{
-						_log.Log(LOG_ERROR, "TTN_MQTT: Could not process all Sensorvalues for channel %i! Now at %i, but expected %i values!", channel, current, chanSensors[channel]);
+						Log(LOG_ERROR, "Could not process all Sensorvalues for channel %d! Now at %d, but expected %d values!", channel, current, chanSensors[channel]);
 					}
 					current++;
 				}
@@ -764,11 +957,11 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 				int iAltDevId = (DeviceID << 8) | channel;
 				if (bTemp && bHumidity && bBaro)
 				{
-					SendTempHumBaroSensorFloat(iAltDevId, BatteryLevel, temp, (int)rint(hum), baro, (uint8_t)nforecast, DeviceName, rssi);
+					SendTempHumBaroSensorFloat(iAltDevId, BatteryLevel, temp, (int)std::rint(hum), baro, (uint8_t)nforecast, DeviceName, rssi);
 				}
 				else if(bTemp && bHumidity)
 				{
-					SendTempHumSensor(iAltDevId, BatteryLevel, temp, (int)rint(hum), DeviceName, rssi);
+					SendTempHumSensor(iAltDevId, BatteryLevel, temp, (int)std::rint(hum), DeviceName, rssi);
 				}
 				else if(bTemp && bBaro)
 				{
@@ -782,7 +975,7 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 					}
 					if (bHumidity)
 					{
-						SendHumiditySensor(iAltDevId, BatteryLevel, (int)rint(hum), DeviceName, rssi);
+						SendHumiditySensor(iAltDevId, BatteryLevel, (int)std::rint(hum), DeviceName, rssi);
 					}
 					if (bBaro)
 					{
@@ -793,6 +986,8 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 			channel++;
 		}
 		while (channel < 65);
+
+		//Debug(DEBUG_NORM, "Completed processing of readings!");
 
 		// Now we have processed all readings for all channels
 		// If we have not seen any GPS data on any channel in this payload
@@ -816,68 +1011,30 @@ void CTTNMQTT::on_message(const struct mosquitto_message *message)
 		// If we have a Geo Location of the sensor (either own or meta), calculate distance from 'home'
 		if(iGps == 1 || !(devlat == 0 || devlon == 0))
 		{
-			double fDomLat;
-			double fDomLon;
-			int nValue;
-			std::string sValue;
-			std::string Latitude;
-			std::string Longitude;
-
-			// Let's get the 'home' Location of this Domoticz instance from the Preferences
-			if (m_sql.GetPreferencesVar("Location", nValue, sValue))
-			{
-				std::vector<std::string> strarray;
-				StringSplit(sValue, ";", strarray);
-
-				if (strarray.size() == 2)
-				{
-					Latitude = strarray[0];
-					Longitude = strarray[1];
-
-					if (!((Latitude == "1") && (Longitude == "1")))
-					{
-						fDomLat = std::stod(Latitude);
-						fDomLon = std::stod(Longitude);
-
-						uint64_t nSsrDistance = static_cast<int>(rint(1000 * distanceEarth(fDomLat, fDomLon, ssrlat, ssrlon)));
-						SendCustomSensor(DeviceID, (iGpsChannel + 64), BatteryLevel, (float)nSsrDistance, DeviceName + " Home Distance", "meters", rssi);
-						//_log.Log(LOG_STATUS, "TTN_MQTT: Distance between Sensordevice and Domoticz Home is %i meters!", nSsrDistance);
-					}
-					else
-					{
-						_log.Log(LOG_ERROR, "TTN_MQTT: Invalid Location found in Settings! (Check your Latitude/Longitude!)");
-					}
-				}
-				else
-				{
-					_log.Log(LOG_ERROR, "TTN_MQTT: Invalid Location found in Settings! (Check your Latitude/Longitude!)");
-				}
-			}
-			else
-			{
-				_log.Log(LOG_ERROR, "TTN_MQTT: Invalid Location found in Settings! (Check your Latitude/Longitude!)");
-			}
+			uint64_t nSsrDistance = static_cast<int>(std::rint(1000 * distanceEarth(m_DomLat, m_DomLon, ssrlat, ssrlon)));
+			SendCustomSensor(DeviceID, (iGpsChannel + 64), BatteryLevel, (float)nSsrDistance, DeviceName + " Home Distance", "meters", rssi);
+			Debug(DEBUG_NORM, "Distance between Sensordevice and Domoticz Home is %f meters!", (double)nSsrDistance);
 		}
 
 		// Did we find any Geo Location data from the Gateway with the best reception
 		if (!(gwlat == 0 && gwlon == 0))
 		{
-			//_log.Log(LOG_STATUS, "TTN_MQTT: Found Geo Location data for the Gateway with the best reception at lat: %f, lon: %f, alt: %f", gwlat, gwlon, gwalt);
+			Debug(DEBUG_NORM, "Found Geo Location data for the Gateway with the best reception at lat: %f, lon: %f, alt: %f", gwlat, gwlon, gwalt);
 			// We have Geo Location data of the sensor AND of the gateway, so we can calculate the distance
 			if (iGps > 1)
 			{
-				_log.Log(LOG_STATUS, "TTN_MQTT: More than 1 GPS measurements found! Unable to determine which one to pick for distance calculations!"); 
+				Log(LOG_STATUS, "More than 1 GPS measurements found! Unable to determine which one to pick for distance calculations!"); 
 			}
 			else if (!(ssrlat == 0 && ssrlon == 0))
 			{
-				uint64_t nGwDistance = static_cast<int>(rint(1000 * distanceEarth(gwlat, gwlon, ssrlat, ssrlon)));
+				uint64_t nGwDistance = static_cast<int>(std::rint(1000 * distanceEarth(gwlat, gwlon, ssrlat, ssrlon)));
 				SendCustomSensor(DeviceID, (channel + 128), BatteryLevel, (float)nGwDistance, DeviceName + " Gateway Distance", "meters", rssi);
-			//	_log.Log(LOG_STATUS, "TTN_MQTT: Distance between Sensordevice and gateway is %i meters!", nGwDistance);
+				Debug(DEBUG_NORM, "Distance between Sensordevice and gateway is %f meters!", (double)nGwDistance);
 			}
 		}
 	}
 	catch (...)
 	{
-		_log.Log(LOG_ERROR, "TTN_MQTT: Error parsing message!!!");
+		Log(LOG_ERROR, "Error parsing message!!!");
 	}
 }

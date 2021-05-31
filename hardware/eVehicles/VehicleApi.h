@@ -6,12 +6,15 @@ Author: MrHobbes74 (github.com/MrHobbes74)
 21/02/2020 1.0 Creation
 13/03/2020 1.1 Added keep asleep support
 28/04/2020 1.2 Added new devices (odometer, lock alert, max charge switch)
+09/02/2021 1.4 Added Testcar Class for easier testing of eVehicle framework
 
 License: Public domain
 
 ************************************************************************/
 #pragma once
 #include <string>
+
+class CeVehicle;
 
 class CVehicleApi
 {
@@ -37,13 +40,16 @@ public:
 		bool has_lock_status;
 		bool has_battery_level;
 		bool has_charge_limit;
-		int  sleep_interval;
+		bool has_custom_data;
+		int  seconds_to_sleep;
+		int  minimum_poll_interval;
 	};
 
 	struct tLocationData {
 		double latitude;
 		double longitude;
 		bool is_driving;
+		bool is_home;
 		int speed;
 	};
 
@@ -68,10 +74,16 @@ public:
 		std::string car_open_message;
 	};
 
+	struct tCustomData {
+		Json::Value customdata;	
+	};
+
 	struct tConfigData {
 		std::string distance_unit;
 		bool unit_miles;
 		std::string car_name;
+		double home_longitude;
+		double home_latitude;
 	};
 
 	struct tAllCarData {
@@ -79,8 +91,10 @@ public:
 		tChargeData charge;
 		tClimateData climate;
 		tVehicleData vehicle;
+		tCustomData custom;
 	};
 
+	virtual ~CVehicleApi() = default;
 	virtual bool Login() = 0;
 	virtual bool RefreshLogin() = 0;
 	virtual bool SendCommand(eCommandType command, std::string parameter = "") = 0;
@@ -90,8 +104,9 @@ public:
 	virtual bool GetChargeData(tChargeData& data) = 0;
 	virtual bool GetClimateData(tClimateData& data) = 0;
 	virtual bool GetVehicleData(tVehicleData& data) = 0;
+	virtual bool GetCustomData(tCustomData& data) = 0;
 	
 	tCapabilities m_capabilities;
 	tConfigData m_config;
-
+	CeVehicle *m_pBase = nullptr;
 };
