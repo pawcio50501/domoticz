@@ -51,7 +51,7 @@ namespace Plugins {
 			{
 				pPlugin->Log(LOG_NORM, "Timeout for port '%s'", m_Port.c_str());
 			}
-			pPlugin->MessagePlugin(new onTimeoutCallback(pPlugin, m_pConnection));
+			pPlugin->MessagePlugin(new onTimeoutCallback(m_pConnection));
 			configureTimeout();
 		}
 		else if (ec != boost::asio::error::operation_aborted) // Timer canceled by message arriving
@@ -84,6 +84,7 @@ namespace Plugins {
 
 		if ((pPlugin->m_bDebug & PDM_CONNECTION) && m_pConnection && (m_pConnection->ob_base.ob_refcnt <= 1))
 		{
+			// GIL is not held normal conversion to string via PyBorrowedRef cannot be used
 			std::string	sTransport = PyUnicode_AsUTF8(pConnection->Transport);
 			std::string	sAddress = PyUnicode_AsUTF8(pConnection->Address);
 			std::string	sPort = PyUnicode_AsUTF8(pConnection->Port);
@@ -94,7 +95,7 @@ namespace Plugins {
 		}
 		if (!m_bDisconnectQueued && m_pConnection && (m_pConnection->ob_base.ob_refcnt <= 1))
 		{
-			pPlugin->MessagePlugin(new DisconnectDirective(pPlugin, m_pConnection));
+			pPlugin->MessagePlugin(new DisconnectDirective(m_pConnection));
 			m_bDisconnectQueued = true;
 		}
 	}
@@ -127,7 +128,7 @@ namespace Plugins {
 		catch (std::exception& e)
 		{
 			pPlugin->Log(LOG_ERROR, "Connection Exception: '%s' connecting to '%s:%s'", e.what(), m_IP.c_str(), m_Port.c_str());
-			pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, -1, std::string(e.what())));
+			pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, -1, std::string(e.what())));
 			return false;
 		}
 
@@ -139,9 +140,6 @@ namespace Plugins {
 	void CPluginTransportTCP::handleAsyncResolve(const boost::system::error_code & err, boost::asio::ip::tcp::resolver::iterator endpoint_iterator)
 	{
 		std::lock_guard<std::mutex> l(PythonMutex); // Take mutex to guard access to CPluginTransport::m_pConnection
-		CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
-		if (!pPlugin)
-			return;
 
 		if (!err)
 		{
@@ -152,12 +150,20 @@ namespace Plugins {
 		{
 			m_bConnecting = false;
 
-			// Notify plugin of failure and trigger cleanup
-			pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, err.value(), err.message()));
-			pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection));
+			CPlugin *pPlugin = ((CConnection *)m_pConnection)->pPlugin;
+			if (pPlugin)
+			{
+				// Notify plugin of failure and trigger cleanup
+				pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, err.value(), err.message()));
+				pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection));
 
-			if ((pPlugin->m_bDebug & PDM_CONNECTION) && (err == boost::asio::error::operation_aborted))
-				pPlugin->Log(LOG_NORM, "Asynchronous resolve aborted (%s:%s).", m_IP.c_str(), m_Port.c_str());
+				if ((pPlugin->m_bDebug & PDM_CONNECTION) && (err == boost::asio::error::operation_aborted))
+					pPlugin->Log(LOG_NORM, "Asynchronous resolve aborted (%s:%s).", m_IP.c_str(), m_Port.c_str());
+			}
+			else
+			{
+				_log.Log(LOG_ERROR, "%s: Connection to '%s:%s' not associated with a plugin", __func__, m_IP.c_str(), m_Port.c_str());
+			}
 		}
 	}
 
@@ -168,7 +174,7 @@ namespace Plugins {
 		if (!pPlugin)
 			return;
 
-		pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, err.value(), err.message()));
+		pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, err.value(), err.message()));
 
 		if (!err)
 		{
@@ -182,7 +188,7 @@ namespace Plugins {
 			m_bConnected = false;
 			if ((pPlugin->m_bDebug & PDM_CONNECTION) && (err == boost::asio::error::operation_aborted))
 				pPlugin->Log(LOG_NORM, "Asynchronous connect aborted (%s:%s).", m_IP.c_str(), m_Port.c_str());
-			pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection));
+			pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection));
 		}
 
 		m_bConnecting = false;
@@ -214,7 +220,7 @@ namespace Plugins {
 		{
 			//			_log.Log(LOG_ERROR, "Plugin: Connection Exception: '%s' connecting to '%s:%s'", e.what(), m_IP.c_str(), m_Port.c_str());
 			CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
-			pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, -1, std::string(e.what())));
+			pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, -1, std::string(e.what())));
 			return false;
 		}
 
@@ -253,22 +259,25 @@ namespace Plugins {
 			pConnection->Port = PyUnicode_FromString(sPort.c_str());
 
 			Py_XDECREF(pConnection->Parent);
-			pConnection->Parent = m_pConnection;
+			pConnection->Parent = (PyObject*)m_pConnection;
 			Py_INCREF(m_pConnection);
 			pConnection->Transport = ((CConnection*)m_pConnection)->Transport;
 			Py_INCREF(pConnection->Transport);
 			pConnection->Protocol = ((CConnection*)m_pConnection)->Protocol;
 			Py_INCREF(pConnection->Protocol);
-			pConnection->pPlugin = ((CConnection*)m_pConnection)->pPlugin;
+			pConnection->Target = ((CConnection *)m_pConnection)->Target;
+			if (pConnection->Target)
+				Py_INCREF(pConnection->Target);
+			pConnection->pPlugin = ((CConnection *)m_pConnection)->pPlugin;
 
 			// Add it to the plugins list of connections
 			pConnection->pPlugin->AddConnection(pTcpTransport);
 
 			// Create Protocol object to handle connection's traffic
 			{
-				pConnection->pPlugin->MessagePlugin(new ProtocolDirective(pConnection->pPlugin, pConnection));
+				pConnection->pPlugin->MessagePlugin(new ProtocolDirective(pConnection));
 				//  and signal connection
-				pConnection->pPlugin->MessagePlugin(new onConnectCallback(pConnection->pPlugin, pConnection, err.value(), err.message()));
+				pConnection->pPlugin->MessagePlugin(new onConnectCallback(pConnection, err.value(), err.message()));
 			}
 
 			pTcpTransport->m_Socket->async_read_some(boost::asio::buffer(pTcpTransport->m_Buffer, sizeof pTcpTransport->m_Buffer),
@@ -289,7 +298,7 @@ namespace Plugins {
 			if (err != boost::asio::error::operation_aborted)
 				pPlugin->Log(LOG_ERROR, "Accept Exception: '%s' connecting to '%s:%s'", err.message().c_str(), m_IP.c_str(), m_Port.c_str());
 
-			pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection));
+			pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection));
 			m_bDisconnectQueued = true;
 		}
 	}
@@ -302,7 +311,7 @@ namespace Plugins {
 			return;
 		if (!e)
 		{
-			pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, bytes_transferred, m_Buffer));
+			pPlugin->MessagePlugin(new ReadEvent(m_pConnection, bytes_transferred, m_Buffer));
 
 			m_tLastSeen = time(nullptr);
 			m_iTotalBytes += bytes_transferred;
@@ -341,7 +350,13 @@ namespace Plugins {
 				}
 			}
 
-			pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection));
+			// Timer events can still trigger even after errors so cancel explicitly
+			if (m_Timer)
+			{
+				m_Timer->cancel();
+			}
+
+			pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection));
 			m_bDisconnectQueued = true;
 		}
 	}
@@ -491,7 +506,7 @@ namespace Plugins {
 #endif
 
 				m_bConnected = true;
-				pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, err.value(), err.message()));
+				pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, err.value(), err.message()));
 
 				m_tLastSeen = time(nullptr);
 				m_TLSSock->async_read_some(boost::asio::buffer(m_Buffer, sizeof m_Buffer), [this](auto &&err, auto bytes) { handleRead(err, bytes); });
@@ -500,7 +515,7 @@ namespace Plugins {
 			catch (boost::system::system_error se)
 			{
 				_log.Log(LOG_ERROR, "TLS Handshake Exception: '%s' connecting to '%s:%s'", se.what(), m_IP.c_str(), m_Port.c_str());
-				pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection));
+				pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection));
 			}
 		}
 		else
@@ -508,8 +523,8 @@ namespace Plugins {
 			m_bConnected = false;
 			if ((pPlugin->m_bDebug & PDM_CONNECTION) && (err == boost::asio::error::operation_aborted))
 				_log.Log(LOG_NORM, "Asynchronous secure connect aborted (%s:%s).", m_IP.c_str(), m_Port.c_str());
-			pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, err.value(), err.message()));
-			pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection));
+			pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, err.value(), err.message()));
+			pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection));
 		}
 
 		m_bConnecting = false;
@@ -550,7 +565,7 @@ namespace Plugins {
 			return;
 		if (!e)
 		{
-			pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, bytes_transferred, m_Buffer));
+			pPlugin->MessagePlugin(new ReadEvent(m_pConnection, bytes_transferred, m_Buffer));
 
 			m_tLastSeen = time(nullptr);
 			m_iTotalBytes += bytes_transferred;
@@ -581,7 +596,7 @@ namespace Plugins {
 					pPlugin->Log(LOG_ERROR, "Async Secure Read Exception: %d, %s", e.value(), e.message().c_str());
 			}
 
-			pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection));
+			pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection));
 
 			m_bDisconnectQueued = true;
 		}
@@ -619,12 +634,23 @@ namespace Plugins {
 				boost::system::error_code ec;
 				int	iPort = atoi(m_Port.c_str());
 
-				m_Socket = new boost::asio::ip::udp::socket(ios, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), iPort));
-				m_Socket->set_option(boost::asio::ip::udp::socket::reuse_address(true));
-				if (((m_IP.substr(0, 4) >= "224.") && (m_IP.substr(0, 4) <= "239.")) || (m_IP.substr(0, 4) == "255."))
+				// Handle broadcast messages
+				if (m_IP == "255.255.255.255")
 				{
-					m_Socket->set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string(m_IP.c_str())), ec);
-					m_Socket->set_option(boost::asio::ip::multicast::hops(2), ec);
+					m_Socket = new boost::asio::ip::udp::socket(ios, boost::asio::ip::udp::endpoint(boost::asio::ip::address_v4::any(), iPort));
+					m_Socket->set_option(boost::asio::ip::udp::socket::socket_base::broadcast(true));
+					m_Socket->set_option(boost::asio::ip::udp::socket::reuse_address(true));
+				}
+				else
+				{
+					m_Socket = new boost::asio::ip::udp::socket(ios, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), iPort));
+					m_Socket->set_option(boost::asio::ip::udp::socket::reuse_address(true));
+					// Hanlde multicast
+					if (((m_IP.substr(0, 4) >= "224.") && (m_IP.substr(0, 4) <= "239.")) || (m_IP.substr(0, 4) == "255."))
+					{
+						m_Socket->set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string(m_IP.c_str())), ec);
+						m_Socket->set_option(boost::asio::ip::multicast::hops(2), ec);
+					}
 				}
 			}
 
@@ -638,7 +664,7 @@ namespace Plugins {
 
 			_log.Log(LOG_ERROR, "Plugin: UDP Listen Exception: '%s' connecting to '%s:%s'", e.what(), m_IP.c_str(), m_Port.c_str());
 			CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
-			pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, -1, std::string(e.what())));
+			pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, -1, std::string(e.what())));
 			return false;
 		}
 
@@ -669,11 +695,14 @@ namespace Plugins {
 			Py_INCREF(pConnection->Transport);
 			pConnection->Protocol = ((CConnection*)m_pConnection)->Protocol;
 			Py_INCREF(pConnection->Protocol);
-			pConnection->pPlugin = ((CConnection*)m_pConnection)->pPlugin;
+			pConnection->Target = ((CConnection *)m_pConnection)->Target;
+			if (pConnection->Target)
+				Py_INCREF(pConnection->Target);
+			pConnection->pPlugin = ((CConnection *)m_pConnection)->pPlugin;
 
 			// Create Protocol object to handle connection's traffic
-			pConnection->pPlugin->MessagePlugin(new ProtocolDirective(pConnection->pPlugin, pConnection));
-			pConnection->pPlugin->MessagePlugin(new ReadEvent(pConnection->pPlugin, pConnection, bytes_transferred, m_Buffer));
+			pConnection->pPlugin->MessagePlugin(new ProtocolDirective(pConnection));
+			pConnection->pPlugin->MessagePlugin(new ReadEvent(pConnection, bytes_transferred, m_Buffer));
 
 			m_tLastSeen = time(nullptr);
 			m_iTotalBytes += bytes_transferred;
@@ -687,7 +716,7 @@ namespace Plugins {
 			else
 			{
 				// should only happen if async_receive_from doesn't call handleRead with 'abort' condition
-				pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection, false));
+				pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection, false));
 				m_bDisconnectQueued = true;
 			}
 		}
@@ -707,7 +736,7 @@ namespace Plugins {
 					pPlugin->Log(LOG_ERROR, "Async UDP Read Exception: %d, %s", ec.value(), ec.message().c_str());
 			}
 
-			pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection, false));
+			pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection, false));
 			m_bDisconnectQueued = true;
 		}
 	}
@@ -812,7 +841,7 @@ namespace Plugins {
 		{
 			std::lock_guard<std::mutex> l(PythonMutex); // Take mutex to guard access to CPluginTransport::m_pConnection
 			CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
-			pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection));
+			pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection));
 		}
 		m_bConnecting = false;
 	}
@@ -845,7 +874,7 @@ namespace Plugins {
 		{
 			_log.Log(LOG_ERROR, "%s Exception: '%s' failed connecting to '%s'", __func__, e.what(), m_IP.c_str());
 			CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
-			pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, -1, std::string(e.what())));
+			pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, -1, std::string(e.what())));
 			return false;
 		}
 
@@ -867,8 +896,8 @@ namespace Plugins {
 			}
 
 			CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
-			pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, 0, nullptr));
-			pPlugin->MessagePlugin(new DisconnectDirective(pPlugin, m_pConnection));
+			pPlugin->MessagePlugin(new ReadEvent(m_pConnection, 0, nullptr));
+			pPlugin->MessagePlugin(new DisconnectDirective(m_pConnection));
 		}
 		else if (ec != boost::asio::error::operation_aborted)  // Timer canceled by message arriving
 		{
@@ -915,7 +944,7 @@ namespace Plugins {
 					m_Timer->cancel();
 				}
 
-				pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, bytes_transferred, m_Buffer, (iMsElapsed ? iMsElapsed : 1)));
+				pPlugin->MessagePlugin(new ReadEvent(m_pConnection, bytes_transferred, m_Buffer, (iMsElapsed ? iMsElapsed : 1)));
 
 				m_tLastSeen = time(nullptr);
 				m_iTotalBytes += bytes_transferred;
@@ -940,7 +969,7 @@ namespace Plugins {
 				}
 			}
 
-			pPlugin->MessagePlugin(new DisconnectedEvent(pPlugin, m_pConnection, false));
+			pPlugin->MessagePlugin(new DisconnectedEvent(m_pConnection, false));
 			m_bDisconnectQueued = true;
 		}
 	}
@@ -1069,20 +1098,20 @@ namespace Plugins {
 				CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
 				if (m_bConnected)
 				{
-					pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, 0, "SerialPort " + m_Port + " opened successfully."));
+					pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, 0, "SerialPort " + m_Port + " opened successfully."));
 					setReadCallback([this](auto err, auto bytes) { handleRead(err, bytes); });
 					configureTimeout();
 				}
 				else
 				{
-					pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, -1, "SerialPort " + m_Port + " open failed, check log for details."));
+					pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, -1, "SerialPort " + m_Port + " open failed, check log for details."));
 				}
 			}
 		}
 		catch (std::exception& e)
 		{
 			CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
-			pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, -1, std::string(e.what())));
+			pPlugin->MessagePlugin(new onConnectCallback(m_pConnection, -1, std::string(e.what())));
 			return false;
 		}
 
@@ -1095,7 +1124,7 @@ namespace Plugins {
 		{
 			std::lock_guard<std::mutex> l(PythonMutex); // Take mutex to guard access to CPluginTransport::m_pConnection
 			CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
-			pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, bytes_transferred, (const unsigned char*)data));
+			pPlugin->MessagePlugin(new ReadEvent(m_pConnection, bytes_transferred, (const unsigned char*)data));
 			configureTimeout();
 			m_tLastSeen = time(nullptr);
 			m_iTotalBytes += bytes_transferred;
@@ -1130,7 +1159,7 @@ namespace Plugins {
 				CPlugin *pPlugin = m_pConnection->pPlugin;
 				if (pPlugin)
 				{
-					pPlugin->MessagePlugin(new onDisconnectCallback(pPlugin, m_pConnection));
+					pPlugin->MessagePlugin(new onDisconnectCallback(m_pConnection));
 				}
 				else
 				{

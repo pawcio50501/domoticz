@@ -213,8 +213,10 @@ hardware/eHouseTCP.cpp
 hardware/eHouse/EhouseEvents.cpp
 hardware/eHouse/EhouseTcpClient.cpp
 hardware/eHouse/EhouseUdpListener.cpp
+hardware/EnOceanEEP.cpp
 hardware/EnOceanESP2.cpp
 hardware/EnOceanESP3.cpp
+hardware/EnOceanRawValue.cpp
 hardware/EnphaseAPI.cpp
 hardware/Ec3kMeterTCP.cpp
 hardware/eVehicles/TeslaApi.cpp
@@ -336,6 +338,7 @@ hardware/plugins/PluginManager.cpp
 hardware/plugins/PluginProtocols.cpp
 hardware/plugins/PluginTransports.cpp
 hardware/plugins/PythonObjects.cpp
+hardware/plugins/PythonObjectEx.cpp
 notifications/NotificationBase.cpp
 notifications/NotificationBrowser.cpp
 notifications/NotificationEmail.cpp
@@ -721,7 +724,7 @@ ELSE()
   MESSAGE(STATUS "==== OpenZWave not found, support disabled!")
 ENDIF(OpenZWave)
 
-IF(EXISTS /sys/class/gpio)
+IF(EXISTS /sys/class/gpio OR FORCE_WITH_GPIO)
   message(STATUS "GPIO is available")
   add_definitions(-DWITH_GPIO)
 ELSE()

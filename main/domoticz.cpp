@@ -88,8 +88,8 @@ namespace
 #else
 		"\t-log file_path (for example /var/log/domoticz.log)\n"
 #endif
-		"\t-loglevel (combination of: normal,status,error,debug)\n"
-		"\t-debuglevel (combination of: normal,hardware,received,webserver,eventsystem,python,thread_id)\n"
+		"\t-loglevel (combination of: all,normal,status,error,debug)\n"
+		"\t-debuglevel (combination of: all,normal,hardware,received,webserver,eventsystem,python,thread_id,sql)\n"
 		"\t-notimestamps (do not prepend timestamps to logs; useful with syslog, etc.)\n"
 		"\t-php_cgi_path (for example /usr/bin/php-cgi)\n"
 #ifndef WIN32
@@ -153,7 +153,6 @@ std::string szAppDate="???";
 std::string szPyVersion="None";
 int ActYear;
 time_t m_StartTime = time(nullptr);
-std::string szRandomUUID = "???";
 std::string journalMode="WAL";
 
 MainWorker m_mainworker;
@@ -506,10 +505,16 @@ bool ParseConfigFile(const std::string &szConfigFile)
 		szFlag = stdstring_trim(szFlag);
 		sLine = stdstring_trim(sLine);
 
-		if (szFlag == "http_port") {
-			webserver_settings.listening_port = sLine;
-		}
+        if (szFlag == "http_address") {
+            webserver_settings.listening_address = sLine;
+        }
+        else if (szFlag == "http_port") {
+            webserver_settings.listening_port = sLine;
+        }
 #ifdef WWW_ENABLE_SSL
+		else if (szFlag == "ssl_address") {
+			secure_webserver_settings.listening_address = sLine;
+		}
 		else if (szFlag == "ssl_port") {
 			secure_webserver_settings.listening_port = sLine;
 		}
@@ -742,7 +747,6 @@ int main(int argc, char**argv)
 
 	/* call srand once for the entire app */
 	std::srand((unsigned int)std::time(nullptr));
-	szRandomUUID = GenerateUUID();    
 
 	GetAppVersion();
 	DisplayAppVersion();
