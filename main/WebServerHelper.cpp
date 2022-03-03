@@ -5,8 +5,6 @@
 
 namespace http {
 	namespace server {
-
-		typedef std::vector<std::shared_ptr<CWebServer> >::iterator server_iterator;
 #ifndef NOCLOUD
 		extern CProxySharedData sharedData;
 #endif
@@ -32,6 +30,7 @@ namespace http {
 
 			our_serverpath = serverpath;
 			plainServer_.reset(new CWebServer());
+
 			serverCollection.push_back(plainServer_);
 			bRet |= plainServer_->StartServer(web_settings, serverpath, bIgnoreUsernamePassword);
 			our_listener_port = web_settings.listening_port;
@@ -77,10 +76,10 @@ namespace http {
 			proxymanager.Stop();
 			// restart
 #ifdef WWW_ENABLE_SSL
-			cWebem *my_pWebEm = (plainServer_ != nullptr ? plainServer_->m_pWebEm
-								     : (secureServer_ != nullptr ? secureServer_->m_pWebEm : nullptr));
+			cWebem *my_pWebEm = (plainServer_ != nullptr && plainServer_->m_pWebEm != nullptr ? plainServer_->m_pWebEm
+							     : (secureServer_ != nullptr && secureServer_->m_pWebEm != nullptr ? secureServer_->m_pWebEm : nullptr));
 #else
-			cWebem* my_pWebEm = plainServer_ != NULL ? plainServer_->m_pWebEm : NULL;
+			cWebem* my_pWebEm = plainServer_ != nullptr && plainServer_->m_pWebEm != nullptr ? plainServer_->m_pWebEm : nullptr;
 #endif
 			if (my_pWebEm == nullptr)
 			{
@@ -158,6 +157,8 @@ namespace http {
 
 			for (auto &it : serverCollection)
 			{
+				if (it->m_pWebEm == nullptr)
+					continue;
 				it->m_pWebEm->ClearLocalNetworks();
 
 				std::vector<std::string> strarray;

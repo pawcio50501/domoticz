@@ -64,6 +64,7 @@ IF(CMAKE_COMPILER_IS_GNUCXX)
   #SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-switch")
   #ADD_DEFINITIONS( -Wall -O0 -ggdb )
   #ADD_DEFINITIONS( -Wfatal-errors -Wformat=2 -Werror=format-security )
+  ADD_DEFINITIONS( -D_FILE_OFFSET_BITS=64 )
 ENDIF()
 
 ### VERSIONING SUPPORT
@@ -213,8 +214,10 @@ hardware/eHouseTCP.cpp
 hardware/eHouse/EhouseEvents.cpp
 hardware/eHouse/EhouseTcpClient.cpp
 hardware/eHouse/EhouseUdpListener.cpp
+hardware/EnOceanEEP.cpp
 hardware/EnOceanESP2.cpp
 hardware/EnOceanESP3.cpp
+hardware/EnOceanRawValue.cpp
 hardware/EnphaseAPI.cpp
 hardware/Ec3kMeterTCP.cpp
 hardware/eVehicles/TeslaApi.cpp
@@ -251,6 +254,7 @@ hardware/Meteorologisk.cpp
 hardware/Meteostick.cpp
 hardware/MochadTCP.cpp
 hardware/MQTT.cpp
+hardware/MQTTAutoDiscover.cpp
 hardware/MultiFun.cpp
 hardware/MySensorsBase.cpp
 hardware/MySensorsSerial.cpp
@@ -289,6 +293,7 @@ hardware/RelayNet.cpp
 hardware/RFLinkBase.cpp
 hardware/RFLinkSerial.cpp
 hardware/RFLinkTCP.cpp
+hardware/RFLinkMQTT.cpp
 hardware/RFXBase.cpp
 hardware/RFXComSerial.cpp
 hardware/RFXComTCP.cpp
@@ -336,6 +341,7 @@ hardware/plugins/PluginManager.cpp
 hardware/plugins/PluginProtocols.cpp
 hardware/plugins/PluginTransports.cpp
 hardware/plugins/PythonObjects.cpp
+hardware/plugins/PythonObjectEx.cpp
 notifications/NotificationBase.cpp
 notifications/NotificationBrowser.cpp
 notifications/NotificationEmail.cpp
@@ -415,15 +421,14 @@ ELSE(LUA_LIBRARIES AND LUA_INCLUDE_DIRS)
 ENDIF(LUA_LIBRARIES AND LUA_INCLUDE_DIRS)
 
 IF(USE_PYTHON)
-  find_package(PythonInterp 3.4)
-  find_package(PythonLibs 3.4)
-  IF(PYTHONLIBS_FOUND)
-    MESSAGE(STATUS "Python3 includes found at: ${PYTHON_INCLUDE_PATH}")
-    INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_PATH})
+  find_package(Python3 3.4 COMPONENTS Development)
+  IF(Python3_Development_FOUND)
+    MESSAGE(STATUS "Python3 version ${Python3_VERSION} includes found at: ${Python3_INCLUDE_DIRS}")
+    INCLUDE_DIRECTORIES(${Python3_INCLUDE_DIRS})
     add_definitions(-DENABLE_PYTHON)
-  ELSE(PYTHONLIBS_FOUND)
+  ELSE(Python3_Development_FOUND)
     MESSAGE(FATAL_ERROR "Python3 not found on your system, use USE_PYTHON=NO or sudo apt-get install python3-dev)")
-  ENDIF(PYTHONLIBS_FOUND)
+  ENDIF(Python3_Development_FOUND)
 ENDIF(USE_PYTHON)
 
 CHECK_INCLUDE_FILE (execinfo.h HAVE_EXECINFO_H)
@@ -721,7 +726,7 @@ ELSE()
   MESSAGE(STATUS "==== OpenZWave not found, support disabled!")
 ENDIF(OpenZWave)
 
-IF(EXISTS /sys/class/gpio)
+IF(EXISTS /sys/class/gpio OR FORCE_WITH_GPIO)
   message(STATUS "GPIO is available")
   add_definitions(-DWITH_GPIO)
 ELSE()

@@ -681,7 +681,7 @@ void XiaomiGateway::InsertUpdateRGBGateway(const std::string &nodeid, const std:
 		ycmd.value = brightness;
 		ycmd.command = cmd;
 		m_mainworker.PushAndWaitRxMessage(this, (const unsigned char *)&ycmd, nullptr, -1, m_Name.c_str());
-		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, LastLevel=%d WHERE(HardwareID == %d) AND (DeviceID == '%s') AND (Type == %d)", Name.c_str(), (STYPE_Dimmer),
+		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, LastLevel=%d WHERE (HardwareID == %d) AND (DeviceID == '%s') AND (Type == %d)", Name.c_str(), (STYPE_Dimmer),
 				 brightness, m_HwdID, szDeviceID, pTypeColorSwitch);
 	}
 	else
@@ -788,7 +788,7 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 			}
 		}
 
-		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, CustomImage=%i WHERE(HardwareID == %d) AND (DeviceID == '%q') AND (Unit == '%d')", Name.c_str(), (switchtype),
+		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, CustomImage=%i WHERE (HardwareID == %d) AND (DeviceID == '%q') AND (Unit == '%d')", Name.c_str(), (switchtype),
 				 customimage, m_HwdID, ID.c_str(), xcmd.unitcode);
 
 		if (switchtype == STYPE_Selector)
@@ -878,7 +878,7 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 			if (battery != 255)
 			{
 				BatteryLevel = battery;
-				m_sql.safe_query("UPDATE DeviceStatus SET BatteryLevel=%d WHERE(HardwareID == %d) AND (DeviceID == '%q') AND (Unit == '%d')", BatteryLevel, m_HwdID, ID.c_str(),
+				m_sql.safe_query("UPDATE DeviceStatus SET BatteryLevel=%d WHERE (HardwareID == %d) AND (DeviceID == '%q') AND (Unit == '%d')", BatteryLevel, m_HwdID, ID.c_str(),
 						 xcmd.unitcode);
 			}
 		}
@@ -1022,7 +1022,7 @@ void XiaomiGateway::Do_Work()
 	{
 		boost::asio::ip::udp::resolver resolver(io_service);
 		boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), m_GatewayIp, "");
-		boost::asio::ip::udp::resolver::iterator endpoints = resolver.resolve(query);
+		auto endpoints = resolver.resolve(query);
 		boost::asio::ip::udp::endpoint ep = *endpoints;
 		boost::asio::ip::udp::socket socket(io_service);
 		socket.connect(ep);
@@ -1760,16 +1760,16 @@ void XiaomiGateway::XiaomiGatewayTokenManager::UpdateTokenSID(const std::string 
 	std::unique_lock<std::mutex> lock(m_mutex);
 	for (auto &m_GatewayToken : m_GatewayTokens)
 	{
-		if (boost::get<0>(m_GatewayToken) == ip)
+		if (std::get<0>(m_GatewayToken) == ip)
 		{
-			boost::get<1>(m_GatewayToken) = token;
-			boost::get<2>(m_GatewayToken) = sid;
+			std::get<1>(m_GatewayToken) = token;
+			std::get<2>(m_GatewayToken) = sid;
 			found = true;
 		}
 	}
 	if (!found)
 	{
-		m_GatewayTokens.push_back(boost::make_tuple(ip, token, sid));
+		m_GatewayTokens.emplace_back(ip, token, sid);
 	}
 }
 
@@ -1779,8 +1779,8 @@ std::string XiaomiGateway::XiaomiGatewayTokenManager::GetToken(const std::string
 	bool found = false;
 	std::unique_lock<std::mutex> lock(m_mutex);
 	for (auto &m_GatewayToken : m_GatewayTokens)
-		if (boost::get<0>(m_GatewayToken) == ip)
-			token = boost::get<1>(m_GatewayToken);
+		if (std::get<0>(m_GatewayToken) == ip)
+			token = std::get<1>(m_GatewayToken);
 
 	return token;
 }
@@ -1791,8 +1791,8 @@ std::string XiaomiGateway::XiaomiGatewayTokenManager::GetSID(const std::string &
 	bool found = false;
 	std::unique_lock<std::mutex> lock(m_mutex);
 	for (auto &m_GatewayToken : m_GatewayTokens)
-		if (boost::get<0>(m_GatewayToken) == ip)
-			sid = boost::get<2>(m_GatewayToken);
+		if (std::get<0>(m_GatewayToken) == ip)
+			sid = std::get<2>(m_GatewayToken);
 
 	return sid;
 }

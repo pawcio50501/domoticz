@@ -31,7 +31,9 @@
 #include "DelayedLink.h"
 #include "../../main/EventsPythonModule.h"
 
-#define MINIMUM_PYTHON_VERSION "3.4.0"
+// Python version constants
+#define MINIMUM_MAJOR_VERSION 3
+#define MINIMUM_MINOR_VERSION 4
 
 #define ATTRIBUTE_VALUE(pElement, Name, Value) \
 		{	\
@@ -57,6 +59,7 @@ extern std::string szPyVersion;
 namespace Plugins {
 
 	PyMODINIT_FUNC PyInit_Domoticz(void);
+	PyMODINIT_FUNC PyInit_DomoticzEx(void);
 
 	// Need forward decleration
 	// PyMODINIT_FUNC PyInit_DomoticzEvents(void);
@@ -104,9 +107,18 @@ namespace Plugins {
 			}
 
 			std::string sVersion = szPyVersion.substr(0, szPyVersion.find_first_of(' '));
-			if (sVersion < MINIMUM_PYTHON_VERSION)
+
+			std::string sMajorVersion = sVersion.substr(0, sVersion.find_first_of('.'));
+			if (std::stoi(sMajorVersion) < MINIMUM_MAJOR_VERSION)
 			{
-				_log.Log(LOG_STATUS, "PluginSystem: Invalid Python version '%s' found, '%s' or above required.", sVersion.c_str(), MINIMUM_PYTHON_VERSION);
+				_log.Log(LOG_STATUS, "PluginSystem: Invalid Python version '%s' found, Major version '%d' or above required.", sVersion.c_str(), MINIMUM_MAJOR_VERSION);
+				return false;
+			}
+
+			std::string sMinorVersion = sVersion.substr(sMajorVersion.length()+1);
+			if (std::stoi(sMinorVersion) < MINIMUM_MINOR_VERSION)
+			{
+				_log.Log(LOG_STATUS, "PluginSystem: Invalid Python version '%s' found, Minor version '%d.%d' or above required.", sVersion.c_str(), MINIMUM_MAJOR_VERSION, MINIMUM_MINOR_VERSION);
 				return false;
 			}
 
@@ -116,6 +128,12 @@ namespace Plugins {
 			if (PyImport_AppendInittab("Domoticz", PyInit_Domoticz) == -1)
 			{
 				_log.Log(LOG_ERROR, "PluginSystem: Failed to append 'Domoticz' to the existing table of built-in modules.");
+				return false;
+			}
+
+			if (PyImport_AppendInittab("DomoticzEx", PyInit_DomoticzEx) == -1)
+			{
+				_log.Log(LOG_ERROR, "PluginSystem: Failed to append 'DomoticzEx' to the existing table of built-in modules.");
 				return false;
 			}
 
@@ -136,7 +154,7 @@ namespace Plugins {
 			m_InitialPythonThread = PyEval_SaveThread();
 
 			m_bEnabled = true;
-			_log.Log(LOG_STATUS, "PluginSystem: Started, Python version '%s'.", sVersion.c_str());
+			_log.Log(LOG_STATUS, "PluginSystem: Started, Python version '%s', %d plugin definitions loaded.", sVersion.c_str(), (int)m_PluginXml.size());
 		}
 		catch (...) {
 			_log.Log(LOG_ERROR, "PluginSystem: Failed to start, Python version '%s', Program '%S', Path '%S'.", szPyVersion.c_str(), Py_GetProgramFullPath(), Py_GetPath());
@@ -179,7 +197,7 @@ namespace Plugins {
 			if (plugin.second)
 			{
 				auto pPlugin = reinterpret_cast<CPlugin *>(plugin.second);
-				pPlugin->MessagePlugin(new SettingsDirective(pPlugin));
+				pPlugin->MessagePlugin(new SettingsDirective());
 			}
 			else
 			{
@@ -265,7 +283,7 @@ namespace Plugins {
 		{
 			_log.Log(LOG_STATUS, "PluginSystem: '%s' Registration ignored, Plugins are not enabled.", Name.c_str());
 		}
-		return reinterpret_cast<CDomoticzHardwareBase*>(pPlugin);
+		return dynamic_cast<CDomoticzHardwareBase*>(pPlugin);
 	}
 
 	void CPluginSystem::DeregisterPlugin(const int HwdID)
@@ -285,9 +303,9 @@ namespace Plugins {
 
 	void CPluginSystem::Do_Work()
 	{
-		while (!m_bAllPluginsStarted)
+		while (!m_bAllPluginsStarted && !IsStopRequested(500))
 		{
-			sleep_milliseconds(500);
+			continue;
 		}
 
 		if (m_pPlugins.size())
@@ -320,12 +338,12 @@ namespace Plugins {
 	void CPluginSystem::DeviceModified(uint64_t DevIdx)
 	{
 		std::vector<std::vector<std::string> > result;
-		result = m_sql.safe_query("SELECT HardwareID, Unit FROM DeviceStatus WHERE (ID == %" PRIu64 ")", DevIdx);
+		result = m_sql.safe_query("SELECT HardwareID, DeviceID, Unit FROM DeviceStatus WHERE (ID == %" PRIu64 ")", DevIdx);
 		if (result.empty())
 			return;
 		std::vector<std::string> sd = result[0];
 		std::string sHwdID = sd[0];
-		std::string Unit = sd[1];
+		std::string Unit = sd[2];
 		CDomoticzHardwareBase *pHardware = m_mainworker.GetHardwareByIDType(sHwdID, HTYPE_PythonPlugin);
 		if (pHardware == nullptr)
 			return;
@@ -333,7 +351,7 @@ namespace Plugins {
 		//GizMoCuz: Why does this work with UNIT ? Why not use the device idx which is always unique ?
 		_log.Debug(DEBUG_NORM, "CPluginSystem::DeviceModified: Notifying plugin %u about modification of device %u", atoi(sHwdID.c_str()), atoi(Unit.c_str()));
 		Plugins::CPlugin *pPlugin = (Plugins::CPlugin*)pHardware;
-		pPlugin->DeviceModified(atoi(Unit.c_str()));
+		pPlugin->DeviceModified(sd[1], atoi(Unit.c_str()));
 	}
 } // namespace Plugins
 
@@ -422,6 +440,15 @@ namespace http {
 											iOptions++;
 										}
 									}
+
+									TiXmlNode* pXmlDescNode = pXmlEle->FirstChild("description");
+									if (pXmlDescNode)
+									{
+										TiXmlPrinter Xmlprinter;
+										Xmlprinter.SetStreamPrinting();
+										pXmlDescNode->Accept(&Xmlprinter);
+										root[iPluginCnt]["parameters"][iParams]["description"] = Xmlprinter.CStr();
+									}
 									iParams++;
 								}
 							}
@@ -497,17 +524,17 @@ namespace http {
 			if (sIdx.empty())
 				return;
 			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT HardwareID, Unit FROM DeviceStatus WHERE (ID=='%q') ", sIdx.c_str());
+			result = m_sql.safe_query("SELECT HardwareID, DeviceID, Unit FROM DeviceStatus WHERE (ID=='%q') ", sIdx.c_str());
 			if (result.size() == 1)
 			{
 				int HwID = atoi(result[0][0].c_str());
-				int Unit = atoi(result[0][1].c_str());
+				int Unit = atoi(result[0][2].c_str());
 				Plugins::CPluginSystem Plugins;
 				std::map<int, CDomoticzHardwareBase*>*	PluginHwd = Plugins.GetHardware();
 				Plugins::CPlugin*	pPlugin = (Plugins::CPlugin*)(*PluginHwd)[HwID];
 				if (pPlugin)
 				{
-					pPlugin->SendCommand(Unit, sAction, 0, NoColor);
+					pPlugin->SendCommand(result[0][1], Unit, sAction, 0, NoColor);
 				}
 			}
 		}

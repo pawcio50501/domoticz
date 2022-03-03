@@ -42,7 +42,6 @@ extern http::server::CWebServerHelper m_webservers;
 #include "../hardware/plugins/PluginMessages.h"
 #include "EventsPythonModule.h"
 #include "EventsPythonDevice.h"
-extern PyObject * PDevice_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
 #endif
 
 // Helper table for Blockly and SQL name mapping
@@ -196,7 +195,7 @@ void CEventSystem::SetEnabled(const bool bEnabled)
 
 void CEventSystem::LoadEvents()
 {
-	std::string dzv_Dir, s;
+	std::string dzv_Dir;
 	CdzVents* dzvents = CdzVents::GetInstance();
 	dzvents->m_bdzVentsExist = false;
 
@@ -239,16 +238,14 @@ void CEventSystem::LoadEvents()
 		}
 	}
 
-	std::vector<std::string> FileEntries;
-	std::string filename;
-
 	// Remove dzVents DB files from disk
+	std::vector<std::string> FileEntries;
 	DirectoryListing(FileEntries, dzv_Dir, false, true);
 	for (const auto &file : FileEntries)
 	{
-		filename = dzv_Dir + file;
-		if (filename.find("README.md") == std::string::npos)
-			std::remove(filename.c_str());
+		if (file.find("README.md") != std::string::npos)
+			continue;
+		std::remove((dzv_Dir + file).c_str());
 	}
 
 	result = m_sql.safe_query(
@@ -273,9 +270,9 @@ void CEventSystem::LoadEvents()
 			// Write active dzVents scripts to disk.
 			if ((eitem.Interpreter == "dzVents") && (eitem.EventStatus != 0))
 			{
-				s = dzv_Dir + eitem.Name + ".lua";
-				_log.Log(LOG_STATUS, "dzVents: Write file: %s", s.c_str());
-				FILE *fOut = fopen(s.c_str(), "wb+");
+				std::string sFile = dzv_Dir + eitem.Name + ".lua";
+				_log.Log(LOG_STATUS, "dzVents: Write file: %s", sFile.c_str());
+				FILE* fOut = fopen(sFile.c_str(), "wb+");
 				if (fOut)
 				{
 					fwrite(eitem.Actions.c_str(), 1, eitem.Actions.size(), fOut);
@@ -284,7 +281,7 @@ void CEventSystem::LoadEvents()
 				}
 				else
 				{
-					_log.Log(LOG_ERROR, "EventSystem: problem writing file: %s",  s.c_str());
+					_log.Log(LOG_ERROR, "EventSystem: problem writing file: %s", sFile.c_str());
 				}
 			}
 		}
@@ -335,18 +332,6 @@ void CEventSystem::Do_Work()
 	_log.Log(LOG_STATUS, "EventSystem: Stopped...");
 
 }
-/*
-std::string utf8_to_string(const char *utf8str, const std::locale& loc)
-{
-// UTF-8 to wstring
-std::wstring_convert<std::codecvt_utf8<wchar_t>> wconv;
-std::wstring wstr = wconv.from_bytes(utf8str);
-// wstring to string
-std::vector<char> buf(wstr.size());
-std::use_facet<std::ctype<wchar_t>>(loc).narrow(wstr.data(), wstr.data() + wstr.size(), '?', buf.data());
-return std::string(buf.data(), buf.size());
-}
-*/
 
 void CEventSystem::StripQuotes(std::string &sString)
 {
@@ -1240,7 +1225,7 @@ bool CEventSystem::UpdateSceneGroup(const uint64_t ulDevID, const int nValue, co
 
 	bool bEventTrigger = true;
 	boost::unique_lock<boost::shared_mutex> scenesgroupsMutexLock(m_scenesgroupsMutex);
-	std::map<uint64_t, _tScenesGroups>::iterator itt = m_scenesgroups.find(ulDevID);
+	auto itt = m_scenesgroups.find(ulDevID);
 	if (itt != m_scenesgroups.end())
 	{
 		_tScenesGroups replaceitem = itt->second;
@@ -1276,7 +1261,7 @@ void CEventSystem::UpdateUserVariable(const uint64_t ulDevID, const std::string 
 
 	boost::unique_lock<boost::shared_mutex> uservariablesMutexLock(m_uservariablesMutex);
 
-	std::map<uint64_t, _tUserVariable>::iterator itt = m_uservariables.find(ulDevID);
+	auto itt = m_uservariables.find(ulDevID);
 	if (itt == m_uservariables.end())
 		return; //not found
 
@@ -1303,7 +1288,7 @@ void CEventSystem::UpdateBatteryLevel(const uint64_t ulDevID, const unsigned cha
 		return;
 
 	boost::unique_lock<boost::shared_mutex> devicestatesMutexLock(m_devicestatesMutex);
-	std::map<uint64_t, _tDeviceStatus>::iterator itt = m_devicestates.find(ulDevID);
+	auto itt = m_devicestates.find(ulDevID);
 
 	if (itt != m_devicestates.end())
 	{
@@ -1336,8 +1321,7 @@ std::string CEventSystem::UpdateSingleState(
 
 	boost::unique_lock<boost::shared_mutex> devicestatesMutexLock(m_devicestatesMutex);
 
-	std::map<uint64_t, _tDeviceStatus>::iterator itt = m_devicestates.find(ulDevID);
-
+	auto itt = m_devicestates.find(ulDevID);
 	if (itt != m_devicestates.end())
 	{
 		//_log.Log(LOG_STATUS,"EventSystem: update device %" PRIu64 "",ulDevID);
@@ -1638,7 +1622,7 @@ void CEventSystem::EvaluateEvent(const std::vector<_tEventQueue> &items)
 		{
 			std::vector<std::vector<std::string> > result;
 			result = m_sql.safe_query(
-				"SELECT DeviceStatus.HardwareID, DeviceStatus.ID, DeviceStatus.Unit FROM DeviceStatus INNER JOIN Hardware ON DeviceStatus.HardwareID=Hardware.ID WHERE (DeviceStatus.Type=%d AND DeviceStatus.SubType=%d  AND Hardware.Type=%d)",
+				"SELECT DeviceStatus.HardwareID, DeviceStatus.ID, DeviceStatus.DeviceID, DeviceStatus.Unit FROM DeviceStatus INNER JOIN Hardware ON DeviceStatus.HardwareID=Hardware.ID WHERE (DeviceStatus.Type=%d AND DeviceStatus.SubType=%d  AND Hardware.Type=%d)",
 				pTypeSecurity1, sTypeDomoticzSecurity, HTYPE_PythonPlugin);
 
 			if (!result.empty())
@@ -1646,8 +1630,7 @@ void CEventSystem::EvaluateEvent(const std::vector<_tEventQueue> &items)
 				std::vector<std::string> sd = result[0];
 				Plugins::CPlugin* pPlugin = (Plugins::CPlugin*)m_mainworker.GetHardware(atoi(sd[0].c_str()));
 				if (pPlugin)
-					pPlugin->MessagePlugin(new Plugins::onSecurityEventCallback(
-						pPlugin, atoi(sd[2].c_str()), item.nValue, m_szSecStatus[item.nValue]));
+					pPlugin->MessagePlugin(new Plugins::onSecurityEventCallback(sd[2].c_str(), atoi(sd[3].c_str()), item.nValue, m_szSecStatus[item.nValue]));
 			}
 		}
 #endif
@@ -1974,7 +1957,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 
 	if (Argument.find("temperaturedevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_tempValuesByID.find(dindex);
+		auto itt = m_tempValuesByID.find(dindex);
 		if (itt != m_tempValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -1984,7 +1967,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("dewpointdevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_dewValuesByID.find(dindex);
+		auto itt = m_dewValuesByID.find(dindex);
 		if (itt != m_dewValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -1994,7 +1977,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("humiditydevice") == 0)
 	{
-		std::map<uint64_t, int>::const_iterator itt = m_humValuesByID.find(dindex);
+		auto itt = m_humValuesByID.find(dindex);
 		if (itt != m_humValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2004,7 +1987,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("barometerdevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_baroValuesByID.find(dindex);
+		auto itt = m_baroValuesByID.find(dindex);
 		if (itt != m_baroValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2014,7 +1997,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("utilitydevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_utilityValuesByID.find(dindex);
+		auto itt = m_utilityValuesByID.find(dindex);
 		if (itt != m_utilityValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2024,7 +2007,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("weatherdevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_weatherValuesByID.find(dindex);
+		auto itt = m_weatherValuesByID.find(dindex);
 		if (itt != m_weatherValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2034,7 +2017,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("raindevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_rainValuesByID.find(dindex);
+		auto itt = m_rainValuesByID.find(dindex);
 		if (itt != m_rainValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2044,7 +2027,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("rainlasthourdevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_rainLastHourValuesByID.find(dindex);
+		auto itt = m_rainLastHourValuesByID.find(dindex);
 		if (itt != m_rainLastHourValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2054,7 +2037,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("uvdevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_uvValuesByID.find(dindex);
+		auto itt = m_uvValuesByID.find(dindex);
 		if (itt != m_uvValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2064,7 +2047,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("winddirdevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_winddirValuesByID.find(dindex);
+		auto itt = m_winddirValuesByID.find(dindex);
 		if (itt != m_winddirValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2074,7 +2057,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("windspeeddevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_windspeedValuesByID.find(dindex);
+		auto itt = m_windspeedValuesByID.find(dindex);
 		if (itt != m_windspeedValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2084,7 +2067,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("windgustdevice") == 0)
 	{
-		std::map<uint64_t, float>::const_iterator itt = m_windgustValuesByID.find(dindex);
+		auto itt = m_windgustValuesByID.find(dindex);
 		if (itt != m_windgustValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -2094,7 +2077,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("variable") == 0)
 	{
-		std::map<uint64_t, _tUserVariable>::const_iterator itt = m_uservariables.find(dindex);
+		auto itt = m_uservariables.find(dindex);
 		if (itt != m_uservariables.end())
 		{
 			return itt->second.variableValue;
@@ -2102,7 +2085,7 @@ std::string CEventSystem::ProcessVariableArgument(const std::string &Argument)
 	}
 	else if (Argument.find("zwavealarms") == 0)
 	{
-		std::map<uint64_t, int>::const_iterator itt = m_zwaveAlarmValuesByID.find(dindex);
+		auto itt = m_zwaveAlarmValuesByID.find(dindex);
 		if (itt != m_zwaveAlarmValuesByID.end())
 		{
 			std::stringstream sstr;
@@ -3602,7 +3585,7 @@ bool CEventSystem::ScheduleEvent(int deviceID, const std::string &Action, bool i
 		CDomoticzHardwareBase *pBaseHardware = m_mainworker.GetHardwareByType(HTYPE_Kodi);
 		if (pBaseHardware != nullptr)
 		{
-			CKodi			*pHardware = reinterpret_cast<CKodi*>(pBaseHardware);
+			CKodi			*pHardware = dynamic_cast<CKodi*>(pBaseHardware);
 			std::string		sPlayList = sParams;
 			size_t			iLastSpace = sParams.find_last_of(' ', sParams.length());
 
@@ -3622,7 +3605,7 @@ bool CEventSystem::ScheduleEvent(int deviceID, const std::string &Action, bool i
 			pBaseHardware = m_mainworker.GetHardwareByType(HTYPE_LogitechMediaServer);
 			if (pBaseHardware == nullptr)
 				return false;
-			CLogitechMediaServer *pHardware = reinterpret_cast<CLogitechMediaServer*>(pBaseHardware);
+			CLogitechMediaServer *pHardware = dynamic_cast<CLogitechMediaServer*>(pBaseHardware);
 
 			int iPlaylistID = pHardware->GetPlaylistRefID(oParseResults.sCommand.substr(14));
 			if (iPlaylistID == 0) return false;
@@ -3636,7 +3619,7 @@ bool CEventSystem::ScheduleEvent(int deviceID, const std::string &Action, bool i
 		CDomoticzHardwareBase *pBaseHardware = m_mainworker.GetHardwareByType(HTYPE_Kodi);
 		if (pBaseHardware != nullptr)
 		{
-			//CKodi			*pHardware = reinterpret_cast<CKodi*>(pBaseHardware);
+			//CKodi			*pHardware = dynamic_cast<CKodi*>(pBaseHardware);
 			if (sParams.length() > 0)
 			{
 				level = atoi(sParams.c_str());
@@ -3649,7 +3632,7 @@ bool CEventSystem::ScheduleEvent(int deviceID, const std::string &Action, bool i
 		CDomoticzHardwareBase *pBaseHardware = m_mainworker.GetHardwareByType(HTYPE_Kodi);
 		if (pBaseHardware != nullptr)
 		{
-			CKodi	*pHardware = reinterpret_cast<CKodi*>(pBaseHardware);
+			CKodi	*pHardware = dynamic_cast<CKodi*>(pBaseHardware);
 			pHardware->SetExecuteCommand(deviceID, sParams);
 		}
 	}
@@ -3828,7 +3811,11 @@ std::string CEventSystem::nValueToWording(const uint8_t dType, const uint8_t dSu
 			lstatus = "Locked";
 		}
 	}
-	else if (switchtype == STYPE_Blinds)
+	else if (
+		(switchtype == STYPE_Blinds)
+		|| (switchtype == STYPE_BlindsPercentage)
+		|| (switchtype == STYPE_BlindsPercentageWithStop)
+		)
 	{
 		if (lstatus == "On")
 		{
@@ -3843,7 +3830,11 @@ std::string CEventSystem::nValueToWording(const uint8_t dType, const uint8_t dSu
 			lstatus = "Open";
 		}
 	}
-	else if (switchtype == STYPE_BlindsInverted)
+	else if (
+		(switchtype == STYPE_BlindsInverted)
+		|| (switchtype == STYPE_BlindsPercentageInverted)
+		|| (switchtype == STYPE_BlindsPercentageInvertedWithStop)
+		)
 	{
 		if (lstatus == "Off")
 		{
@@ -3856,28 +3847,6 @@ std::string CEventSystem::nValueToWording(const uint8_t dType, const uint8_t dSu
 		else
 		{
 			lstatus = "Open";
-		}
-	}
-	else if (switchtype == STYPE_BlindsPercentage)
-	{
-		if (lstatus == "On")
-		{
-			lstatus = "Closed";
-		}
-		else if (lstatus == "Off")
-		{
-			lstatus = "Open";
-		}
-	}
-	else if (switchtype == STYPE_BlindsPercentageInverted)
-	{
-		if (lstatus == "On")
-		{
-			lstatus = "Open";
-		}
-		else if (lstatus == "Off")
-		{
-			lstatus = "Closed";
 		}
 	}
 	else if (switchtype == STYPE_Media)
@@ -4016,7 +3985,11 @@ int CEventSystem::calculateDimLevel(int deviceID, int percentageLevel)
 
 		if (maxDimLevel != 0)
 		{
-			if ((switchtype == STYPE_Dimmer) || (switchtype == STYPE_BlindsPercentage) || (switchtype == STYPE_BlindsPercentageInverted))
+			if (
+				(switchtype == STYPE_Dimmer)
+				|| (switchtype == STYPE_BlindsPercentage) || (switchtype == STYPE_BlindsPercentageInverted)
+				|| (switchtype == STYPE_BlindsPercentageWithStop) || (switchtype == STYPE_BlindsPercentageInvertedWithStop)
+				)
 			{
 				float fLevel = (maxDimLevel / 100.0F) * percentageLevel;
 				if (fLevel > 100)

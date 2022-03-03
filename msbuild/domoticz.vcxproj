@@ -29,27 +29,27 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <EnableUnitySupport>false</EnableUnitySupport>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -139,7 +139,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>./Windows Libraries/OpenZwave/bin/OpenZWaveD.lib;Setupapi.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;dnsapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>./Windows Libraries/openzwave/x64/OpenZWaveD.lib;Setupapi.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;dnsapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
       <Profile>false</Profile>
     </Link>
@@ -196,7 +196,7 @@
       <EnableCOMDATFolding>false</EnableCOMDATFolding>
       <OptimizeReferences>false</OptimizeReferences>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>./Windows Libraries/OpenZwave/bin/OpenZWave.lib;Setupapi.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;dnsapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>./Windows Libraries/openzwave/x64/OpenZWave.lib;Setupapi.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;dnsapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
@@ -287,7 +287,6 @@
     <None Include="..\www\css\style.css" />
     <None Include="..\www\css\ui-darkness\jquery-ui.min.css" />
     <None Include="..\www\eventsframe.html" />
-    <None Include="..\www\html5.appcache" />
     <None Include="..\www\i18n\domoticz-ar.json.gz" />
     <None Include="..\www\i18n\domoticz-bg.json.gz" />
     <None Include="..\www\i18n\domoticz-ca.json.gz" />
@@ -444,6 +443,7 @@
     <None Include="..\www\js\noty\themes\default.js.gz" />
     <None Include="..\www\js\require.js.gz" />
     <None Include="..\www\js\respond.min.js.gz" />
+    <None Include="..\www\js\sw-toolbox.js" />
     <None Include="..\www\js\themes\dark-blue.js.gz" />
     <None Include="..\www\js\themes\dark-green.js.gz" />
     <None Include="..\www\js\themes\gray.js.gz" />
@@ -452,6 +452,7 @@
     <None Include="..\www\js\ui-bootstrap.min.js.gz" />
     <None Include="..\www\js\wow.min.js.gz" />
     <None Include="..\www\js\ZeroClipboard.js.gz" />
+    <None Include="..\www\manifest.json" />
     <None Include="..\www\media\handclosed.cur" />
     <None Include="..\www\media\handopen.cur" />
     <None Include="..\www\media\swf\copy_csv_xls.swf" />
@@ -461,6 +462,7 @@
     <None Include="..\www\ozwcp\ozwcp.html" />
     <None Include="..\www\secpanel\css\style.css" />
     <None Include="..\www\secpanel\index.html" />
+    <None Include="..\www\service-worker.js" />
     <None Include="..\www\styles\default\base.css" />
     <None Include="..\www\styles\default\custom.css" />
     <None Include="..\www\styles\default\custom.js" />
@@ -588,6 +590,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
     </ClInclude>
+    <ClInclude Include="..\hardware\EnOceanEEP.h" />
     <ClInclude Include="..\hardware\EnOceanESP2.h" />
     <ClInclude Include="..\hardware\EnOceanESP3.h" />
     <ClInclude Include="..\hardware\EnphaseAPI.h" />
@@ -610,8 +613,10 @@
     <ClInclude Include="..\hardware\HardwareCereal.h" />
     <ClInclude Include="..\hardware\Honeywell.h" />
     <ClInclude Include="..\hardware\Meteorologisk.h" />
+    <ClInclude Include="..\hardware\MQTTAutoDiscover.h" />
     <ClInclude Include="..\hardware\NestOAuthAPI.h" />
     <ClInclude Include="..\hardware\OctoPrintMQTT.h" />
+    <ClInclude Include="..\hardware\plugins\PythonObjectEx.h" />
     <ClInclude Include="..\hardware\Rtl433.h" />
     <ClInclude Include="..\hardware\serial\impl\win.h" />
     <ClInclude Include="..\hardware\SysfsGpio.h" />
@@ -668,6 +673,7 @@
     <ClInclude Include="..\hardware\Rego6XXSerial.h" />
     <ClInclude Include="..\hardware\RelayNet.h" />
     <ClInclude Include="..\hardware\RFLinkBase.h" />
+    <ClInclude Include="..\hardware\RFLinkMQTT.h" />
     <ClInclude Include="..\hardware\RFLinkSerial.h" />
     <ClInclude Include="..\hardware\RFLinkTCP.h" />
     <ClInclude Include="..\hardware\RFXBase.h" />
@@ -891,8 +897,10 @@
       </LanguageStandard>
     </ClCompile>
     <ClCompile Include="..\hardware\EcoDevices.cpp" />
+    <ClCompile Include="..\hardware\EnOceanEEP.cpp" />
     <ClCompile Include="..\hardware\EnOceanESP2.cpp" />
     <ClCompile Include="..\hardware\EnOceanESP3.cpp" />
+    <ClCompile Include="..\hardware\EnOceanRawValue.cpp" />
     <ClCompile Include="..\hardware\EnphaseAPI.cpp" />
     <ClCompile Include="..\hardware\ETH8020.cpp" />
     <ClCompile Include="..\hardware\eVehicles\eVehicle.cpp" />
@@ -911,8 +919,10 @@
     <ClCompile Include="..\hardware\GpioPin.cpp" />
     <ClCompile Include="..\hardware\Honeywell.cpp" />
     <ClCompile Include="..\hardware\Meteorologisk.cpp" />
+    <ClCompile Include="..\hardware\MQTTAutoDiscover.cpp" />
     <ClCompile Include="..\hardware\NestOAuthAPI.cpp" />
     <ClCompile Include="..\hardware\OctoPrintMQTT.cpp" />
+    <ClCompile Include="..\hardware\plugins\PythonObjectEx.cpp" />
     <ClCompile Include="..\hardware\Rtl433.cpp" />
     <ClCompile Include="..\hardware\SysfsGpio.cpp" />
     <ClCompile Include="..\hardware\HarmonyHub.cpp" />
@@ -973,6 +983,7 @@
     <ClCompile Include="..\hardware\RAVEn.cpp" />
     <ClCompile Include="..\hardware\RelayNet.cpp" />
     <ClCompile Include="..\hardware\RFLinkBase.cpp" />
+    <ClCompile Include="..\hardware\RFLinkMQTT.cpp" />
     <ClCompile Include="..\hardware\RFLinkSerial.cpp" />
     <ClCompile Include="..\hardware\RFLinkTCP.cpp" />
     <ClCompile Include="..\hardware\RFXBase.cpp" />

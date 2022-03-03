@@ -11,6 +11,7 @@
 #define timer_resolution_hz 25
 
 struct sqlite3;
+struct sqlite3_stmt;
 
 enum _eWindUnit
 {
@@ -320,6 +321,27 @@ typedef std::vector<std::string> TSqlRowQuery;
 // result for an sql query : Vector of TSqlRowQuery
 typedef std::vector<TSqlRowQuery> TSqlQueryResult;
 
+class CSQLStatement
+{
+      private:
+	sqlite3 *m_DBase;
+	sqlite3_stmt *m_Statement;
+	int iNextParam;
+	int m_Status;
+	std::string m_ErrorText;
+
+      public:
+	CSQLStatement(sqlite3 *pDBase, const std::string &pSQL);
+	int AddParameter(std::string &pParam);
+	int Execute();
+	bool Error();
+	const char *ErrorText()
+	{
+		return m_ErrorText.c_str();
+	};
+	~CSQLStatement();
+};
+
 class CSQLHelper : public StoppableTask
 {
       public:
@@ -337,15 +359,15 @@ class CSQLHelper : public StoppableTask
 
 	// Returns DeviceRowID
 	uint64_t UpdateValue(int HardwareID, const char *ID, unsigned char unit, unsigned char devType, unsigned char subType, unsigned char signallevel, unsigned char batterylevel, int nValue,
-			     std::string &devname, bool bUseOnOffAction = true);
+			     std::string &devname, const bool bUseOnOffAction, const char *User = nullptr);
 	uint64_t UpdateValue(int HardwareID, const char *ID, unsigned char unit, unsigned char devType, unsigned char subType, unsigned char signallevel, unsigned char batterylevel,
-			     const char *sValue, std::string &devname, bool bUseOnOffAction = true);
+			     const char *sValue, std::string &devname, const bool bUseOnOffAction, const char* User = nullptr);
 	uint64_t UpdateValue(int HardwareID, const char *ID, unsigned char unit, unsigned char devType, unsigned char subType, unsigned char signallevel, unsigned char batterylevel, int nValue,
-			     const char *sValue, std::string &devname, bool bUseOnOffAction = true);
+			     const char *sValue, std::string &devname, const bool bUseOnOffAction, const char* User = nullptr);
 	uint64_t UpdateValueLighting2GroupCmd(int HardwareID, const char *ID, unsigned char unit, unsigned char devType, unsigned char subType, unsigned char signallevel, unsigned char batterylevel,
-					      int nValue, const char *sValue, std::string &devname, bool bUseOnOffAction = true);
+					      int nValue, const char *sValue, std::string &devname, const bool bUseOnOffAction, const char* User = nullptr);
 	uint64_t UpdateValueHomeConfortGroupCmd(int HardwareID, const char *ID, unsigned char unit, unsigned char devType, unsigned char subType, unsigned char signallevel, unsigned char batterylevel,
-						int nValue, const char *sValue, std::string &devname, bool bUseOnOffAction = true);
+						int nValue, const char *sValue, std::string &devname, const bool bUseOnOffAction, const char* User = nullptr);
 
 	uint64_t GetDeviceIndex(int HardwareID, const std::string &ID, unsigned char unit, unsigned char devType, unsigned char subType, std::string &devname);
 
@@ -420,6 +442,7 @@ class CSQLHelper : public StoppableTask
 
 	bool HandleOnOffAction(bool bIsOn, const std::string &OnAction, const std::string &OffAction);
 
+	int execute_sql(const std::string &sSQL, std::vector<std::string> *pValues, bool bLogError);
 	std::vector<std::vector<std::string>> safe_query(const char *fmt, ...);
 	std::vector<std::vector<std::string>> safe_queryBlob(const char *fmt, ...);
 	void safe_exec_no_return(const char *fmt, ...);
@@ -456,6 +479,7 @@ class CSQLHelper : public StoppableTask
 
       public:
 	std::string m_LastSwitchID; // for learning command
+	std::string m_UniqueID;
 	uint64_t m_LastSwitchRowID;
 	_eWindUnit m_windunit;
 	std::string m_windsign;
@@ -497,7 +521,7 @@ class CSQLHelper : public StoppableTask
 	void StopThread();
 	void Do_Work();
 #ifndef WIN32
-	void ManageExecuteScriptTimeout(int pid, int timeout, bool *stillRunning, bool *timeoutOccurred);
+	void ManageExecuteScriptTimeout(std::string szCommand, int pid, int timeout, bool *stillRunning, bool *timeoutOccurred);
 #endif
 	void PerformThreadedAction(const _tTaskItem tItem);
 	bool SwitchLightFromTasker(const std::string &idx, const std::string &switchcmd, const std::string &level, const std::string &color, const std::string &User);
@@ -508,7 +532,7 @@ class CSQLHelper : public StoppableTask
 
 	// Returns DeviceRowID
 	uint64_t UpdateValueInt(int HardwareID, const char *ID, unsigned char unit, unsigned char devType, unsigned char subType, unsigned char signallevel, unsigned char batterylevel, int nValue,
-				const char *sValue, std::string &devname, bool bUseOnOffAction);
+				const char *sValue, std::string &devname, bool bUseOnOffAction, const char* User = nullptr);
 
 	bool UpdateCalendarMeter(int HardwareID, const char *DeviceID, unsigned char unit, unsigned char devType, unsigned char subType, bool shortLog, bool multiMeter, const char *date,
 				 long long value1 = 0, long long value2 = 0, long long value3 = 0, long long value4 = 0, long long value5 = 0, long long value6 = 0, long long counter1 = 0,
@@ -540,6 +564,7 @@ class CSQLHelper : public StoppableTask
 	bool CheckDateSQL(const std::string &sDate);
 	bool CheckDateTimeSQL(const std::string &sDateTime);
 	bool CheckTime(const std::string &sTime);
+	void SendUpdateInt(const std::string& Idx);
 
 	std::vector<std::vector<std::string>> query(const std::string &szQuery);
 	std::vector<std::vector<std::string>> queryBlob(const std::string &szQuery);

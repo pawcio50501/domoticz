@@ -76,7 +76,6 @@ namespace
 		"\t-webroot additional web root, useful with proxy servers (for example domoticz)\n"
 		"\t-startupdelay seconds (default=0)\n"
 		"\t-nowwwpwd (in case you forgot the web server username/password)\n"
-		"\t-nocache (do not return appcache, use only when developing the web pages)\n"
 		"\t-wwwcompress mode (on = always compress [default], off = always decompress, static = no processing but try precompressed first)\n"
 #if defined WIN32
 		"\t-nobrowser (do not start web browser (Windows Only)\n"
@@ -85,11 +84,13 @@ namespace
 		"\t-dbase_disable_wal_mode\n"
 #if defined WIN32
 		"\t-log file_path (for example D:\\domoticz.log)\n"
+		"\t-weblog file_path (for example D:\\domoticz_access.log)\n"
 #else
 		"\t-log file_path (for example /var/log/domoticz.log)\n"
+		"\t-weblog file_path (for example /var/log/domoticz_access.log)\n"
 #endif
-		"\t-loglevel (combination of: normal,status,error,debug)\n"
-		"\t-debuglevel (combination of: normal,hardware,received,webserver,eventsystem,python,thread_id)\n"
+		"\t-loglevel (combination of: all,normal,status,error,debug)\n"
+		"\t-debuglevel (combination of: all,normal,hardware,received,webserver,eventsystem,python,thread_id,sql)\n"
 		"\t-notimestamps (do not prepend timestamps to logs; useful with syslog, etc.)\n"
 		"\t-php_cgi_path (for example /usr/bin/php-cgi)\n"
 #ifndef WIN32
@@ -153,7 +154,6 @@ std::string szAppDate="???";
 std::string szPyVersion="None";
 int ActYear;
 time_t m_StartTime = time(nullptr);
-std::string szRandomUUID = "???";
 std::string journalMode="WAL";
 
 MainWorker m_mainworker;
@@ -163,10 +163,10 @@ CSQLHelper m_sql;
 CNotificationHelper m_notifications;
 
 std::string logfile;
+std::string weblogfile;
 bool g_bStopApplication = false;
 bool g_bUseSyslog = false;
 bool g_bRunAsDaemon = false;
-bool g_bDontCacheWWW = false;
 http::server::_eWebCompressionMode g_wwwCompressMode = http::server::WWW_USE_GZIP;
 bool g_bUseUpdater = true;
 http::server::server_settings webserver_settings;
@@ -506,10 +506,16 @@ bool ParseConfigFile(const std::string &szConfigFile)
 		szFlag = stdstring_trim(szFlag);
 		sLine = stdstring_trim(sLine);
 
-		if (szFlag == "http_port") {
-			webserver_settings.listening_port = sLine;
-		}
+        if (szFlag == "http_address") {
+            webserver_settings.listening_address = sLine;
+        }
+        else if (szFlag == "http_port") {
+            webserver_settings.listening_port = sLine;
+        }
 #ifdef WWW_ENABLE_SSL
+		else if (szFlag == "ssl_address") {
+			secure_webserver_settings.listening_address = sLine;
+		}
 		else if (szFlag == "ssl_port") {
 			secure_webserver_settings.listening_port = sLine;
 		}
@@ -550,14 +556,14 @@ bool ParseConfigFile(const std::string &szConfigFile)
 				return false;
 			}
 		}
-		else if (szFlag == "cache") {
-			g_bDontCacheWWW = !GetConfigBool(sLine);
-		}
 		else if (szFlag == "reset_password") {
 			m_mainworker.m_bIgnoreUsernamePassword = GetConfigBool(sLine);
 		}
 		else if (szFlag == "log_file") {
 			logfile = sLine;
+		}
+		else if (szFlag == "weblog_file") {
+			weblogfile = sLine;
 		}
 		else if (szFlag == "loglevel") {
 			_log.SetLogFlags(sLine);
@@ -691,6 +697,15 @@ int main(int argc, char**argv)
 			}
 			logfile = cmdLine.GetSafeArgument("-log", 0, "domoticz.log");
 		}
+		if (cmdLine.HasSwitch("-weblog"))
+		{
+			if (cmdLine.GetArgumentCount("-weblog") != 1)
+			{
+				_log.Log(LOG_ERROR, "Please specify an output weblog file (or syslog:<facility>)");
+				return 1;
+			}
+			weblogfile = cmdLine.GetSafeArgument("-weblog", 0, "domoticz_access.log");
+		}
 		if (cmdLine.HasSwitch("-approot"))
 		{
 			if (cmdLine.GetArgumentCount("-approot") != 1)
@@ -709,6 +724,9 @@ int main(int argc, char**argv)
 
 	if (!logfile.empty())
 		_log.SetOutputFile(logfile.c_str());
+
+	if (!weblogfile.empty())
+		_log.SetACLFOutputFile(weblogfile.c_str());
 
 	if (szStartupFolder.empty())
 	{
@@ -742,7 +760,6 @@ int main(int argc, char**argv)
 
 	/* call srand once for the entire app */
 	std::srand((unsigned int)std::time(nullptr));
-	szRandomUUID = GenerateUUID();    
 
 	GetAppVersion();
 	DisplayAppVersion();
@@ -810,9 +827,9 @@ int main(int argc, char**argv)
 			}
 			std::string wwwport = cmdLine.GetSafeArgument("-www", 0, "");
 			int iPort = (int)atoi(wwwport.c_str());
-			if ((iPort < 0) || (iPort > 32767))
+			if ((iPort < 0) || (iPort > 49151))
 			{
-				_log.Log(LOG_ERROR, "Please specify a valid www port");
+				_log.Log(LOG_ERROR, "Please specify a valid www port (1 - 49151, or 0 to disable)");
 				return 1;
 			}
 			webserver_settings.listening_port = wwwport;
@@ -851,9 +868,9 @@ int main(int argc, char**argv)
 			}
 			std::string wwwport = cmdLine.GetSafeArgument("-sslwww", 0, "");
 			int iPort = (int)atoi(wwwport.c_str());
-			if ((iPort < 0) || (iPort > 32767))
+			if ((iPort < 0) || (iPort > 49151))
 			{
-				_log.Log(LOG_ERROR, "Please specify a valid sslwww port");
+				_log.Log(LOG_ERROR, "Please specify a valid sslwww port (1 - 49151)");
 				return 1;
 			}
 			secure_webserver_settings.listening_port = wwwport;
@@ -934,10 +951,6 @@ int main(int argc, char**argv)
 		if (cmdLine.HasSwitch("-nowwwpwd"))
 		{
 			m_mainworker.m_bIgnoreUsernamePassword = true;
-		}
-		if (cmdLine.HasSwitch("-nocache"))
-		{
-			g_bDontCacheWWW = true;
 		}
 		if (cmdLine.HasSwitch("-wwwcompress"))
 		{

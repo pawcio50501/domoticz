@@ -6,7 +6,7 @@
 #define MyAppPublisher "Domoticz.com"
 #define MyAppURL "http://www.domoticz.com/"
 #define MyAppExeName "domoticz.exe"
-#define NSSM "nssm.exe"
+#define NSSM "WinSI.exe"
 #define SetupBaseName   "DomoticzSetup_"
 #define SetupName   "DomoticzSetup"
 #dim Version[4]
@@ -38,8 +38,6 @@ PrivilegesRequired=admin
 SolidCompression=yes
 UsePreviousAppDir=yes
 DirExistsWarning=no
-WizardImageFile=compiler:WizModernImage-IS.bmp
-WizardSmallImageFile=compiler:WizModernSmallImage-IS.bmp
 
 [Tasks]
 Name: RunAsApp; Description: "Run as application "; Flags: exclusive;
@@ -57,7 +55,7 @@ Source: "..\..\scripts\*"; DestDir: "{app}\scripts"; Flags: recursesubdirs creat
 Source: "..\..\dzVents\*"; DestDir: "{app}\dzVents"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\Windows Libraries\openzwave\OpenZWave.dll"; DestDir: {app}; Flags: ignoreversion;
 Source: "..\..\History.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: ".\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: ".\WinSI.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\server_cert.pem"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
 
 Source: "..\Windows Libraries\Redist\*"; DestDir: {app}; Flags: ignoreversion
