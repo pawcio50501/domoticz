@@ -31,24 +31,27 @@ namespace http
 			unsigned long ID;
 			std::string Username;
 			std::string Password;
-			_eUserRights userrights;
-			int TotSensors;
-			int ActiveTabs;
+			_eUserRights userrights = URIGHTS_VIEWER;
+			int TotSensors = 0;
+			int ActiveTabs = 0;
 		} WebUserPassword;
 
 		typedef struct _tWebEmSession
 		{
 			std::string id;
 			std::string remote_host;
+			std::string local_host;
+			std::string remote_port;
+			std::string local_port;
 			std::string auth_token;
 			std::string username;
-			int reply_status;
-			time_t timeout;
-			time_t expires;
-			int rights;
-			bool rememberme;
-			bool isnew;
-			bool forcelogin;
+			int reply_status = 0;
+			time_t timeout = 0;
+			time_t expires = 0;
+			int rights = 0;
+			bool rememberme = false;
+			bool isnew = false;
+			bool forcelogin = false;
 		} WebEmSession;
 
 		typedef struct _tIPNetwork
