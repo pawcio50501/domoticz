@@ -5,8 +5,8 @@ Author : Blaise Thauvin
 Version : 1.6
 Description : This class is used by various Teleinfo hardware decoders to process and display data
 		  It is currently used by EcoDevices, TeleinfoSerial
-		  Detailed information on the Teleinfo protocol can be found at (version 5, 16/03/2015)
-			  http://www.enedis.fr/sites/default/files/Enedis-NOI-CPT_02E.pdf
+		  Detailed information on the Teleinfo protocol (Enedis-NOI-CPT_54E) can be found at (version 3, 01/06/2018)
+		  https://www.enedis.fr/media/2035/download
 
 History :
 0.1 2017-03-03 : Creation
@@ -23,7 +23,6 @@ History :
 #include "stdafx.h"
 #include "TeleinfoBase.h"
 #include "../main/Logger.h"
-#include "../main/localtime_r.h"
 #include "../main/Helper.h"
 #include <bitset>			 // This is necessary to compile on Windows
 
@@ -36,7 +35,6 @@ CTeleinfoBase::CTeleinfoBase()
 	m_p1power.ID = 1;
 	m_p2power.ID = 2;
 	m_p3power.ID = 3;
-
 	m_bDisableCRC = false;
 
 	InitTeleinfo();
@@ -46,7 +44,7 @@ void CTeleinfoBase::InitTeleinfo()
 {
 	m_bufferpos = 0;
 	m_teleinfo.CRCmode1 = 255;	 // Guess the CRC mode at first run
-	m_counter = 0;
+	m_teleinfo.waitingFirstBlock = true; 
 }
 
 void CTeleinfoBase::ProcessTeleinfo(Teleinfo& teleinfo)
@@ -387,7 +385,7 @@ void CTeleinfoBase::ProcessTeleinfo(const std::string& name, int rank, Teleinfo&
 			teleinfo.pAlertPPOT = teleinfo.PPOT;
 			teleinfo.PPOT >>= 1;
 			std::stringstream ss;
-			ss << "Bitmap phases: " << std::bitset<3>(~teleinfo.PPOT);
+			ss << "Bitmap phases: " << std::bitset<3>(~static_cast<uint64_t>(teleinfo.PPOT));
 			message = ss.str();
 			SendAlertSensor(32 * rank + 7, 255, alertPPOT, message, " Alerte Potentiels");
 		}
@@ -425,7 +423,7 @@ void CTeleinfoBase::ProcessTeleinfo(const std::string& name, int rank, Teleinfo&
 		if((teleinfo.STGE & 0x80) != (teleinfo.prevSTGE & 0x80) || teleinfo.prevSTGE == UINT32_MAX)
 		{
 			int iOverload = (teleinfo.STGE >> 7) & 0x1;
-			SendAlertSensor(32 * rank + 12, 255, iOverload, (iOverload == 0)?"Pas de dépssament de la puissance de référence":"Dépassement de la puissance de référence", name + " Dépassement puissance");
+			SendAlertSensor(32 * rank + 12, 255, iOverload, (iOverload == 0)?"Pas de dépassement de la puissance de référence":"Dépassement de la puissance de référence", name + " Dépassement puissance");
 		}
 		if((teleinfo.STGE & 0x100) != (teleinfo.prevSTGE & 0x100) || teleinfo.prevSTGE == UINT32_MAX)
 		{
@@ -548,7 +546,18 @@ void CTeleinfoBase::MatchLine()
 	value = atoi(splitresults[1].c_str());
 
 	// Historic mode
-	if (label == "ADCO") m_teleinfo.ADCO = vString;
+	if (label == "ADCO" || label == "ADSC") 
+	{
+		m_teleinfo.ADCO = vString;
+		// waiting a complete Block received to have m_teleinfo structure completely filled before processing anything => avoid strange behavior at init
+		if (m_teleinfo.waitingFirstBlock)
+			m_teleinfo.waitingFirstBlock = false;
+		else
+		{
+			Debug(DEBUG_HARDWARE, "frame complete, PAPP: %i, PTEC: %s, OPTARIF: %s", m_teleinfo.PAPP, m_teleinfo.PTEC.c_str(), m_teleinfo.OPTARIF.c_str());
+			ProcessTeleinfo(m_teleinfo);
+		}
+	}
 	else if (label == "OPTARIF") m_teleinfo.OPTARIF = vString;
 	else if (label == "ISOUSC") m_teleinfo.ISOUSC = value;
 	else if (label == "PAPP")
@@ -574,12 +583,29 @@ void CTeleinfoBase::MatchLine()
 	else if (label == "IINST2") m_teleinfo.IINST2 = value;
 	else if (label == "IINST3") m_teleinfo.IINST3 = value;
 	else if (label == "PPOT")  m_teleinfo.PPOT = value;
-	else if (label == "MOTDETAT") m_counter++;
 
 	// Standard mode
 	else if (label == "EAST") m_teleinfo.BASE = value;
-	else if (label == "EASF01") m_teleinfo.HCHC = value;
-	else if (label == "EASF02") m_teleinfo.HCHP = value;
+	else if (label == "EASF01") 
+	{
+		// With the TEMPO subscription (= BBR : Blue White Red) this counter is for peak Blue hours
+		if (m_teleinfo.OPTARIF == "BBR")
+			m_teleinfo.BBRHCJB = value;
+		else
+			m_teleinfo.HCHC = value;
+	}
+	else if (label == "EASF02") 
+	{
+		// With the TEMPO subscription (= BBR : Blue White Red) this counter is for off-peak Blue hours
+		if (m_teleinfo.OPTARIF == "BBR")
+			m_teleinfo.BBRHPJB = value;
+		else
+			m_teleinfo.HCHP = value;
+	}
+	else if (label == "EASF03") m_teleinfo.BBRHCJW = value; // TEMPO peak White hours
+	else if (label == "EASF04") m_teleinfo.BBRHPJW = value; // TEMPO off-peak White hours
+	else if (label == "EASF05") m_teleinfo.BBRHCJR = value; // TEMPO peak Red hours
+	else if (label == "EASF06") m_teleinfo.BBRHPJR = value; // TEMPO off-peak Red hours
 	else if (label == "PREF") m_teleinfo.PREF = value;
 	else if (label == "IRMS1") m_teleinfo.IINST = value;
 	else if (label == "IRMS2")
@@ -589,7 +615,26 @@ void CTeleinfoBase::MatchLine()
 		m_teleinfo.IINST2 = value;
 	}
 	else if (label == "IRMS3") m_teleinfo.IINST3 = value;
-	else if (label == "NGTF") m_teleinfo.OPTARIF = stdstring_trim(vString);
+	else if (label == "NGTF") 
+	{
+		std::string ngtfString = stdstring_trim(vString);
+		// Different subscriptions exist and it becomes difficult to remain compatible with historical behavior
+		// The NGTF string is vendor dependent...
+		// Example : At the seller TotalEnergie there is a subscription with super off-peak hours which are on the 3rd meter EASF03
+		// I still put it in off-peak behavior for the moment: It will just miss super off-peak hours: @TODO
+		if (ngtfString == "H PLEINE/CREUSE" || ngtfString == "H SUPER CREUSES" || ngtfString == "HC SEM ET HC WE")
+			m_teleinfo.OPTARIF = "HC..";
+		else if (ngtfString == "TEMPO")
+			// In standard mode, TEMPO string is identical to BBR in historical mode (EDF only)
+			m_teleinfo.OPTARIF = "BBR";
+		else if (ngtfString == "PRODUCTEUR")
+			// subscription for electricity production only
+			// OPTARIF must be set to BASE to have a display on producer meters
+			m_teleinfo.OPTARIF = "BASE";
+		else
+			// For historic mode compatibility
+			m_teleinfo.OPTARIF = ngtfString;
+	}
 	else if (label == "SINSTS")
 	{
 		m_teleinfo.PAPP = value;
@@ -601,10 +646,23 @@ void CTeleinfoBase::MatchLine()
 	else if (label == "URMS1") m_teleinfo.URMS1 = value;
 	else if (label == "URMS2") m_teleinfo.URMS2 = value;
 	else if (label == "URMS3") m_teleinfo.URMS3 = value;
-	else if (label == "NTARF")
+	else if (label == "NTARF" && m_teleinfo.OPTARIF != "")
 	{
-		if (value == 1 && m_teleinfo.OPTARIF == "BASE")
-			m_teleinfo.PTEC = "TH..";
+		// BASE subscription 
+		if (m_teleinfo.OPTARIF == "BASE") m_teleinfo.PTEC = "TH..";
+		// TEMPO subscription 
+		else if (m_teleinfo.OPTARIF == "BBR")
+			switch (value)
+			{
+			case 1: m_teleinfo.PTEC = "HC B"; break;
+			case 2: m_teleinfo.PTEC = "HP B"; break;
+			case 3: m_teleinfo.PTEC = "HC W"; break;
+			case 4: m_teleinfo.PTEC = "HP W"; break;
+			case 5: m_teleinfo.PTEC = "HC R"; break;
+			case 6: m_teleinfo.PTEC = "HP R"; break;
+			default: break;
+			}
+		// Others subscription like (HP / HC) 
 		else if (value == 1)
 			m_teleinfo.PTEC = "HC..";
 		else if (value == 2)
@@ -613,22 +671,22 @@ void CTeleinfoBase::MatchLine()
 	else if (label == "EAIT") m_teleinfo.EAIT = value;
 	else if (label == "SINSTI") m_teleinfo.SINSTI = value;
 	else if (label == "STGE")
-	{ // Status register, hexadecimal string (without 0x)
+	{  // Status register, hexadecimal string (without 0x)
 		m_teleinfo.STGE = strtoul(splitresults[1].c_str(), nullptr, 16);
-	}
-	else if (label == "ADSC")
-	{
-		m_counter++;
-	}
 
-	// at 1200 baud we have roughly one frame per 1,5 second, check more frequently for alerts.
-	if (m_counter >= m_iBaudRate / 600)
-	{
-		m_counter = 0;
-		Debug(DEBUG_HARDWARE, "frame complete, PAPP: %i, PTEC: %s, OPTARIF: %s", m_teleinfo.PAPP, m_teleinfo.PTEC.c_str(), m_teleinfo.OPTARIF.c_str());
-		ProcessTeleinfo(m_teleinfo);
-		mytime(&m_LastHeartbeat);// keep heartbeat happy
+		// Color of tomorow
+		int tomorow = ( m_teleinfo.STGE & 0x0C000000 ) >> 26;
+
+		switch (tomorow)
+		{
+			case 1: m_teleinfo.DEMAIN = "BLEU"; break;
+			case 2: m_teleinfo.DEMAIN = "BLAN"; break;
+			case 3: m_teleinfo.DEMAIN = "ROUG"; break;		
+			default: m_teleinfo.DEMAIN = "----"; break;
+		}
 	}
+	
+	mytime(&m_LastHeartbeat); // keep heartbeat happy
 }
 
 void CTeleinfoBase::ParseTeleinfoData(const char* pData, int Len)
@@ -650,7 +708,7 @@ void CTeleinfoBase::ParseTeleinfoData(const char* pData, int Len)
 			// discard newline, close string, parse line and clear it.
 			m_buffer[m_bufferpos] = 0;
 
-			//We process the line only if the checksum is ok and user did not request to bypass CRC verification
+			// process the line only if the checksum is ok and user did not request to bypass CRC verification
 			if ((m_bDisableCRC) || isCheckSumOk(std::string(m_buffer), m_teleinfo.CRCmode1))
 			{
 				MatchLine();
@@ -664,4 +722,3 @@ void CTeleinfoBase::ParseTeleinfoData(const char* pData, int Len)
 		ii++;
 	}
 }
-

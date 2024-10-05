@@ -96,19 +96,24 @@ define(['app', 'livesocket'], function (app) {
 		}
 
 		RefreshItem = function (item) {
+			item.searchText = GenerateLiveSearchTextT(item);
 			ctrl.temperatures.forEach(function (olditem, oldindex, oldarray) {
 				if (olditem.idx == item.idx) {
 					oldarray[oldindex] = item;
-					if ($scope.config.ShowUpdatedEffect == true) {
-						$("#tempwidgets #" + item.idx + " #name").effect("highlight", { color: '#EEFFEE' }, 1000);
+					if (!document.hidden) {
+						if ($scope.config.ShowUpdatedEffect == true) {
+							$("#tempwidgets #" + item.idx + " #name").effect("highlight", { color: '#EEFFEE' }, 1000);
+						}
 					}
 				}
 			});
+			RefreshLiveSearch();
 		}
 
 		//We only call this once. After this the widgets are being updated automatically by used of the 'jsonupdate' broadcast event.
 		RefreshTemps = function () {
-			livesocket.getJson("json.htm?type=devices&filter=temp&used=true&order=[Order]&lastupdate=" + $.LastUpdateTime + "&plan=" + window.myglobals.LastPlanSelected, function (data) {
+			var roomPlanId = $routeParams.room || window.myglobals.LastPlanSelected;
+			livesocket.getJson("json.htm?type=command&param=getdevices&filter=temp&used=true&order=[Order]&lastupdate=" + $.LastUpdateTime + "&plan=" + roomPlanId, function (data) {
 				if (typeof data.ServerTime != 'undefined') {
 					$rootScope.SetTimeAndSun(data.Sunrise, data.Sunset, data.ServerTime);
 				}
@@ -143,7 +148,7 @@ define(['app', 'livesocket'], function (app) {
 			var roomPlanId = $routeParams.room || window.myglobals.LastPlanSelected;
 
 			$.ajax({
-				url: "json.htm?type=devices&filter=temp&used=true&order=[Order]&plan=" + roomPlanId,
+				url: "json.htm?type=command&param=getdevices&filter=temp&used=true&order=[Order]&plan=" + roomPlanId,
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -151,6 +156,9 @@ define(['app', 'livesocket'], function (app) {
 						if (typeof data.ActTime != 'undefined') {
 							$.LastUpdateTime = parseInt(data.ActTime);
 						}
+						$.each(data.result, function (i, item) {
+							item.searchText = GenerateLiveSearchTextT(item);
+						});
 						ctrl.temperatures = data.result;
 					} else {
 						ctrl.temperatures = [];
@@ -175,10 +183,7 @@ define(['app', 'livesocket'], function (app) {
 		};
 		$scope.DropWidget = function (idx) {
 			var myid = idx;
-			var roomid = ctrl.roomSelected;
-			if (typeof roomid == 'undefined') {
-				roomid = 0;
-			}
+			var roomid = window.myglobals.LastPlanSelected;
 			$.ajax({
 				url: "json.htm?type=command&param=switchdeviceorder&idx1=" + myid + "&idx2=" + $.devIdx + "&roomid=" + roomid,
 				async: false,
@@ -218,7 +223,7 @@ define(['app', 'livesocket'], function (app) {
 					$(this).dialog("close");
 					var aValue = $("#dialog-edittempdevice #edittable #adjustment").val();
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-edittempdevice #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-edittempdevice #devicedescription").val()) +
 						'&addjvalue=' + aValue +
@@ -237,7 +242,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-edittempdevicesmall #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-edittempdevicesmall #devicedescription").val()) +
 							'&used=false',
@@ -293,7 +298,7 @@ define(['app', 'livesocket'], function (app) {
 					$(this).dialog("close");
 
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editsetpoint #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editsetpoint #devicedescription").val()) +
 						'&setpoint=' + setpoint +
@@ -318,7 +323,7 @@ define(['app', 'livesocket'], function (app) {
 					if (aValue < 5) aValue = 5;//These values will display but the controller will update back the currently scheduled setpoint in due course
 					if (aValue > 35) aValue = 35;//These values will display but the controller will update back the currently scheduled setpoint in due course
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editsetpoint #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editsetpoint #devicedescription").val()) +
 						'&setpoint=' + aValue +
@@ -363,7 +368,7 @@ define(['app', 'livesocket'], function (app) {
 					if ($("#dialog-editstate #edittable #until_state").val() != "")
 						tUntil = $("#dialog-editstate #edittable #until_state").datetimepicker('getDate').toISOString();
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editstate #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editstate #devicedescription").val()) +
 						'&state=' + aValue +
@@ -405,7 +410,7 @@ define(['app', 'livesocket'], function (app) {
 				if (bValid) {
 					$(this).dialog("close");
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-edittempdevicesmall #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-edittempdevicesmall #devicedescription").val()) +
 						'&used=true',
@@ -423,7 +428,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-edittempdevicesmall #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-edittempdevicesmall #devicedescription").val()) +
 							'&used=false',
@@ -457,57 +462,42 @@ define(['app', 'livesocket'], function (app) {
 			});
 
 			ShowTemps();
-
-			$("#dialog-edittempdevice").keydown(function (event) {
-				if (event.keyCode == 13) {
-					$(this).siblings('.ui-dialog-buttonpane').find('button:eq(0)').trigger("click");
-					return false;
-				}
-			});
-			$("#dialog-edittempdevicesmall").keydown(function (event) {
-				if (event.keyCode == 13) {
-					$(this).siblings('.ui-dialog-buttonpane').find('button:eq(0)').trigger("click");
-					return false;
-				}
-			});
-
+			////WatchLiveSearch();
 
 		};
 
-		ctrl.RoomPlans = [{ idx: 0, name: $.t("All") }];
-		$.ajax({
-			url: "json.htm?type=plans",
-			async: false,
-			dataType: 'json',
-			success: function (data) {
-				if (typeof data.result != 'undefined') {
-					var totalItems = data.result.length;
-					if (totalItems > 0) {
-						$.each(data.result, function (i, item) {
-							ctrl.RoomPlans.push({
-								idx: item.idx,
-								name: item.Name
-							});
-						});
-					}
-				}
+		//handles TopBar Links
+		$scope.tblinks = [
+			{
+				href:"#/Temperature/CustomTempLog", 
+				text:"Custom Graph", 
+				i18n: "Custom Graph", 
+				icon: "area-chart"
+			},
+			{
+				onclick:"ShowForecast", 
+				text:"Forecast", 
+				i18n: "Forecast", 
+				icon: "cloud-sun-rain"
 			}
-		});
+		];
 
+		//handles RoomPlans
+		ctrl.RoomPlans=$rootScope.GetRoomPlans();	
 		var roomPlanId = $routeParams.room || window.myglobals.LastPlanSelected;
 
 		if (typeof roomPlanId != 'undefined') {
 			ctrl.roomSelected = roomPlanId;
+			window.myglobals.LastPlanSelected = roomPlanId;
 		}
 		ctrl.changeRoom = function () {
 			var idx = ctrl.roomSelected;
 			window.myglobals.LastPlanSelected = idx;
 
 			$route.updateParams({
-					room: idx > 0 ? idx : undefined
+					room: idx >= 0 ? idx : undefined
 				});
 				$location.replace();
-				$scope.$apply();
 		};
 
 	})
@@ -678,9 +668,11 @@ define(['app', 'livesocket'], function (app) {
 					};
 
 					$element.i18n();
+					//WatchLiveSearch();
+					WatchDescriptions();
 
 					if ($scope.ordering == true) {
-						if (permissions.hasPermission("Admin")) {
+						if (permissions.hasPermission("User")) {
 							if (window.myglobals.ismobileint == false) {
 								$element.draggable({
 									drag: function () {

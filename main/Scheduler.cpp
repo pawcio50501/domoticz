@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include <iostream>
 #include "Scheduler.h"
-#include "localtime_r.h"
 #include "Logger.h"
 #include "Helper.h"
 #include "SQLHelper.h"
@@ -66,12 +65,12 @@ void CScheduler::ReloadSchedules()
 		"SELECT T1.DeviceRowID, T1.Time, T1.Type, T1.Cmd, T1.Level, T1.Days, T2.Name,"
 		" T2.Used, T1.UseRandomness, T1.Color, T1.[Date], T1.MDay, T1.Month, T1.Occurence, T1.ID"
 		" FROM Timers as T1, DeviceStatus as T2"
-		" WHERE ((T1.Active == 1) AND (T1.TimerPlan == %d) AND (T2.ID == T1.DeviceRowID))"
+		" WHERE ((T1.Active == 1) AND ((T1.TimerPlan == %d) OR (T1.TimerPlan == 9999)) AND (T2.ID == T1.DeviceRowID))"
 		" ORDER BY T1.ID",
 		m_sql.m_ActiveTimerPlan);
 	if (!result.empty())
 	{
-		for (const auto &sd : result)
+		for (const auto& sd : result)
 		{
 			bool bDUsed = (atoi(sd[7].c_str()) != 0);
 
@@ -85,7 +84,7 @@ void CScheduler::ReloadSchedules()
 
 				_eTimerType timerType = (_eTimerType)atoi(sd[2].c_str());
 				titem.RowID = std::stoull(sd[0]);
-				titem.TimerID= std::stoull(sd[14]);
+				titem.TimerID = std::stoull(sd[14]);
 				titem.startHour = (unsigned char)atoi(sd[1].substr(0, 2).c_str());
 				titem.startMin = (unsigned char)atoi(sd[1].substr(3, 2).c_str());
 				titem.startTime = 0;
@@ -146,6 +145,7 @@ void CScheduler::ReloadSchedules()
 				}
 				titem.Days = atoi(sd[5].c_str());
 				titem.DeviceName = sd[6];
+
 				if (AdjustScheduleItem(&titem, false) == true)
 					m_scheduleitems.push_back(titem);
 			}
@@ -163,12 +163,12 @@ void CScheduler::ReloadSchedules()
 		"SELECT T1.SceneRowID, T1.Time, T1.Type, T1.Cmd, T1.Level, T1.Days, T2.Name,"
 		" T1.UseRandomness, T1.[Date], T1.MDay, T1.Month, T1.Occurence, T1.ID"
 		" FROM SceneTimers as T1, Scenes as T2"
-		" WHERE ((T1.Active == 1) AND (T1.TimerPlan == %d) AND (T2.ID == T1.SceneRowID))"
+		" WHERE ((T1.Active == 1) AND ((T1.TimerPlan == %d) OR (T1.TimerPlan == 9999)) AND (T2.ID == T1.SceneRowID))"
 		" ORDER BY T1.ID",
 		m_sql.m_ActiveTimerPlan);
 	if (!result.empty())
 	{
-		for (const auto &sd : result)
+		for (const auto& sd : result)
 		{
 			tScheduleItem titem;
 
@@ -253,12 +253,12 @@ void CScheduler::ReloadSchedules()
 		"SELECT T1.DeviceRowID, T1.Time, T1.Type, T1.Temperature, T1.Days, T2.Name,"
 		" T1.[Date], T1.MDay, T1.Month, T1.Occurence, T1.ID"
 		" FROM SetpointTimers as T1, DeviceStatus as T2"
-		" WHERE ((T1.Active == 1) AND (T1.TimerPlan == %d) AND (T2.ID == T1.DeviceRowID))"
+		" WHERE ((T1.Active == 1) AND ((T1.TimerPlan == %d) OR (T1.TimerPlan == 9999)) AND (T2.ID == T1.DeviceRowID))"
 		" ORDER BY T1.ID",
 		m_sql.m_ActiveTimerPlan);
 	if (!result.empty())
 	{
-		for (const auto &sd : result)
+		for (const auto& sd : result)
 		{
 			tScheduleItem titem;
 
@@ -268,13 +268,8 @@ void CScheduler::ReloadSchedules()
 			titem.MDay = 0;
 			titem.Month = 0;
 			titem.Occurence = 0;
-
-			{
-				std::stringstream s_str(sd[0]);
-				s_str >> titem.RowID; }
-			{
-				std::stringstream s_str(sd[10]);
-				s_str >> titem.TimerID; }
+			titem.RowID = std::stoull(sd[0]);
+			titem.TimerID = std::stoull(sd[10]);
 
 			_eTimerType timerType = (_eTimerType)atoi(sd[2].c_str());
 
@@ -336,9 +331,10 @@ void CScheduler::ReloadSchedules()
 	}
 }
 
-void CScheduler::SetSunRiseSetTimers(const std::string &sSunRise, const std::string &sSunSet, const std::string &sSunAtSouth, const std::string &sCivTwStart, const std::string &sCivTwEnd, const std::string &sNautTwStart, const std::string &sNautTwEnd, const std::string &sAstTwStart, const std::string &sAstTwEnd)
+void CScheduler::SetSunRiseSetTimes(const std::string& sSunRise, const std::string& sSunSet, const std::string& sSunAtSouth, const std::string& sCivTwStart, const std::string& sCivTwEnd, const std::string& sNautTwStart, const std::string& sNautTwEnd, const std::string& sAstTwStart, const std::string& sAstTwEnd)
 {
 	bool bReloadSchedules = false;
+	bool bReloadSunRiseSet = false;
 
 	{	//needed private scope for the lock
 		std::lock_guard<std::mutex> l(m_mutex);
@@ -350,7 +346,7 @@ void CScheduler::SetSunRiseSetTimers(const std::string &sSunRise, const std::str
 		struct tm tm1;
 
 		auto allSchedules = std::array<std::string, 9>{ sSunRise, sSunSet, sSunAtSouth, sCivTwStart, sCivTwEnd, sNautTwStart, sNautTwEnd, sAstTwStart, sAstTwEnd };
-		time_t *allTimes[] = {&m_tSunRise, &m_tSunSet, &m_tSunAtSouth, &m_tCivTwStart, &m_tCivTwEnd, &m_tNautTwStart, &m_tNautTwEnd, &m_tAstTwStart, &m_tAstTwEnd};
+		time_t* allTimes[] = { &m_tSunRise, &m_tSunSet, &m_tSunAtSouth, &m_tCivTwStart, &m_tCivTwEnd, &m_tNautTwStart, &m_tNautTwEnd, &m_tAstTwStart, &m_tAstTwEnd };
 		for (size_t a = 0; a < allSchedules.size(); a = a + 1)
 		{
 			//std::cout << allSchedules[a].c_str() << ' ';
@@ -358,21 +354,54 @@ void CScheduler::SetSunRiseSetTimers(const std::string &sSunRise, const std::str
 			int min = atoi(allSchedules[a].substr(3, 2).c_str());
 			int sec = atoi(allSchedules[a].substr(6, 2).c_str());
 
-			constructTime(temptime,tm1,ltime.tm_year+1900,ltime.tm_mon+1,ltime.tm_mday,hour,min,sec,ltime.tm_isdst);
+			constructTime(temptime, tm1, ltime.tm_year + 1900, ltime.tm_mon + 1, ltime.tm_mday, hour, min, sec, ltime.tm_isdst);
 			if ((*allTimes[a] != temptime) && (temptime != 0))
 			{
 				if (*allTimes[a] == 0)
 					bReloadSchedules = true;
 				*allTimes[a] = temptime;
+				bReloadSunRiseSet = true;
 			}
 		}
 	}
 
 	if (bReloadSchedules)
 		ReloadSchedules();
+	else if (bReloadSunRiseSet)
+		AdjustSunRiseSetSchedules();
 }
 
-bool CScheduler::AdjustScheduleItem(tScheduleItem *pItem, bool bForceAddDay)
+void CScheduler::AdjustSunRiseSetSchedules()
+{
+	for (auto &itt : m_scheduleitems)
+	{
+		if ((itt.timerType == TTYPE_BEFORESUNRISE) ||
+			(itt.timerType == TTYPE_AFTERSUNRISE) ||
+			(itt.timerType == TTYPE_BEFORESUNSET) ||
+			(itt.timerType == TTYPE_AFTERSUNSET) ||
+
+			(itt.timerType == TTYPE_BEFORESUNATSOUTH) ||
+			(itt.timerType == TTYPE_AFTERSUNATSOUTH) ||
+			(itt.timerType == TTYPE_BEFORECIVTWSTART) ||
+			(itt.timerType == TTYPE_AFTERCIVTWSTART) ||
+			(itt.timerType == TTYPE_BEFORECIVTWEND) ||
+			(itt.timerType == TTYPE_AFTERCIVTWEND) ||
+			(itt.timerType == TTYPE_BEFORENAUTTWSTART) ||
+			(itt.timerType == TTYPE_AFTERNAUTTWSTART) ||
+			(itt.timerType == TTYPE_BEFORENAUTTWEND) ||
+			(itt.timerType == TTYPE_AFTERNAUTTWEND) ||
+			(itt.timerType == TTYPE_BEFOREASTTWSTART) ||
+			(itt.timerType == TTYPE_AFTERASTTWSTART) ||
+			(itt.timerType == TTYPE_BEFOREASTTWEND) ||
+			(itt.timerType == TTYPE_AFTERASTTWEND)
+			)
+		{
+			AdjustScheduleItem(&itt, false);
+		}
+	}
+}
+
+bool CScheduler::AdjustScheduleItem(tScheduleItem* pItem, bool bForceAddDay)
 {
 	time_t atime = mytime(nullptr);
 	time_t rtime = atime;
@@ -424,18 +453,18 @@ bool CScheduler::AdjustScheduleItem(tScheduleItem *pItem, bool bForceAddDay)
 		(pItem->timerType == TTYPE_WEEKSODD) ||
 		(pItem->timerType == TTYPE_WEEKSEVEN))
 	{
-		constructTime(rtime,tm1,ltime.tm_year+1900,ltime.tm_mon+1,ltime.tm_mday,pItem->startHour,pItem->startMin,roffset*60,isdst);
+		constructTime(rtime, tm1, ltime.tm_year + 1900, ltime.tm_mon + 1, ltime.tm_mday, pItem->startHour, pItem->startMin, roffset * 60, isdst);
 		while (rtime < atime + 60)
 		{
 			ltime.tm_mday++;
-			constructTime(rtime,tm1,ltime.tm_year+1900,ltime.tm_mon+1,ltime.tm_mday,pItem->startHour,pItem->startMin,roffset*60,isdst);
+			constructTime(rtime, tm1, ltime.tm_year + 1900, ltime.tm_mon + 1, ltime.tm_mday, pItem->startHour, pItem->startMin, roffset * 60, isdst);
 		}
 		pItem->startTime = rtime;
 		return true;
 	}
 	if (pItem->timerType == TTYPE_FIXEDDATETIME)
 	{
-		constructTime(rtime,tm1,pItem->startYear,pItem->startMonth,pItem->startDay,pItem->startHour,pItem->startMin,roffset*60,isdst);
+		constructTime(rtime, tm1, pItem->startYear, pItem->startMonth, pItem->startDay, pItem->startHour, pItem->startMin, roffset * 60, isdst);
 		if (rtime < atime)
 			return false; //past date/time
 		pItem->startTime = rtime;
@@ -551,12 +580,12 @@ bool CScheduler::AdjustScheduleItem(tScheduleItem *pItem, bool bForceAddDay)
 	}
 	else if (pItem->timerType == TTYPE_MONTHLY)
 	{
-		constructTime(rtime,tm1,ltime.tm_year+1900,ltime.tm_mon+1,pItem->MDay,pItem->startHour,pItem->startMin,0,isdst);
+		constructTime(rtime, tm1, ltime.tm_year + 1900, ltime.tm_mon + 1, pItem->MDay, pItem->startHour, pItem->startMin, 0, isdst);
 
-		while ( (rtime < atime) || (tm1.tm_mday != pItem->MDay) ) // past date/time OR mday exceeds max days in month
+		while ((rtime < atime) || (tm1.tm_mday != pItem->MDay)) // past date/time OR mday exceeds max days in month
 		{
 			ltime.tm_mon++;
-			constructTime(rtime,tm1,ltime.tm_year+1900,ltime.tm_mon+1,pItem->MDay,pItem->startHour,pItem->startMin,0,isdst);
+			constructTime(rtime, tm1, ltime.tm_year + 1900, ltime.tm_mon + 1, pItem->MDay, pItem->startHour, pItem->startMin, 0, isdst);
 		}
 
 		rtime += roffset * 60; // add randomness
@@ -578,7 +607,7 @@ bool CScheduler::AdjustScheduleItem(tScheduleItem *pItem, bool bForceAddDay)
 		nth_dow ndm(Occurence, Day, Month);
 		boost::gregorian::date d = ndm.get_date(ltime.tm_year + 1900);
 
-		constructTime(rtime,tm1,ltime.tm_year+1900,ltime.tm_mon+1,d.day(),pItem->startHour,pItem->startMin,0,isdst);
+		constructTime(rtime, tm1, ltime.tm_year + 1900, ltime.tm_mon + 1, d.day(), pItem->startHour, pItem->startMin, 0, isdst);
 
 		if (rtime < atime) //past date/time
 		{
@@ -593,7 +622,7 @@ bool CScheduler::AdjustScheduleItem(tScheduleItem *pItem, bool bForceAddDay)
 			nth_dow ndm(Occurence, Day, Month);
 			boost::gregorian::date d = ndm.get_date(ltime.tm_year + 1900);
 
-			constructTime(rtime,tm1,ltime.tm_year+1900,ltime.tm_mon,d.day(),pItem->startHour,pItem->startMin,0,isdst);
+			constructTime(rtime, tm1, ltime.tm_year + 1900, ltime.tm_mon, d.day(), pItem->startHour, pItem->startMin, 0, isdst);
 		}
 
 		rtime += roffset * 60; // add randomness
@@ -602,13 +631,13 @@ bool CScheduler::AdjustScheduleItem(tScheduleItem *pItem, bool bForceAddDay)
 	}
 	else if (pItem->timerType == TTYPE_YEARLY)
 	{
-		constructTime(rtime,tm1,ltime.tm_year+1900,pItem->Month,pItem->MDay,pItem->startHour,pItem->startMin,0,isdst);
+		constructTime(rtime, tm1, ltime.tm_year + 1900, pItem->Month, pItem->MDay, pItem->startHour, pItem->startMin, 0, isdst);
 
-		while ( (rtime < atime) || (tm1.tm_mday != pItem->MDay) ) // past date/time OR mday exceeds max days in month
+		while ((rtime < atime) || (tm1.tm_mday != pItem->MDay)) // past date/time OR mday exceeds max days in month
 		{
 			//schedule for next year
 			ltime.tm_year++;
-			constructTime(rtime,tm1,ltime.tm_year+1900,pItem->Month,pItem->MDay,pItem->startHour,pItem->startMin,0,isdst);
+			constructTime(rtime, tm1, ltime.tm_year + 1900, pItem->Month, pItem->MDay, pItem->startHour, pItem->startMin, 0, isdst);
 		}
 
 		rtime += roffset * 60; // add randomness
@@ -714,7 +743,7 @@ void CScheduler::CheckSchedules()
 	struct tm ltime;
 	localtime_r(&atime, &ltime);
 
-	for (auto &item : m_scheduleitems)
+	for (auto& item : m_scheduleitems)
 	{
 		if ((item.bEnabled) && (atime > item.startTime))
 		{
@@ -796,14 +825,14 @@ void CScheduler::CheckSchedules()
 
 				if (item.bIsScene == true)
 					_log.Log(LOG_STATUS, "Schedule item started! Name: %s, Type: %s, SceneID: %" PRIu64 ", Time: %s",
-						 item.DeviceName.c_str(), Timer_Type_Desc(item.timerType), item.RowID, ltimeBuf);
+						item.DeviceName.c_str(), Timer_Type_Desc(item.timerType), item.RowID, ltimeBuf);
 				else if (item.bIsThermostat == true)
 					_log.Log(LOG_STATUS,
-						 "Schedule item started! Name: %s, Type: %s, ThermostatID: %" PRIu64 ", Time: %s",
-						 item.DeviceName.c_str(), Timer_Type_Desc(item.timerType), item.RowID, ltimeBuf);
+						"Schedule item started! Name: %s, Type: %s, ThermostatID: %" PRIu64 ", Time: %s",
+						item.DeviceName.c_str(), Timer_Type_Desc(item.timerType), item.RowID, ltimeBuf);
 				else
 					_log.Log(LOG_STATUS, "Schedule item started! Name: %s, Type: %s, DevID: %" PRIu64 ", Time: %s",
-						 item.DeviceName.c_str(), Timer_Type_Desc(item.timerType), item.RowID, ltimeBuf);
+						item.DeviceName.c_str(), Timer_Type_Desc(item.timerType), item.RowID, ltimeBuf);
 				std::string switchcmd;
 				if (item.timerCmd == TCMD_ON)
 					switchcmd = "On";
@@ -817,20 +846,10 @@ void CScheduler::CheckSchedules()
 				{
 					if (item.bIsScene == true)
 					{
-						/*
-												if (
-													(item.timerType ==
-						   TTYPE_BEFORESUNRISE) || (item.timerType == TTYPE_AFTERSUNRISE) || (item.timerType ==
-						   TTYPE_BEFORESUNSET) || (item.timerType == TTYPE_AFTERSUNSET)
-													)
-												{
-
-												}
-						*/
 						if (!m_mainworker.SwitchScene(item.RowID, switchcmd, "timer"))
 						{
 							_log.Log(LOG_ERROR, "Error switching Scene command, SceneID: %" PRIu64 ", Time: %s",
-								 item.RowID, ltimeBuf);
+								item.RowID, ltimeBuf);
 						}
 					}
 					else if (item.bIsThermostat == true)
@@ -840,8 +859,8 @@ void CScheduler::CheckSchedules()
 						if (!m_mainworker.SetSetPoint(sstr.str(), item.Temperature))
 						{
 							_log.Log(LOG_ERROR,
-								 "Error setting thermostat setpoint, ThermostatID: %" PRIu64 ", Time: %s",
-								 item.RowID, ltimeBuf);
+								"Error setting thermostat setpoint, ThermostatID: %" PRIu64 ", Time: %s",
+								item.RowID, ltimeBuf);
 						}
 					}
 					else
@@ -866,23 +885,37 @@ void CScheduler::CheckSchedules()
 
 							GetLightStatus(dType, dSubType, switchtype, 0, "", lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
 							int ilevel = maxDimLevel;
-							if (
-								(switchtype == STYPE_BlindsPercentage)
-								|| (switchtype == STYPE_BlindsPercentageInverted)
-								|| (switchtype == STYPE_BlindsPercentageWithStop)
-								|| (switchtype == STYPE_BlindsPercentageInvertedWithStop)
-								)
+							if (switchtype == STYPE_Blinds)
 							{
 								if (item.timerCmd == TCMD_ON)
+									switchcmd = "Open";
+								else if (item.timerCmd == TCMD_OFF)
+									switchcmd = "Close";
+							}
+							else if (
+								(switchtype == STYPE_BlindsPercentage)
+								|| (switchtype == STYPE_BlindsPercentageWithStop)
+								)
+							{
+								if ((item.Level > 0) && (item.Level < 100))
 								{
+									// set position to value between 1 and 99 %
 									switchcmd = "Set Level";
 									float fLevel = (maxDimLevel / 100.0F) * item.Level;
-									if (fLevel > 100)
-										fLevel = 100;
-									ilevel = int(fLevel);
+									ilevel = ground(fLevel);
+									if (ilevel > maxDimLevel)
+										ilevel = maxDimLevel;
 								}
-								else if (item.timerCmd == TCMD_OFF)
+								else if (item.timerCmd == TCMD_ON) // no percentage set (0 or 100)
+								{
+									switchcmd = "Open";
+									ilevel = 100;
+								}
+								else if (item.timerCmd == TCMD_OFF) // no percentage set (0 or 100)
+								{
+									switchcmd = "Close";
 									ilevel = 0;
+								}
 							}
 							else if ((switchtype == STYPE_Dimmer) && (maxDimLevel != 0))
 							{
@@ -890,11 +923,12 @@ void CScheduler::CheckSchedules()
 								{
 									switchcmd = "Set Level";
 									float fLevel = (maxDimLevel / 100.0F) * item.Level;
-									if (fLevel > 100)
-										fLevel = 100;
-									ilevel = int(fLevel);
+									ilevel = ground(fLevel);
+									if (ilevel > maxDimLevel)
+										ilevel = maxDimLevel;
 								}
-							} else if (switchtype == STYPE_Selector) {
+							}
+							else if (switchtype == STYPE_Selector) {
 								if (item.timerCmd == TCMD_ON)
 								{
 									switchcmd = "Set Level";
@@ -905,12 +939,11 @@ void CScheduler::CheckSchedules()
 									ilevel = 0; // force level to a valid value for Selector
 								}
 							}
-							if (!m_mainworker.SwitchLight(item.RowID, switchcmd, ilevel, item.Color, false, 0,
-										      "timer"))
+							if (m_mainworker.SwitchLight(item.RowID, switchcmd, ilevel, item.Color, false, 0, "timer") == MainWorker::SL_ERROR)
 							{
 								_log.Log(LOG_ERROR,
-									 "Error sending switch command, DevID: %" PRIu64 ", Time: %s",
-									 item.RowID, ltimeBuf);
+									"Error sending switch command, DevID: %" PRIu64 ", Time: %s",
+									item.RowID, ltimeBuf);
 							}
 						}
 					}
@@ -951,15 +984,15 @@ void CScheduler::DeleteExpiredTimers()
 		szDate,
 		szDate,
 		szTime
-		);
+	);
 	if (!result.empty()) {
 		m_sql.safe_query("DELETE FROM Timers WHERE (Type == %i AND ((Date < '%q') OR (Date == '%q' AND Time < '%q')))",
 			TTYPE_FIXEDDATETIME,
 			szDate,
 			szDate,
 			szTime
-			);
-		iExpiredTimers += result.size();
+		);
+		iExpiredTimers += static_cast<int>(result.size());
 	}
 
 	// Check SceneTimers
@@ -968,16 +1001,34 @@ void CScheduler::DeleteExpiredTimers()
 		szDate,
 		szDate,
 		szTime
-		);
+	);
 	if (!result.empty()) {
 		m_sql.safe_query("DELETE FROM SceneTimers WHERE (Type == %i AND ((Date < '%q') OR (Date == '%q' AND Time < '%q')))",
 			TTYPE_FIXEDDATETIME,
 			szDate,
 			szDate,
 			szTime
-			);
-		iExpiredTimers += result.size();
+		);
+		iExpiredTimers += static_cast<int>(result.size());
 	}
+
+	// Setpoint timers
+	result = m_sql.safe_query("SELECT ID FROM SetpointTimers WHERE (Type == %i AND ((Date < '%q') OR (Date == '%q' AND Time < '%q')))",
+		TTYPE_FIXEDDATETIME,
+		szDate,
+		szDate,
+		szTime
+	);
+	if (!result.empty()) {
+		m_sql.safe_query("DELETE FROM SetpointTimers WHERE (Type == %i AND ((Date < '%q') OR (Date == '%q' AND Time < '%q')))",
+			TTYPE_FIXEDDATETIME,
+			szDate,
+			szDate,
+			szTime
+		);
+		iExpiredTimers += static_cast<int>(result.size());
+	}
+	
 
 	if (iExpiredTimers > 0) {
 		_log.Log(LOG_STATUS, "Purged %i expired (scene)timer(s)", iExpiredTimers);
@@ -989,12 +1040,12 @@ void CScheduler::DeleteExpiredTimers()
 //Webserver helpers
 namespace http {
 	namespace server {
-		void CWebServer::RType_Schedules(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_GetSchedules(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			std::string rfilter = request::findValue(&req, "filter");
 
 			root["status"] = "OK";
-			root["title"] = "Schedules";
+			root["title"] = "getschedules";
 
 			std::vector<std::vector<std::string> > tot_result;
 			std::vector<std::vector<std::string> > tmp_result;
@@ -1050,7 +1101,7 @@ namespace http {
 			if (!tot_result.empty())
 			{
 				int ii = 0;
-				for (const auto &sd : tot_result)
+				for (const auto& sd : tot_result)
 				{
 					int iTimerIdx = atoi(sd[0].c_str());
 					bool bActive = atoi(sd[1].c_str()) != 0;
@@ -1122,29 +1173,43 @@ namespace http {
 				}
 			}
 		}
-		void CWebServer::RType_Timers(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_GetTimers(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			uint64_t idx = 0;
 			if (!request::findValue(&req, "idx").empty())
 			{
-				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
+				idx = std::stoull(request::findValue(&req, "idx"));
 			}
 			if (idx == 0)
 				return;
 			root["status"] = "OK";
-			root["title"] = "Timers";
-			char szTmp[50];
+			root["title"] = "gettimers";
 
 			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT ID, Active, [Date], Time, Type, Cmd, Level, Color, Days, UseRandomness, MDay, Month, Occurence FROM Timers WHERE (DeviceRowID==%" PRIu64 ") AND (TimerPlan==%d) ORDER BY ID",
+
+			result = m_sql.safe_query("SELECT SwitchType FROM DeviceStatus WHERE (ID==%" PRIu64 ")", idx);
+			if (result.empty())
+				return;
+
+			_eSwitchType switchtype = (_eSwitchType)std::stoi(result[0][0]);
+			const bool bIsBlinds = (
+				switchtype == STYPE_Blinds
+				|| switchtype == STYPE_BlindsPercentage
+				|| switchtype == STYPE_BlindsPercentageWithStop
+				|| switchtype == STYPE_VenetianBlindsEU
+				|| switchtype == STYPE_VenetianBlindsUS
+				);
+
+
+			result = m_sql.safe_query("SELECT ID, Active, [Date], Time, Type, Cmd, Level, Color, Days, UseRandomness, MDay, Month, Occurence, TimerPlan FROM Timers WHERE (DeviceRowID==%" PRIu64 ") AND ((TimerPlan==%d) OR (TimerPlan==9999)) ORDER BY ID",
 				idx, m_sql.m_ActiveTimerPlan);
 			if (!result.empty())
 			{
 				int ii = 0;
-				for (const auto &sd : result)
+				for (const auto& sd : result)
 				{
 					unsigned char iLevel = atoi(sd[6].c_str());
-					if (iLevel == 0)
+					if ((iLevel == 0) && (!bIsBlinds))
 						iLevel = 100;
 
 					int iTimerType = atoi(sd[4].c_str());
@@ -1154,8 +1219,7 @@ namespace http {
 						int Year = atoi(sdate.substr(0, 4).c_str());
 						int Month = atoi(sdate.substr(5, 2).c_str());
 						int Day = atoi(sdate.substr(8, 2).c_str());
-						sprintf(szTmp, "%04d-%02d-%02d", Year, Month, Day);
-						sdate = szTmp;
+						sdate = std_format("%04d-%02d-%02d", Year, Month, Day);
 					}
 					else
 						sdate = "";
@@ -1173,12 +1237,13 @@ namespace http {
 					root["result"][ii]["MDay"] = atoi(sd[10].c_str());
 					root["result"][ii]["Month"] = atoi(sd[11].c_str());
 					root["result"][ii]["Occurence"] = atoi(sd[12].c_str());
+					root["result"][ii]["Persistent"] = (atoi(sd[13].c_str()) == 9999) ? "true" : "false";
 					ii++;
 				}
 			}
 		}
 
-		void CWebServer::Cmd_SetActiveTimerPlan(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_SetActiveTimerPlan(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1186,27 +1251,30 @@ namespace http {
 				return; //Only admin user allowed
 			}
 
+			root["title"] = "SetActiveTimerPlan";
 			int rnOldvalue = 0;
 			int rnvalue = 0;
+			std::string sValue = request::findValue(&req, "ActiveTimerPlan");
 			m_sql.GetPreferencesVar("ActiveTimerPlan", rnOldvalue);
-			rnvalue = atoi(request::findValue(&req, "ActiveTimerPlan").c_str());
+			rnvalue = (!sValue.empty() ? atoi(sValue.c_str()) : rnOldvalue);
 			if (rnOldvalue != rnvalue)
 			{
 				std::vector<std::vector<std::string> > result;
 				result = m_sql.safe_query("SELECT Name FROM TimerPlans WHERE (ID == %d)", rnvalue);
 				if (result.empty())
+				{
+					_log.Debug(DEBUG_HARDWARE, "Scheduler Timerplan not found! (%d)", rnvalue);
 					return; //timerplan not found!
+				}
 				_log.Log(LOG_STATUS, "Scheduler Timerplan changed (%d - %s)", rnvalue, result[0][0].c_str());
 				m_sql.UpdatePreferencesVar("ActiveTimerPlan", rnvalue);
 				m_sql.m_ActiveTimerPlan = rnvalue;
 				m_mainworker.m_scheduler.ReloadSchedules();
+				root["status"] = "OK";
 			}
-
-			root["status"] = "OK";
-			root["title"] = "SetActiveTimerPlan";
 		}
 
-		void CWebServer::Cmd_AddTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_AddTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1228,9 +1296,12 @@ namespace http {
 			std::string smday = "0";
 			std::string smonth = "0";
 			std::string soccurence = "0";
+			std::string persistent = request::findValue(&req, "persistent");
 			if ((idx.empty()) || (active.empty()) || (stimertype.empty()) || (shour.empty()) || (smin.empty()) || (randomness.empty()) || (scmd.empty()) || (sdays.empty()))
 				return;
 			unsigned char iTimerType = atoi(stimertype.c_str());
+
+			int timer_plan = (persistent == "true") ? 9999 : m_sql.m_ActiveTimerPlan;
 
 			time_t now = mytime(nullptr);
 			struct tm tm1;
@@ -1301,12 +1372,12 @@ namespace http {
 				mday,
 				month,
 				occurence,
-				m_sql.m_ActiveTimerPlan
-				);
+				timer_plan
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_UpdateTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_UpdateTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1328,10 +1399,14 @@ namespace http {
 			std::string smday = "0";
 			std::string smonth = "0";
 			std::string soccurence = "0";
+			std::string persistent = request::findValue(&req, "persistent");
 			if ((idx.empty()) || (active.empty()) || (stimertype.empty()) || (shour.empty()) || (smin.empty()) || (randomness.empty()) || (scmd.empty()) || (sdays.empty()))
 				return;
 
 			unsigned char iTimerType = atoi(stimertype.c_str());
+
+			int timer_plan = (persistent == "true") ? 9999 : m_sql.m_ActiveTimerPlan;
+
 			time_t now = mytime(nullptr);
 			struct tm tm1;
 			localtime_r(&now, &tm1);
@@ -1387,7 +1462,7 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "UpdateTimer";
 			m_sql.safe_query(
-				"UPDATE Timers SET Active=%d, [Date]='%04d-%02d-%02d', Time='%02d:%02d', Type=%d, UseRandomness=%d, Cmd=%d, Level=%d, Color='%q', Days=%d, MDay=%d, Month=%d, Occurence=%d WHERE (ID == '%q')",
+				"UPDATE Timers SET Active=%d, [Date]='%04d-%02d-%02d', Time='%02d:%02d', Type=%d, UseRandomness=%d, Cmd=%d, Level=%d, Color='%q', Days=%d, MDay=%d, Month=%d, Occurence=%d, TimerPlan=%d WHERE (ID == '%q')",
 				(active == "true") ? 1 : 0,
 				Year, Month, Day,
 				hour, min,
@@ -1400,12 +1475,13 @@ namespace http {
 				mday,
 				month,
 				occurence,
+				timer_plan,
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_DeleteTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_DeleteTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1421,11 +1497,11 @@ namespace http {
 			m_sql.safe_query(
 				"DELETE FROM Timers WHERE (ID == '%q')",
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_EnableTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_EnableTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1441,11 +1517,11 @@ namespace http {
 			m_sql.safe_query(
 				"UPDATE Timers SET Active=1 WHERE (ID == '%q')",
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_DisableTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_DisableTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1461,11 +1537,11 @@ namespace http {
 			m_sql.safe_query(
 				"UPDATE Timers SET Active=0 WHERE (ID == '%q')",
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_ClearTimers(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_ClearTimers(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1479,33 +1555,33 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "ClearTimer";
 			m_sql.safe_query(
-				"DELETE FROM Timers WHERE ((DeviceRowID == '%q') AND (TimerPlan == %d))",
+				"DELETE FROM Timers WHERE (DeviceRowID == '%q') AND ((TimerPlan == %d) OR (TimerPlan == 9999))",
 				idx.c_str(),
 				m_sql.m_ActiveTimerPlan
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::RType_SetpointTimers(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_GetSetpointTimers(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			uint64_t idx = 0;
 			if (!request::findValue(&req, "idx").empty())
 			{
-				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
+				idx = std::stoull(request::findValue(&req, "idx"));
 			}
 			if (idx == 0)
 				return;
 			root["status"] = "OK";
-			root["title"] = "SetpointTimers";
+			root["title"] = "getsetpointtimers";
 			char szTmp[50];
 
 			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT ID, Active, [Date], Time, Type, Temperature, Days, MDay, Month, Occurence FROM SetpointTimers WHERE (DeviceRowID=%" PRIu64 ") AND (TimerPlan==%d) ORDER BY ID",
+			result = m_sql.safe_query("SELECT ID, Active, [Date], Time, Type, Temperature, Days, MDay, Month, Occurence, TimerPlan FROM SetpointTimers WHERE (DeviceRowID=%" PRIu64 ") AND ((TimerPlan==%d) OR (TimerPlan==9999)) ORDER BY ID",
 				idx, m_sql.m_ActiveTimerPlan);
 			if (!result.empty())
 			{
 				int ii = 0;
-				for (const auto &sd : result)
+				for (const auto& sd : result)
 				{
 					int iTimerType = atoi(sd[4].c_str());
 					std::string sdate = sd[2];
@@ -1530,11 +1606,12 @@ namespace http {
 					root["result"][ii]["MDay"] = atoi(sd[7].c_str());
 					root["result"][ii]["Month"] = atoi(sd[8].c_str());
 					root["result"][ii]["Occurence"] = atoi(sd[9].c_str());
+					root["result"][ii]["Persistent"] = (atoi(sd[10].c_str()) == 9999) ? "true" : "false";
 					ii++;
 				}
 			}
 		}
-		void CWebServer::Cmd_AddSetpointTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_AddSetpointTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1553,9 +1630,13 @@ namespace http {
 			std::string smday = "0";
 			std::string smonth = "0";
 			std::string soccurence = "0";
+			std::string persistent = request::findValue(&req, "persistent");
+
 			if ((idx.empty()) || (active.empty()) || (stimertype.empty()) || (shour.empty()) || (smin.empty()) || (stvalue.empty()) || (sdays.empty()))
 				return;
+
 			unsigned char iTimerType = atoi(stimertype.c_str());
+			int timer_plan = (persistent == "true") ? 9999 : m_sql.m_ActiveTimerPlan;
 
 			time_t now = mytime(nullptr);
 			struct tm tm1;
@@ -1609,24 +1690,39 @@ namespace http {
 			int occurence = atoi(soccurence.c_str());
 			root["status"] = "OK";
 			root["title"] = "AddSetpointTimer";
+
+			std::string szDate = std_format("%04d-%02d-%02d", Year, Month, Day);
+			std::string szTime = std_format("%02d:%02d", hour, min);
+
+			//Check for duplicate
+			auto result = m_sql.safe_query("SELECT ID FROM SetpointTimers WHERE (DeviceRowID==%s) AND ([Date]=='%q') AND (Time=='%q') AND (Type==%d) AND (TimerPlan==%d)",
+				idx.c_str(),
+				szDate.c_str(),
+				szTime.c_str(),
+				iTimerType,
+				timer_plan
+			);
+			if (!result.empty())
+				return; //duplicate!
+
 			m_sql.safe_query(
-				"INSERT INTO SetpointTimers (Active, DeviceRowID, [Date], Time, Type, Temperature, Days, MDay, Month, Occurence, TimerPlan) VALUES (%d,'%q','%04d-%02d-%02d','%02d:%02d',%d,%.1f,%d,%d,%d,%d,%d)",
+				"INSERT INTO SetpointTimers (Active, DeviceRowID, [Date], Time, Type, Temperature, Days, MDay, Month, Occurence, TimerPlan) VALUES (%d,'%q','%q','%q',%d,%.1f,%d,%d,%d,%d,%d)",
 				(active == "true") ? 1 : 0,
 				idx.c_str(),
-				Year, Month, Day,
-				hour, min,
+				szDate.c_str(),
+				szTime.c_str(),
 				iTimerType,
 				temperature,
 				days,
 				mday,
 				month,
 				occurence,
-				m_sql.m_ActiveTimerPlan
-				);
+				timer_plan
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_UpdateSetpointTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_UpdateSetpointTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1645,10 +1741,13 @@ namespace http {
 			std::string smday = "0";
 			std::string smonth = "0";
 			std::string soccurence = "0";
+			std::string persistent = request::findValue(&req, "persistent");
 			if ((idx.empty()) || (active.empty()) || (stimertype.empty()) || (shour.empty()) || (smin.empty()) || (stvalue.empty()) || (sdays.empty()))
 				return;
 
 			unsigned char iTimerType = atoi(stimertype.c_str());
+			int timer_plan = (persistent == "true") ? 9999 : m_sql.m_ActiveTimerPlan;
+
 			time_t now = mytime(nullptr);
 			struct tm tm1;
 			localtime_r(&now, &tm1);
@@ -1702,7 +1801,7 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "UpdateSetpointTimer";
 			m_sql.safe_query(
-				"UPDATE SetpointTimers SET Active=%d, [Date]='%04d-%02d-%02d', Time='%02d:%02d', Type=%d, Temperature=%.1f, Days=%d, MDay=%d, Month=%d, Occurence=%d WHERE (ID == '%q')",
+				"UPDATE SetpointTimers SET Active=%d, [Date]='%04d-%02d-%02d', Time='%02d:%02d', Type=%d, Temperature=%.1f, Days=%d, MDay=%d, Month=%d, Occurence=%d, TimerPlan=%d WHERE (ID == '%q')",
 				(active == "true") ? 1 : 0,
 				Year, Month, Day,
 				hour, min,
@@ -1712,12 +1811,13 @@ namespace http {
 				mday,
 				month,
 				occurence,
+				timer_plan,
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_DeleteSetpointTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_DeleteSetpointTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1733,11 +1833,11 @@ namespace http {
 			m_sql.safe_query(
 				"DELETE FROM SetpointTimers WHERE (ID == '%q')",
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_EnableSetpointTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_EnableSetpointTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1753,11 +1853,11 @@ namespace http {
 			m_sql.safe_query(
 				"UPDATE SetpointTimers SET Active=1 WHERE (ID == '%q')",
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_DisableSetpointTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_DisableSetpointTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1773,11 +1873,11 @@ namespace http {
 			m_sql.safe_query(
 				"UPDATE SetpointTimers SET Active=0 WHERE (ID == '%q')",
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_ClearSetpointTimers(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_ClearSetpointTimers(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1788,36 +1888,40 @@ namespace http {
 			std::string idx = request::findValue(&req, "idx");
 			if (idx.empty())
 				return;
+
+			int timer_plan = m_sql.m_ActiveTimerPlan;
+
 			root["status"] = "OK";
 			root["title"] = "ClearSetpointTimers";
 			m_sql.safe_query(
-				"DELETE FROM SetpointTimers WHERE (DeviceRowID == '%q')",
-				idx.c_str()
-				);
+				"DELETE FROM SetpointTimers WHERE (DeviceRowID == '%q') AND ((TimerPlan==%d) OR (TimerPlan==9999))",
+				idx.c_str(),
+				timer_plan
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::RType_SceneTimers(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_GetSceneTimers(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			uint64_t idx = 0;
 			if (!request::findValue(&req, "idx").empty())
 			{
-				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
+				idx = std::stoull(request::findValue(&req, "idx"));
 			}
 			if (idx == 0)
 				return;
 			root["status"] = "OK";
-			root["title"] = "SceneTimers";
+			root["title"] = "getscenetimers";
 
 			char szTmp[40];
 
 			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT ID, Active, [Date], Time, Type, Cmd, Level, Days, UseRandomness, MDay, Month, Occurence FROM SceneTimers WHERE (SceneRowID==%" PRIu64 ") AND (TimerPlan==%d) ORDER BY ID",
+			result = m_sql.safe_query("SELECT ID, Active, [Date], Time, Type, Cmd, Level, Days, UseRandomness, MDay, Month, Occurence, TimerPlan FROM SceneTimers WHERE (SceneRowID==%" PRIu64 ") AND ((TimerPlan==%d) OR (TimerPlan==9999)) ORDER BY ID",
 				idx, m_sql.m_ActiveTimerPlan);
 			if (!result.empty())
 			{
 				int ii = 0;
-				for (const auto &sd : result)
+				for (const auto& sd : result)
 				{
 					unsigned char iLevel = atoi(sd[6].c_str());
 					if (iLevel == 0)
@@ -1848,12 +1952,13 @@ namespace http {
 					root["result"][ii]["MDay"] = atoi(sd[9].c_str());
 					root["result"][ii]["Month"] = atoi(sd[10].c_str());
 					root["result"][ii]["Occurence"] = atoi(sd[11].c_str());
+					root["result"][ii]["Persistent"] = (atoi(sd[12].c_str()) == 9999) ? "true" : "false";
 					ii++;
 				}
 			}
 		}
 
-		void CWebServer::Cmd_AddSceneTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_AddSceneTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1874,9 +1979,13 @@ namespace http {
 			std::string smday = "0";
 			std::string smonth = "0";
 			std::string soccurence = "0";
+			std::string persistent = request::findValue(&req, "persistent");
+
 			if ((idx.empty()) || (active.empty()) || (stimertype.empty()) || (shour.empty()) || (smin.empty()) || (randomness.empty()) || (scmd.empty()) || (sdays.empty()))
 				return;
+
 			unsigned char iTimerType = atoi(stimertype.c_str());
+			int timer_plan = (persistent == "true") ? 9999 : m_sql.m_ActiveTimerPlan;
 
 			time_t now = mytime(nullptr);
 			struct tm tm1;
@@ -1945,12 +2054,12 @@ namespace http {
 				mday,
 				month,
 				occurence,
-				m_sql.m_ActiveTimerPlan
-				);
+				timer_plan
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_UpdateSceneTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_UpdateSceneTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -1971,10 +2080,12 @@ namespace http {
 			std::string smday = "0";
 			std::string smonth = "0";
 			std::string soccurence = "0";
+			std::string persistent = request::findValue(&req, "persistent");
 			if ((idx.empty()) || (active.empty()) || (stimertype.empty()) || (shour.empty()) || (smin.empty()) || (randomness.empty()) || (scmd.empty()) || (sdays.empty()))
 				return;
 
 			unsigned char iTimerType = atoi(stimertype.c_str());
+			int timer_plan = (persistent == "true") ? 9999 : m_sql.m_ActiveTimerPlan;
 
 			time_t now = mytime(nullptr);
 			struct tm tm1;
@@ -2030,7 +2141,7 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "UpdateSceneTimer";
 			m_sql.safe_query(
-				"UPDATE SceneTimers SET Active=%d, [Date]='%04d-%02d-%02d', Time='%02d:%02d', Type=%d, UseRandomness=%d, Cmd=%d, Level=%d, Days=%d, MDay=%d, Month=%d, Occurence=%d WHERE (ID == '%q')",
+				"UPDATE SceneTimers SET Active=%d, [Date]='%04d-%02d-%02d', Time='%02d:%02d', Type=%d, UseRandomness=%d, Cmd=%d, Level=%d, Days=%d, MDay=%d, Month=%d, Occurence=%d, TimerPlan=%d WHERE (ID == '%q')",
 				(active == "true") ? 1 : 0,
 				Year, Month, Day,
 				hour, min,
@@ -2042,12 +2153,13 @@ namespace http {
 				mday,
 				month,
 				occurence,
+				timer_plan,
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_DeleteSceneTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_DeleteSceneTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -2063,11 +2175,11 @@ namespace http {
 			m_sql.safe_query(
 				"DELETE FROM SceneTimers WHERE (ID == '%q')",
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_EnableSceneTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_EnableSceneTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -2083,11 +2195,11 @@ namespace http {
 			m_sql.safe_query(
 				"UPDATE SceneTimers SET Active=1 WHERE (ID == '%q')",
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_DisableSceneTimer(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_DisableSceneTimer(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -2103,11 +2215,11 @@ namespace http {
 			m_sql.safe_query(
 				"UPDATE SceneTimers SET Active=0 WHERE (ID == '%q')",
 				idx.c_str()
-				);
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_ClearSceneTimers(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_ClearSceneTimers(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -2115,19 +2227,22 @@ namespace http {
 				return; //Only admin user allowed
 			}
 
+			int timer_plan = m_sql.m_ActiveTimerPlan;
+
 			std::string idx = request::findValue(&req, "idx");
 			if (idx.empty())
 				return;
 			root["status"] = "OK";
 			root["title"] = "ClearSceneTimer";
 			m_sql.safe_query(
-				"DELETE FROM SceneTimers WHERE (SceneRowID == '%q')",
-				idx.c_str()
-				);
+				"DELETE FROM SceneTimers WHERE (SceneRowID == '%q') AND ((TimerPlan==%d) OR (TimerPlan==9999))",
+				idx.c_str(),
+				timer_plan
+			);
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
-		void CWebServer::Cmd_GetTimerPlans(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_GetTimerPlans(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -2141,7 +2256,7 @@ namespace http {
 			if (!result.empty())
 			{
 				int ii = 0;
-				for (const auto &sd : result)
+				for (const auto& sd : result)
 				{
 					root["result"][ii]["idx"] = atoi(sd[0].c_str());
 					root["result"][ii]["Name"] = sd[1];
@@ -2151,7 +2266,7 @@ namespace http {
 			}
 		}
 
-		void CWebServer::Cmd_AddTimerPlan(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_AddTimerPlan(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -2170,7 +2285,7 @@ namespace http {
 			m_sql.safe_query("INSERT INTO TimerPlans (Name) VALUES ('%q')", name.c_str());
 		}
 
-		void CWebServer::Cmd_UpdateTimerPlan(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_UpdateTimerPlan(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -2194,7 +2309,7 @@ namespace http {
 			m_sql.safe_query("UPDATE TimerPlans SET Name='%q' WHERE (ID == '%q')", name.c_str(), idx.c_str());
 		}
 
-		void CWebServer::Cmd_DeleteTimerPlan(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_DeleteTimerPlan(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -2211,7 +2326,7 @@ namespace http {
 
 			root["status"] = "OK";
 			root["title"] = "DeletePlan";
-			
+
 			m_sql.safe_query("DELETE FROM Timers WHERE (TimerPlan == '%q')", idx.c_str());
 			m_sql.safe_query("DELETE FROM SceneTimers WHERE (TimerPlan == '%q')", idx.c_str());
 			m_sql.safe_query("DELETE FROM SetpointTimers WHERE (TimerPlan == '%q')", idx.c_str());
@@ -2227,7 +2342,7 @@ namespace http {
 			}
 		}
 
-		void CWebServer::Cmd_DuplicateTimerPlan(WebEmSession & session, const request& req, Json::Value &root)
+		void CWebServer::Cmd_DuplicateTimerPlan(WebEmSession& session, const request& req, Json::Value& root)
 		{
 			if (session.rights != 2)
 			{
@@ -2258,7 +2373,7 @@ namespace http {
 
 				//Normal Timers
 				result = m_sql.safe_query("SELECT Active, DeviceRowID, Time, Type, Cmd, Level, Days, UseRandomness, [Date], MDay, Month, Occurence, Color FROM Timers WHERE (TimerPlan==%q) ORDER BY ID", idx.c_str());
-				for (const auto &sd : result)
+				for (const auto& sd : result)
 				{
 					m_sql.safe_query(
 						"INSERT INTO Timers (Active, DeviceRowID, Time, Type, Cmd, Level, Days, UseRandomness, [Date], MDay, Month, Occurence, Color, TimerPlan) VALUES (%q, %q, '%q', %q, %q, %q, %q, %q, '%q', %q, %q, %q, '%q', %q)",
@@ -2280,7 +2395,7 @@ namespace http {
 				}
 				//Scene Timers
 				result = m_sql.safe_query("SELECT Active, SceneRowID, Time, Type, Cmd, Level, Days, UseRandomness, [Date], Month, MDay, Occurence FROM SceneTimers WHERE (TimerPlan==%q) ORDER BY ID", idx.c_str());
-				for (const auto &sd : result)
+				for (const auto& sd : result)
 				{
 					m_sql.safe_query(
 						"INSERT INTO SceneTimers (Active, SceneRowID, Time, Type, Cmd, Level, Days, UseRandomness, [Date], Month, MDay, Occurence, TimerPlan) VALUES (%q, %q, '%q', %q, %q, %q, %q, %q, '%q', %q, %q, %q, %q)",
@@ -2296,13 +2411,12 @@ namespace http {
 						sd[9].c_str(),
 						sd[10].c_str(),
 						sd[11].c_str(),
-						sd[12].c_str(),
 						nID.c_str()
 					);
 				}
 				//Setpoint Timers
 				result = m_sql.safe_query("SELECT Active, DeviceRowID, [Date], Time, Type, Temperature, Days, Month, MDay, Occurence FROM SetpointTimers WHERE (TimerPlan==%q) ORDER BY ID", idx.c_str());
-				for (const auto &sd : result)
+				for (const auto& sd : result)
 				{
 					m_sql.safe_query(
 						"INSERT INTO SetpointTimers (Active, DeviceRowID, [Date], Time, Type, Temperature, Days, Month, MDay, Occurence, TimerPlan) VALUES (%q, %q, '%q', '%q', %q, %q, %q, %q, %q, %q, %q)",

@@ -5,8 +5,7 @@ define(['app', 'report/helpers'], function (app, reportHelpers) {
         };
 
         function fetch(deviceIdx, year, month) {
-            return domoticzApi.sendRequest({
-                type: 'graph',
+            return domoticzApi.sendCommand('graph', {
                 sensor: 'temp',
                 range: 'year',
                 idx: deviceIdx,
@@ -202,7 +201,7 @@ define(['app', 'report/helpers'], function (app, reportHelpers) {
         function init() {
             vm.isMonthView = vm.selectedMonth > 0;
             vm.degreeType = $.myglobals.tempsign;
-
+			$.devIdx = vm.device.idx;
             getData();
         }
 
@@ -408,6 +407,10 @@ define(['app', 'report/helpers'], function (app, reportHelpers) {
             });
         }
 
+		function reloadPage() {
+			window.location.reload();
+		}
+		
         function showVariationChart(data) {
             var chartElement = $element.find('#variation-graph');
 
@@ -454,6 +457,17 @@ define(['app', 'report/helpers'], function (app, reportHelpers) {
                         : ' °' + vm.degreeType
                 },
                 plotOptions: {
+					series: {
+						point: {
+							events: {
+								click: function (event) {
+									if (vm.isMonthView) {
+										chartPointClickNew(event, false, reloadPage);
+									}
+								}
+							}
+						}
+					},
                     columnrange: {
                         dataLabels: {
                             enabled: !vm.isMonthView,

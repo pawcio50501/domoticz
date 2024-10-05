@@ -20,14 +20,11 @@ License: Public domain
 #include "../main/Logger.h"
 #include "../main/Helper.h"
 #include "../main/SQLHelper.h"
-#include "../main/localtime_r.h"
 #include "csocket.h"
 
 #include <string.h>
 #include "hardwaretypes.h"
 #include "../main/RFXtrx.h"
-
-#include <openssl/sha.h>
 
 #include "../notifications/NotificationHelper.h"
 
@@ -165,7 +162,7 @@ void COpenWebNetTCP::disconnect()
 {
 	if (m_pStatusSocket != nullptr)
 	{
-		Log(LOG_STATUS, "disconnect");
+		Log(LOG_STATUS, "Disconnect");
 		m_pStatusSocket->close();
 		delete m_pStatusSocket;
 		m_pStatusSocket = nullptr;
@@ -186,7 +183,7 @@ bool COpenWebNetTCP::isStatusSocketConnected()
 **/
 bool COpenWebNetTCP::ownWrite(csocket *connectionSocket, const char* pdata, size_t size)
 {
-	int bytesWritten = connectionSocket->write(pdata, size);
+	int bytesWritten = connectionSocket->write(pdata, static_cast<unsigned int>(size));
 	if (bytesWritten != size) 
 	{
 		Log(LOG_ERROR, "partial write: %u/%u", bytesWritten, (unsigned int)size);
@@ -201,7 +198,7 @@ bool COpenWebNetTCP::ownWrite(csocket *connectionSocket, const char* pdata, size
 int COpenWebNetTCP::ownRead(csocket *connectionSocket, char* pdata, size_t size)
 {
 	memset(pdata, 0, size);
-	int read = connectionSocket->read(pdata, size, false);
+	int read = connectionSocket->read(pdata, static_cast<unsigned int>(size), false);
 	return (read);
 }
 
@@ -596,7 +593,7 @@ void COpenWebNetTCP::MonitorFrames()
 				}
 				else
 				{
-					Log(LOG_STATUS, "TCP/IP monitor not connected, retrying in %d seconds...", OPENWEBNET_RETRY_DELAY);
+					Log(LOG_STATUS, "Monitor not connected, retrying in %d seconds...", OPENWEBNET_RETRY_DELAY);
 					sleep_seconds(1);
 				}
 			}
@@ -615,7 +612,7 @@ void COpenWebNetTCP::MonitorFrames()
 					break;
 
 				if ((bread == 0) || (bread < 0)) {
-					Log(LOG_ERROR, "TCP/IP monitor connection closed!");
+					Log(LOG_ERROR, "monitor connection closed!");
 					disconnect();  // disconnet socket if present
 				}
 				else
@@ -651,7 +648,7 @@ void COpenWebNetTCP::MonitorFrames()
 		}
 	}
 
-	Log(LOG_STATUS, "TCP/IP monitor worker stopped...");
+	Log(LOG_STATUS, "monitor worker stopped...");
 }
 
 /**
@@ -681,7 +678,7 @@ void COpenWebNetTCP::UpdateSetPoint(const int who, const int where, float fval, 
 
 				where is setpoint zone (1 - 99)
 	**/
-	SendSetPointSensor((who & 0xFF), (iInterface & 0xff), (where & 0xFF), fval, devname);
+	SendSetPointSensor(0, (who & 0xFF), (iInterface & 0xff), (where & 0xFF), 1, fval, devname);
 }
 
 /**
@@ -858,8 +855,8 @@ void COpenWebNetTCP::UpdateBlinds(const int who, const int where, const int Comm
 	{
 		nvalue = 0;
 		slevel = 0;
-		switch_type = (iLevel < 0) ? STYPE_VenetianBlindsEU : STYPE_BlindsPercentageInverted;
-		m_sql.InsertDevice(m_HwdID, szIdx, iInterface, pTypeGeneralSwitch, sSwitchTypeAC, switch_type, 0, "", devname);
+		switch_type = (iLevel < 0) ? STYPE_VenetianBlindsEU : STYPE_BlindsPercentage;
+		m_sql.InsertDevice(m_HwdID, 0, szIdx, iInterface, pTypeGeneralSwitch, sSwitchTypeAC, switch_type, 0, "", devname);
 	}
 	else
 	{
@@ -868,7 +865,11 @@ void COpenWebNetTCP::UpdateBlinds(const int who, const int where, const int Comm
 		switch_type = atoi(result[0][3].c_str());
 	}
 
-	if ((switch_type == STYPE_BlindsPercentageInverted) && (iLevel < 0)) return; // check normal frame received for BlindsPercentageInverted
+	if (
+		(switch_type == STYPE_BlindsPercentage)
+		&& (iLevel < 0)
+		)
+		return;
 
 	int cmd = -1;
 	switch (Command)
@@ -906,7 +907,7 @@ void COpenWebNetTCP::UpdateBlinds(const int who, const int where, const int Comm
 	}
 
 	// verify command for advanced type
-	if (switch_type == STYPE_BlindsPercentageInverted)
+	if (switch_type == STYPE_BlindsPercentage)
 	{
 		cmd = (iLevel == 0) ? gswitch_sOff : gswitch_sSetLevel;
 	}
@@ -933,7 +934,7 @@ void COpenWebNetTCP::UpdateCenPlus(const int who, const int where, const int Com
 	{
 		// First insert, set SwitchType = STYPE_Contact, so we have a correct contact device
 		nvalue = 0;
-		m_sql.InsertDevice(m_HwdID, szIdx, iInterface, pTypeGeneralSwitch, sSwitchTypeAC, STYPE_Contact, 0, "Unavailable", devname);
+		m_sql.InsertDevice(m_HwdID, 0, szIdx, iInterface, pTypeGeneralSwitch, sSwitchTypeAC, STYPE_Contact, 0, "Unavailable", devname);
 	}
 	else
 	{
@@ -966,7 +967,7 @@ void COpenWebNetTCP::UpdateSoundDiffusion(const int who, const int where, const 
 	result = m_sql.safe_query("SELECT ID,SwitchType FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%s') AND (Unit==%d)", m_HwdID, szIdx, iInterface);
 	if (result.empty())
 	{
-		//m_sql.InsertDevice(m_HwdID, szIdx, iInterface, pTypeGeneralSwitch, sSwitchTypeAC, STYPE_Media, 0, "Unavailable", "OpenWebNet Media", 12, 255, 1);
+		//m_sql.InsertDevice(m_HwdID, 0, szIdx, iInterface, pTypeGeneralSwitch, sSwitchTypeAC, STYPE_Media, 0, "Unavailable", "OpenWebNet Media", 12, 255, 1);
 	}
 
 	//TODO: manage SoundDiffusion device like dimmer (on, off and set volume) or like media device (check how to do it)
@@ -1000,7 +1001,7 @@ void COpenWebNetTCP::UpdateSwitch(const int who, const int where, const int what
 		}
 		else
 			switch_type = STYPE_OnOff;
-		m_sql.InsertDevice(m_HwdID, szIdx, iInterface, pTypeGeneralSwitch, sSwitchTypeAC, switch_type, 0, "Unavailable", devname);
+		m_sql.InsertDevice(m_HwdID, 0, szIdx, iInterface, pTypeGeneralSwitch, sSwitchTypeAC, switch_type, 0, "Unavailable", devname);
 	}
 	else
 	{
@@ -1030,7 +1031,7 @@ void COpenWebNetTCP::UpdateSwitch(const int who, const int where, const int what
 **/
 void COpenWebNetTCP::decodeWhereAndFill(const int who, const std::string &where, std::vector<std::string> whereParam, std::string *devname, int *iWhere)
 {
-	int wlen = where.length();	
+	size_t wlen = where.length();	
 	int iArea = -1;
 	*iWhere = -1;
 
@@ -1803,8 +1804,9 @@ bool COpenWebNetTCP::WriteToHardware(const char *pdata, const unsigned char leng
 		case WHO_AUTOMATION:
 			//Blinds/Window command
 			sprintf(szIdx, "%08X", ((who << 16) & 0xffff0000) | (where & 0x0000ffff));
-			result = m_sql.safe_query("SELECT nValue FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%s') AND (SwitchType==%d)",  //*******is there a better method for get
-				m_HwdID, szIdx, STYPE_BlindsPercentageInverted);																		   //*******SUBtype (STYPE_BlindsPercentageInverted) ??
+			result = m_sql.safe_query(
+				"SELECT nValue FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%s') AND (SwitchType==%d)",
+				m_HwdID, szIdx, STYPE_BlindsPercentage);
 
 			if (result.empty())// from a normal button
 			{
@@ -2192,10 +2194,21 @@ void COpenWebNetTCP::requestEnergyTotalizer()
 	whoStr << WHO_ENERGY_MANAGEMENT;
 	dimensionStr << ENERGY_MANAGEMENT_DIMENSION_ENERGY_TOTALIZER;
 
-	for (int where = WHERE_ENERGY_1; where < MAX_WHERE_ENERGY; where++)
+	/** request for the energy totalizer of the central units **/
+	for (int where = WHERE_ENERGY_CU_1; where < MAX_WHERE_ENERGY_CU; where++)
 	{
 		std::stringstream whereStr;
 		whereStr << where;
+		request.CreateDimensionMsgOpen(whoStr.str(), whereStr.str(), dimensionStr.str());
+		sendCommand(request, responses, 0, true);
+	}
+	
+	/** request for the energy totalizer of the actuators **/
+	for (int where = WHERE_ENERGY_A_1; where < MAX_WHERE_ENERGY_A; where++)
+	{
+		std::stringstream whereStr;
+		whereStr << where;
+		whereStr << "#0";
 		request.CreateDimensionMsgOpen(whoStr.str(), whereStr.str(), dimensionStr.str());
 		sendCommand(request, responses, 0, true);
 	}
@@ -2220,10 +2233,21 @@ void COpenWebNetTCP::requestAutomaticUpdatePower(int time)
 	appStr << time;
 	value.push_back(appStr.str());
 
-	for (int where = WHERE_ENERGY_1; where < MAX_WHERE_ENERGY; where++)
+	/** request for the automatic update power of the central units **/
+	for (int where = WHERE_ENERGY_CU_1; where < MAX_WHERE_ENERGY_CU; where++)
 	{
 		std::stringstream whereStr;
 		whereStr << where;
+		request.CreateWrDimensionMsgOpen2(whoStr.str(), whereStr.str(), dimensionStr.str(), value);
+		sendCommand(request, responses, 0, true);
+	}
+
+	/** request for the automatic update power of the actuators **/
+	for (int where = WHERE_ENERGY_A_1; where < MAX_WHERE_ENERGY_A; where++)
+	{
+		std::stringstream whereStr;
+		whereStr << where;
+		whereStr << "#0";
 		request.CreateWrDimensionMsgOpen2(whoStr.str(), whereStr.str(), dimensionStr.str(), value);
 		sendCommand(request, responses, 0, true);
 	}

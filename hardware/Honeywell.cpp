@@ -3,7 +3,6 @@
 #include "../main/Helper.h"
 #include "../main/Logger.h"
 #include "hardwaretypes.h"
-#include "../main/localtime_r.h"
 #include "../main/WebServerHelper.h"
 #include "../main/RFXtrx.h"
 #include "../main/SQLHelper.h"
@@ -11,8 +10,6 @@
 #include "../main/mainworker.h"
 #include "../main/json_helper.h"
 #include "../webserver/Base64.h"
-
-#define round(a) ( int ) ( a + .5 )
 
 constexpr auto HONEYWELL_DEFAULT_APIKEY = "atD3jtzXC5z4X8WPbzvo0CBqWi7S81Nh";
 constexpr auto HONEYWELL_DEFAULT_APISECRET = "TXDzy2aHpAJw6YiO";
@@ -141,12 +138,12 @@ bool CHoneywell::WriteToHardware(const char *pdata, const unsigned char /*length
 		}
 
 	}
-	else if (pCmd->ICMND.packettype == pTypeThermostat && pCmd->LIGHTING2.subtype == sTypeThermSetpoint)
+	else if (pCmd->ICMND.packettype == pTypeSetpoint && pCmd->LIGHTING2.subtype == sTypeSetpoint)
 	{
 		int nodeID = pCmd->LIGHTING2.id3;
 		int devID = nodeID / 10;
-		const _tThermostat *therm = reinterpret_cast<const _tThermostat*>(pdata);
-		SetSetpoint(devID, therm->temp, nodeID);
+		const _tSetpoint* therm = reinterpret_cast<const _tSetpoint*>(pdata);
+		SetSetpoint(devID, therm->value, nodeID);
 	}
 	return false;
 }
@@ -287,9 +284,9 @@ void CHoneywell::GetThermostatData()
 			desc = kSetPointDesc;
 			stdreplace(desc, "[devicename]", deviceName);
 			if(units == "Fahrenheit") {
-				SendSetPointSensor((uint8_t)(10 * devNr + 4), (float)ConvertToCelsius(temperature), desc);
+				SendSetPointSensor(0, 0, 0, (uint8_t)(10 * devNr + 4), 0, (float)ConvertToCelsius(temperature), desc);
 			}else{
-				SendSetPointSensor((uint8_t)(10 * devNr + 4), temperature, desc);
+				SendSetPointSensor(0, 0, 0, (uint8_t)(10 * devNr + 4), 0, temperature, desc);
 			}
 			
 			std::string operationstatus = device["operationStatus"]["mode"].asString();
@@ -341,24 +338,6 @@ void CHoneywell::GetThermostatData()
 			SendSwitch(10 * devNr + 6, 1, 255, bAway, 0, desc, m_Name);
 		}
 	}
-}
-
-//
-// send the temperature from honeywell to domoticz backend
-//
-void CHoneywell::SendSetPointSensor(const unsigned char Idx, const float Temp, const std::string &defaultname)
-{
-	_tThermostat thermos;
-	thermos.subtype = sTypeThermSetpoint;
-	thermos.id1 = 0;
-	thermos.id2 = 0;
-	thermos.id3 = 0;
-	thermos.id4 = Idx;
-	thermos.dunit = 0;
-
-	thermos.temp = Temp;
-
-	sDecodeRXMessage(this, (const unsigned char *)&thermos, defaultname.c_str(), 255, nullptr);
 }
 
 //
@@ -433,9 +412,9 @@ void CHoneywell::SetPauseStatus(const int idx, bool bCommand, const int nodeID)
 		desc = kSetPointDesc;
 		stdreplace(desc, "[devicename]", mDeviceList[idx]["name"].asString());
 		if(units == "Fahrenheit") {
-			SendSetPointSensor((uint8_t)(10 * idx + 4), (float)ConvertToCelsius(temperature), desc);
+			SendSetPointSensor(0, 0, 0, (uint8_t)(10 * idx + 4), 0, (float)ConvertToCelsius(temperature), desc);
 		}else{
-			SendSetPointSensor((uint8_t)(10 * idx + 4), temperature, desc);
+			SendSetPointSensor(0, 0, 0, (uint8_t)(10 * idx + 4), 0, temperature, desc);
 		}
 	}
 
@@ -496,7 +475,7 @@ void CHoneywell::SetSetpoint(const int idx, const float temp, const int nodeid)
 
 		std::string desc = kSetPointDesc;
 		stdreplace(desc, "[devicename]", mDeviceList[idx]["name"].asString());
-		SendSetPointSensor((uint8_t)(10 * idx + 4), temp, desc);
+		SendSetPointSensor(0, 0, 0, (uint8_t)(10 * idx + 4), 0, temp, desc);
 	}
 	//desc = kHeatingDesc;
 	//stdreplace(desc, "[devicename]", mDeviceList[idx]["name"].asString());

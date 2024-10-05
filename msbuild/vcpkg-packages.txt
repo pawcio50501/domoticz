@@ -1,1 +1,10 @@
-boost cereal curl jsoncpp lua minizip mosquitto openssl pthreads sqlite3 zlib
+boost
+curl
+jsoncpp
+lua
+minizip
+mosquitto
+openssl
+pthreads
+sqlite3
+zlib

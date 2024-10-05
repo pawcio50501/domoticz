@@ -2,7 +2,6 @@
 #include "TeleinfoTCP.h"
 #include "../main/Logger.h"
 #include "../main/Helper.h"
-#include "../main/localtime_r.h"
 
 CTeleinfoTCP::CTeleinfoTCP(const int ID, const std::string &IPAddress, const unsigned short usIPPort, int datatimeout, const bool disable_crc, const int ratelimit):
 	m_szIPAddress(IPAddress),
@@ -58,7 +57,7 @@ void CTeleinfoTCP::Do_Work()
 	}
 	terminate();
 
-	Log(LOG_STATUS, "TCP/IP Worker stopped...");
+	Log(LOG_STATUS, "Worker stopped...");
 }
 
 
@@ -72,7 +71,7 @@ void CTeleinfoTCP::OnConnect()
 {
 	Init();
 
-	Log(LOG_STATUS, "connected to: %s:%d",  m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Connected to: %s:%d",  m_szIPAddress.c_str(), m_usIPPort);
 
 	if (m_bDisableCRC)
 		Log(LOG_STATUS, "CRC checks on incoming data are disabled");
@@ -83,7 +82,7 @@ void CTeleinfoTCP::OnConnect()
 
 void CTeleinfoTCP::OnDisconnect()
 {
-	Log(LOG_STATUS, "disconnected");
+	Log(LOG_STATUS, "Disconnected");
 }
 
 

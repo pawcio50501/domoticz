@@ -2,7 +2,6 @@
 #include "MochadTCP.h"
 #include "../main/Logger.h"
 #include "../main/Helper.h"
-#include "../main/localtime_r.h"
 #include "../main/RFXtrx.h"
 #include <iostream>
 
@@ -115,7 +114,7 @@ bool MochadTCP::StopHardware()
 
 void MochadTCP::OnConnect()
 {
-	Log(LOG_STATUS, "connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	m_bIsStarted = true;
 
 	sOnConnected(this);
@@ -123,17 +122,17 @@ void MochadTCP::OnConnect()
 
 void MochadTCP::OnDisconnect()
 {
-	Log(LOG_STATUS, "disconnected");
+	Log(LOG_STATUS, "Disconnected");
 }
 
 void MochadTCP::OnData(const unsigned char *pData, size_t length)
 {
-	ParseData(pData, length);
+	ParseData(pData, static_cast<int>(length));
 }
 
 void MochadTCP::Do_Work()
 {
-	Log(LOG_STATUS, "trying to connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Trying to connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	int sec_counter = 0;
 	connect(m_szIPAddress, m_usIPPort);
 	while (!IsStopRequested(1000))
@@ -147,7 +146,7 @@ void MochadTCP::Do_Work()
 	}
 	terminate();
 
-	Log(LOG_STATUS,"TCP/IP Worker stopped...");
+	Log(LOG_STATUS,"Worker stopped...");
 }
 
 void MochadTCP::OnError(const boost::system::error_code& error)

@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "Comm5TCP.h"
 #include "../main/Helper.h"
-#include "../main/localtime_r.h"
 #include "../main/Logger.h"
 #include "../main/RFXtrx.h"
 
@@ -16,11 +15,6 @@
    for each individual input.
 
 */
-
-static inline std::string &c5_rtrim(std::string &s) {
-	s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
-	return s;
-}
 
 static inline std::vector<std::string> c5_tokenize(const std::string &s) {
 	std::vector<std::string> tokens;
@@ -79,7 +73,7 @@ bool Comm5TCP::StopHardware()
 
 void Comm5TCP::OnConnect()
 {
-	Log(LOG_STATUS, "connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	m_bIsStarted = true;
 	notificationEnabled = false;
 
@@ -91,7 +85,7 @@ void Comm5TCP::OnConnect()
 
 void Comm5TCP::OnDisconnect()
 {
-	Log(LOG_ERROR, "disconected");
+	Log(LOG_ERROR, "Disconected");
 }
 
 void Comm5TCP::Do_Work()
@@ -111,7 +105,7 @@ void Comm5TCP::Do_Work()
 	}
 	terminate();
 
-	Log(LOG_STATUS, "TCP/IP Worker stopped...");
+	Log(LOG_STATUS, "Worker stopped...");
 }
 
 void Comm5TCP::processSensorData(const std::string& line)
@@ -139,7 +133,7 @@ void Comm5TCP::ParseData(const unsigned char* data, const size_t len)
 	std::string line;
 
 	while (std::getline(stream, line, '\n')) {
-		line = c5_rtrim(line);
+		line = stdstring_rtrim(line);
 		if (c5_startsWith(line, "211")) {
 			std::vector<std::string> tokens = c5_tokenize(line);
 			if (tokens.size() < 2)

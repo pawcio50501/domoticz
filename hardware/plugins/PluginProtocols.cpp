@@ -17,20 +17,20 @@
 
 namespace Plugins {
 
-	CPluginProtocol *CPluginProtocol::Create(const std::string &sProtocol)
+	CPluginProtocol* CPluginProtocol::Create(const std::string& sProtocol)
 	{
 		if (sProtocol == "Line") return (CPluginProtocol*) new CPluginProtocolLine();
 		if (sProtocol == "XML")
-			return (CPluginProtocol *)new CPluginProtocolXML();
+			return (CPluginProtocol*)new CPluginProtocolXML();
 		if (sProtocol == "JSON")
-			return (CPluginProtocol *)new CPluginProtocolJSON();
+			return (CPluginProtocol*)new CPluginProtocolJSON();
 		if ((sProtocol == "HTTP") || (sProtocol == "HTTPS"))
 		{
 			CPluginProtocolHTTP* pProtocol = new CPluginProtocolHTTP(sProtocol == "HTTPS");
 			return (CPluginProtocol*)pProtocol;
 		}
 		if (sProtocol == "ICMP")
-			return (CPluginProtocol *)new CPluginProtocolICMP();
+			return (CPluginProtocol*)new CPluginProtocolICMP();
 		if ((sProtocol == "MQTT") || (sProtocol == "MQTTS"))
 		{
 			CPluginProtocolMQTT* pProtocol = new CPluginProtocolMQTT(sProtocol == "MQTTS");
@@ -59,8 +59,8 @@ namespace Plugins {
 		if (pObject.IsBytes())
 		{
 			const char* pData = PyBytes_AsString(pObject);
-			int			iSize = PyBytes_Size(pObject);
-			retVal.reserve((size_t)iSize);
+			size_t		iSize = PyBytes_Size(pObject);
+			retVal.reserve(iSize);
 			retVal.assign(pData, pData + iSize);
 		}
 		// Handle ByteArray objects
@@ -88,7 +88,7 @@ namespace Plugins {
 		return retVal;
 	}
 
-	void CPluginProtocol::Flush(CPlugin *pPlugin, CConnection *pConnection)
+	void CPluginProtocol::Flush(CPlugin* pPlugin, CConnection* pConnection)
 	{
 		if (!m_sRetainedData.empty())
 		{
@@ -106,8 +106,8 @@ namespace Plugins {
 		std::vector<byte>	vData = m_sRetainedData;										// if there was some data left over from last time add it back in
 		vData.insert(vData.end(), Message->m_Buffer.begin(), Message->m_Buffer.end());		// add the new data
 
-		std::string		sData(vData.begin(), vData.end());
-		int iPos = sData.find_first_of('\r');		//  Look for message terminator
+		std::string	sData(vData.begin(), vData.end());
+		size_t iPos = sData.find_first_of('\r');		//  Look for message terminator
 		while (iPos != std::string::npos)
 		{
 			Message->m_pConnection->pPlugin->MessagePlugin(new onMessageCallback(Message->m_pConnection, std::vector<byte>(&sData[0], &sData[iPos])));
@@ -122,55 +122,63 @@ namespace Plugins {
 
 	static void AddBytesToDict(PyObject* pDict, const char* key, const std::string& value)
 	{
-		PyNewRef pObj = Py_BuildValue("y#", value.c_str(), value.length());
-		if (PyDict_SetItemString(pDict, key, pObj) == -1)
+		//PyNewRef pObj = Py_BuildValue("y#", value.c_str(), value.length());
+		PyNewRef pObj((byte*)value.c_str(), value.length());
+		if (!pObj || PyDict_SetItemString(pDict, key, (PyObject*)pObj) == -1)
 			_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, key, value.c_str());
 	}
-	
+
 	static void AddStringToDict(PyObject* pDict, const char* key, const std::string& value)
 	{
-		PyNewRef pObj = Py_BuildValue("s#", value.c_str(), value.length());
-		if (PyDict_SetItemString(pDict, key, pObj) == -1)
+		PyNewRef pObj(value);
+		if (!pObj || PyDict_SetItemString(pDict, key, (PyObject*)pObj) == -1)
 			_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, key, value.c_str());
 	}
 
 	static void AddIntToDict(PyObject* pDict, const char* key, const int value)
 	{
-		PyNewRef pObj = Py_BuildValue("i", value);
-		if (PyDict_SetItemString(pDict, key, pObj) == -1)
+		PyNewRef pObj(value);
+		if (!pObj || PyDict_SetItemString(pDict, key, (PyObject*)pObj) == -1)
 			_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%d' to dictionary.", __func__, key, value);
+	}
+
+	static void AddLongToDict(PyObject* pDict, const char* key, const long value)
+	{
+		PyNewRef pObj(value);
+		if (!pObj || PyDict_SetItemString(pDict, key, (PyObject*)pObj) == -1)
+			_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%ld' to dictionary.", __func__, key, value);
 	}
 
 	static void AddUIntToDict(PyObject* pDict, const char* key, const unsigned int value)
 	{
-		PyNewRef pObj = Py_BuildValue("I", value);
-		if (PyDict_SetItemString(pDict, key, pObj) == -1)
+		PyNewRef pObj(value);
+		if (!pObj || PyDict_SetItemString(pDict, key, (PyObject*)pObj) == -1)
 			_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%d' to dictionary.", __func__, key, value);
 	}
 
 	static void AddDoubleToDict(PyObject* pDict, const char* key, const double value)
 	{
-		PyNewRef pObj = Py_BuildValue("d", value);
-		if (PyDict_SetItemString(pDict, key, pObj) == -1)
+		PyNewRef pObj(value);
+		if (!pObj || PyDict_SetItemString(pDict, key, (PyObject*)pObj) == -1)
 			_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%f' to dictionary.", __func__, key, value);
 	}
 
 	static void AddBoolToDict(PyObject* pDict, const char* key, const bool value)
 	{
-		PyNewRef pObj = Py_BuildValue("N", PyBool_FromLong(value));
-		if (PyDict_SetItemString(pDict, key, pObj) == -1)
-			_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%d' to dictionary.", __func__, key, value);
+		PyNewRef pObj(value);
+		if (!pObj || PyDict_SetItemString(pDict, key, (PyObject*)pObj) == -1)
+			_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, key, value ? "True" : "False");
 	}
 
 	PyObject* CPluginProtocolJSON::JSONtoPython(Json::Value* pJSON)
 	{
-		PyObject *pRetVal = nullptr;
+		PyObject* pRetVal = nullptr;
 
 		if (pJSON->isArray())
 		{
 			pRetVal = PyList_New(pJSON->size());
 			Py_ssize_t	Index = 0;
-			for (auto &pRef : *pJSON)
+			for (auto& pRef : *pJSON)
 			{
 				// PyList_SetItem 'steals' a reference so use PyBorrowedRef instead of PyNewRef
 				if (pRef.isArray() || pRef.isObject())
@@ -237,7 +245,7 @@ namespace Plugins {
 		return pRetVal;
 	}
 
-	PyObject *CPluginProtocolJSON::JSONtoPython(const std::string &sData)
+	PyObject* CPluginProtocolJSON::JSONtoPython(const std::string& sData)
 	{
 		Json::Value		root;
 		PyObject* pRetVal = nullptr;
@@ -337,10 +345,10 @@ namespace Plugins {
 		vData.insert(vData.end(), Message->m_Buffer.begin(), Message->m_Buffer.end());		// add the new data
 
 		std::string		sData(vData.begin(), vData.end());
-		int iPos = 1;
+		size_t iPos = 1;
 		while (iPos) {
 			Json::Value		root;
-			iPos = sData.find("}{", 0) + 1;		//  Look for message separater in case there is more than one
+			iPos = sData.find("}{", 0) + 1;		//  Look for message separator in case there is more than one
 			if (!iPos) // no, just one or part of one
 			{
 				if ((sData.substr(sData.length() - 1, 1) == "}") &&
@@ -402,11 +410,11 @@ namespace Plugins {
 				{
 					if (sData.find("<?xml") != std::string::npos)	// step over '<?xml version="1.0" encoding="utf-8"?>' if present
 					{
-						int iEnd = sData.find("?>");
+						size_t iEnd = sData.find("?>");
 						sData = sData.substr(iEnd + 2);
 					}
 
-					int iStart = sData.find_first_of('<');
+					size_t iStart = sData.find_first_of('<');
 					if (iStart == std::string::npos)
 					{
 						// start of a tag not found so discard
@@ -414,17 +422,17 @@ namespace Plugins {
 						break;
 					}
 					if (iStart) sData = sData.substr(iStart);		// remove any leading data
-					int iEnd = sData.find_first_of(" >");
+					size_t iEnd = sData.find_first_of(" >");
 					if (iEnd != std::string::npos)
 					{
 						m_Tag = sData.substr(1, (iEnd - 1));
 					}
 				}
 
-				int	iPos = sData.find("</" + m_Tag + ">");
+				size_t iPos = sData.find("</" + m_Tag + ">");
 				if (iPos != std::string::npos)
 				{
-					int iEnd = iPos + m_Tag.length() + 3;
+					size_t iEnd = iPos + m_Tag.length() + 3;
 					Message->m_pConnection->pPlugin->MessagePlugin(new onMessageCallback(Message->m_pConnection, sData.substr(0, iEnd)));
 
 					if (iEnd == sData.length())
@@ -477,8 +485,8 @@ namespace Plugins {
 				if (uHeaderText == "CHUNKED")
 					m_Chunked = true;
 			}
-			PyNewRef		pObj = Py_BuildValue("s", sHeaderText.c_str());
-			PyBorrowedRef	pPrevObj = PyDict_GetItemString((PyObject *)m_Headers, sHeaderName.c_str());
+			PyNewRef		pObj(sHeaderText);
+			PyBorrowedRef	pPrevObj = PyDict_GetItemString((PyObject*)m_Headers, sHeaderName.c_str());
 			// Encode multi headers in a list
 			if (pPrevObj)
 			{
@@ -509,7 +517,7 @@ namespace Plugins {
 		}
 	}
 
-	void CPluginProtocolHTTP::Flush(CPlugin *pPlugin, CConnection *pConnection)
+	void CPluginProtocolHTTP::Flush(CPlugin* pPlugin, CConnection* pConnection)
 	{
 		if (!m_sRetainedData.empty())
 		{
@@ -530,7 +538,7 @@ namespace Plugins {
 		// HTML is non binary so use strings
 		std::string		sData(m_sRetainedData.begin(), m_sRetainedData.end());
 
-		m_ContentLength = -1;
+		m_ContentLength = 0;
 		m_Chunked = false;
 		m_RemainingChunk = 0;
 
@@ -538,7 +546,7 @@ namespace Plugins {
 		// will end badly.
 		if (sData.find("\r\n") == std::string::npos)
 		{
-		        return;
+			return;
 		}
 
 		//
@@ -593,7 +601,7 @@ namespace Plugins {
 					if ((m_ContentLength == sData.length()) || (Message->m_Buffer.empty()))
 					{
 						PyObject* pDataDict = PyDict_New();
-						PyNewRef pObj = Py_BuildValue("s", m_Status.c_str());
+						PyNewRef pObj(m_Status);
 						if (PyDict_SetItemString(pDataDict, "Status", pObj) == -1)
 							_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", "HTTP", "Status", m_Status.c_str());
 
@@ -607,7 +615,7 @@ namespace Plugins {
 
 						if (sData.length())
 						{
-							PyNewRef pObj = Py_BuildValue("y#", sData.c_str(), sData.length());
+							PyNewRef pObj((const byte*)sData.c_str(), sData.length());
 							if (PyDict_SetItemString(pDataDict, "Data", pObj) == -1)
 								_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", "HTTP", "Data", sData.c_str());
 						}
@@ -624,7 +632,7 @@ namespace Plugins {
 					{
 						if (!m_RemainingChunk)	// Not processing a chunk so we should be at the start of one
 						{
-						        // Skip terminating \r\n from previous chunk
+							// Skip terminating \r\n from previous chunk
 							if (sData[0] == '\r')
 							{
 								sData = sData.substr(sData.find_first_of('\n') + 1);
@@ -633,7 +641,7 @@ namespace Plugins {
 							size_t uSizeEnd = sData.find_first_of('\r');
 							if (uSizeEnd == std::string::npos || sData.find_first_of('\n', uSizeEnd + 1) == std::string::npos)
 							{
-							        break;
+								break;
 							}
 							std::string		sChunkLine = sData.substr(0, uSizeEnd);
 							m_RemainingChunk = strtol(sChunkLine.c_str(), nullptr, 16);
@@ -643,7 +651,7 @@ namespace Plugins {
 							if (m_RemainingChunk == 0 && (sData.find_first_of('\n') != std::string::npos))
 							{
 								PyObject* pDataDict = PyDict_New();
-								PyNewRef pObj = Py_BuildValue("s", m_Status.c_str());
+								PyNewRef pObj(m_Status);
 								if (PyDict_SetItemString(pDataDict, "Status", pObj) == -1)
 									_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", "HTTP", "Status", m_Status.c_str());
 
@@ -657,7 +665,7 @@ namespace Plugins {
 
 								if (sPayload.length())
 								{
-									PyNewRef pObj = Py_BuildValue("y#", sPayload.c_str(), sPayload.length());
+									PyNewRef pObj = PyBytes_FromStringAndSize(sPayload.c_str(), sPayload.length());
 									if (PyDict_SetItemString(pDataDict, "Data", pObj) == -1)
 										_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", "HTTP", "Data", sPayload.c_str());
 								}
@@ -702,7 +710,7 @@ namespace Plugins {
 				{
 					PyObject* DataDict = PyDict_New();
 					std::string		sVerb = sFirstLine.substr(0, sFirstLine.find_first_of(' '));
-					PyNewRef pObj = Py_BuildValue("s", sVerb.c_str());
+					PyNewRef pObj(sVerb);
 					if (PyDict_SetItemString(DataDict, "Verb", pObj) == -1)
 						_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", "HTTP", "Verb", sVerb.c_str());
 
@@ -717,7 +725,7 @@ namespace Plugins {
 						_log.Log(LOG_ERROR, "malformed request response received (verb: %s/%s)", sVerb.c_str(), sFirstLine.c_str());
 					}
 
-					PyNewRef pURL = Py_BuildValue("s", sURL.c_str());
+					PyNewRef pURL(sURL);
 					if (PyDict_SetItemString(DataDict, "URL", pURL) == -1)
 						_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", "HTTP", "URL", sURL.c_str());
 
@@ -731,7 +739,7 @@ namespace Plugins {
 
 					if (sPayload.length())
 					{
-						PyNewRef pObj = Py_BuildValue("y#", sPayload.c_str(), sPayload.length());
+						PyNewRef pObj = PyBytes_FromStringAndSize(sPayload.c_str(), sPayload.length());
 						if (PyDict_SetItemString(DataDict, "Data", pObj) == -1)
 							_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", "HTTP", "Data", sPayload.c_str());
 					}
@@ -805,7 +813,7 @@ namespace Plugins {
 			{
 				std::string		User;
 				std::string		Pass;
-				PyObject*		pModule = (PyObject*)WriteMessage->m_pConnection->pPlugin->PythonModule();
+				PyObject* pModule = (PyObject*)WriteMessage->m_pConnection->pPlugin->PythonModule();
 				PyNewRef		pDict = PyObject_GetAttrString(pModule, "Parameters");
 				if (pDict)
 				{
@@ -868,7 +876,7 @@ namespace Plugins {
 			sHttp += "\r\n";
 
 			// Add Date header if it is not supplied
-			PyObject *pHead = nullptr;
+			PyObject* pHead = nullptr;
 			if (pHeaders) pHead = PyDict_GetItemString(pHeaders, "Date");
 			if (!pHead)
 			{
@@ -929,7 +937,7 @@ namespace Plugins {
 						else if (pValue.IsList())
 						{
 							PyNewRef	iterator = PyObject_GetIter(value);
-							PyObject*	item;
+							PyObject* item;
 							while (item = PyIter_Next(iterator))
 							{
 								PyBorrowedRef	pItem(item);
@@ -993,7 +1001,7 @@ namespace Plugins {
 		// Chunks require hex encoded chunk length instead of normal response
 		if (pChunk)
 		{
-			long	lChunkLength = 0;
+			size_t lChunkLength = 0;
 			if (pData.IsString())
 				lChunkLength = PyUnicode_GetLength(pData);
 			else if (pData.IsByteArray())
@@ -1018,8 +1026,8 @@ namespace Plugins {
 			retVal.reserve(sHttp.length() + PyByteArray_Size(pData) + 2);
 			retVal.assign(sHttp.c_str(), sHttp.c_str() + sHttp.length());
 			const char* pByteArray = PyByteArray_AsString(pData);
-			int iStop = PyByteArray_Size(pData);
-			for (int i = 0; i < iStop; i++)
+			size_t iStop = PyByteArray_Size(pData);
+			for (size_t i = 0; i < iStop; i++)
 			{
 				retVal.push_back(pByteArray[i]);
 			}
@@ -1029,8 +1037,8 @@ namespace Plugins {
 			retVal.reserve(sHttp.length() + PyBytes_Size(pData) + 2);
 			retVal.assign(sHttp.c_str(), sHttp.c_str() + sHttp.length());
 			const char* pBytes = PyBytes_AsString(pData);
-			int iStop = PyBytes_Size(pData);
-			for (int i = 0; i < iStop; i++)
+			size_t iStop = PyBytes_Size(pData);
+			for (size_t i = 0; i < iStop; i++)
 			{
 				retVal.push_back(pBytes[i]);
 			}
@@ -1053,7 +1061,7 @@ namespace Plugins {
 
 	void CPluginProtocolICMP::ProcessInbound(const ReadEvent* Message)
 	{
-		PyNewRef pObj = nullptr;
+		PyNewRef pObj;
 		PyObject* pDataDict = PyDict_New();
 		int			iTotalData = 0;
 		int			iDataOffset = 0;
@@ -1179,8 +1187,7 @@ namespace Plugins {
 		}
 
 		std::string		sData(Message->m_Buffer.begin(), Message->m_Buffer.end());
-		sData = sData.substr(iDataOffset, iTotalData - iDataOffset);
-		pObj = Py_BuildValue("y#", sData.c_str(), sData.length());
+		pObj = PyNewRef((byte*)sData.c_str(), sData.length());
 		if (PyDict_SetItemString(pDataDict, "Data", pObj) == -1)
 			_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", "ICMP", "Data", sData.c_str());
 
@@ -1207,13 +1214,13 @@ namespace Plugins {
 
 #define MQTT_PROTOCOL	  4
 
-	static void MQTTPushBackNumber(int iNumber, std::vector<byte> &vVector)
+	static void MQTTPushBackNumber(int iNumber, std::vector<byte>& vVector)
 	{
 		vVector.push_back(iNumber / 256);
 		vVector.push_back(iNumber % 256);
 	}
 
-	static void MQTTPushBackLong(long iLong, std::vector<byte> &vVector)
+	static void MQTTPushBackLong(long iLong, std::vector<byte>& vVector)
 	{
 		vVector.push_back(iLong & 0xFF000000 >> 24);
 		vVector.push_back(iLong & 0xFF0000 >> 16);
@@ -1221,14 +1228,14 @@ namespace Plugins {
 		vVector.push_back(iLong & 0xFF);
 	}
 
-	static void MQTTPushBackString(const std::string &sString, std::vector<byte> &vVector)
+	static void MQTTPushBackString(const std::string& sString, std::vector<byte>& vVector)
 	{
 		vVector.insert(vVector.end(), sString.begin(), sString.end());
 	}
 
 	static void MQTTPushBackStringWLen(const std::string& sString, std::vector<byte>& vVector)
 	{
-		MQTTPushBackNumber(sString.length(), vVector);
+		MQTTPushBackNumber(static_cast<int>(sString.length()), vVector);
 		vVector.insert(vVector.end(), sString.begin(), sString.end());
 	}
 
@@ -1276,7 +1283,7 @@ namespace Plugins {
 			byte		bResponseType = header & 0xF0;
 			byte		flags = header & 0x0F;
 			PyObject* pMqttDict = PyDict_New();
-			PyObject *pObj = nullptr;
+			PyObject* pObj = nullptr;
 			uint16_t	iPacketIdentifier = 0;
 			long iRemainingLength = MQTTDecodeVariableByte(it);
 
@@ -1300,7 +1307,7 @@ namespace Plugins {
 					AddStringToDict(pMqttDict, "Error", std::string("MQTT protocol violation: Invalid protocol length"));
 					break;
 				}
-				const char *cProtocol = (const char *)&*it;
+				const char* cProtocol = (const char*)&*it;
 				std::string sProtocol(cProtocol, iProtocol);
 				if (sProtocol != "MQTT")
 				{
@@ -1313,7 +1320,7 @@ namespace Plugins {
 				AddBoolToDict(pMqttDict, "Username", (flags & 0x80));
 				AddBoolToDict(pMqttDict, "Password", (flags & 0x40));
 				AddBoolToDict(pMqttDict, "Retain", (flags & 0x20));
-				AddIntToDict(pMqttDict, "QoS", (flags & 0x18)>>3);
+				AddIntToDict(pMqttDict, "QoS", (flags & 0x18) >> 3);
 				AddBoolToDict(pMqttDict, "Will", (flags & 0x04));
 				AddBoolToDict(pMqttDict, "Clean", (flags & 0x02));
 				AddIntToDict(pMqttDict, "KeepAlive", ((*it++ << 8) + *it++));
@@ -1333,7 +1340,7 @@ namespace Plugins {
 				int iClientIDLen = *it++;
 				if (iClientIDLen)
 				{
-					const char *cClientID = (const char *)&*it;
+					const char* cClientID = (const char*)&*it;
 					AddStringToDict(pMqttDict, "ClientID", std::string(cClientID, iClientIDLen));
 					it += iClientIDLen;
 				}
@@ -1348,7 +1355,7 @@ namespace Plugins {
 					int iWillPropLen = *it++;
 					if (iWillPropLen)
 					{
-						const char *cWill = (const char *)&*it;
+						const char* cWill = (const char*)&*it;
 						AddIntToDict(pMqttDict, "WillDelayInterval", atoi(std::string(cWill, iWillPropLen).c_str()));
 					}
 					else
@@ -1368,7 +1375,7 @@ namespace Plugins {
 					int iTopicLen = *it++; // Should be UTF-8 encoded with a 2 byte length but was not by the test client
 					if (iTopicLen)
 					{
-						const char *cTopic = (const char *)&*it;
+						const char* cTopic = (const char*)&*it;
 						AddIntToDict(pMqttDict, "WillTopic", atoi(std::string(cTopic, iTopicLen).c_str()));
 					}
 					it += iTopicLen;
@@ -1384,7 +1391,7 @@ namespace Plugins {
 					int iPayloadLen = (*it++ << 8) + *it++;
 					if (iPayloadLen)
 					{
-						const char *cPayload = (const char *)&*it;
+						const char* cPayload = (const char*)&*it;
 						AddStringToDict(pMqttDict, "WillPayload", std::string(cPayload, iPayloadLen));
 					}
 					it += iPayloadLen;
@@ -1400,7 +1407,7 @@ namespace Plugins {
 					int iUsernameLen = (*it++ << 8) + *it++;
 					if (iUsernameLen)
 					{
-						const char *cUsername = (const char *)&*it;
+						const char* cUsername = (const char*)&*it;
 						AddStringToDict(pMqttDict, "Username", std::string(cUsername, iUsernameLen));
 					}
 					it += iUsernameLen;
@@ -1416,7 +1423,7 @@ namespace Plugins {
 					int iPasswordLen = (*it++ << 8) + *it++;
 					if (iPasswordLen)
 					{
-						const char *cPassword = (const char *)&*it;
+						const char* cPassword = (const char*)&*it;
 						AddStringToDict(pMqttDict, "Password", std::string(cPassword, iPasswordLen));
 					}
 					it += iPasswordLen;
@@ -1596,7 +1603,7 @@ namespace Plugins {
 					m_bErrored = true;
 					break;
 				}
-				std::string	sTopic((char const*) & *it, topicLen);
+				std::string	sTopic((char const*)&*it, topicLen);
 				AddStringToDict(pMqttDict, "Topic", sTopic);
 				it += topicLen;
 				if (iQoS)
@@ -1605,7 +1612,7 @@ namespace Plugins {
 					AddIntToDict(pMqttDict, "PacketIdentifier", iPacketIdentifier);
 				}
 				// Payload
-				const char *pPayload = (it == pktend) ? nullptr : (const char *)&*it;
+				const char* pPayload = (it == pktend) ? nullptr : (const char*)&*it;
 				std::string	sPayload(pPayload, std::distance(it, pktend));
 				AddBytesToDict(pMqttDict, "Payload", sPayload);
 				break;
@@ -1643,7 +1650,7 @@ namespace Plugins {
 					m_bErrored = true;
 				}
 				break;
-			case MQTT_SUBSCRIBE: 
+			case MQTT_SUBSCRIBE:
 			{
 				AddStringToDict(pMqttDict, "Verb", std::string("SUBSCRIBE"));
 				if (flags != 2)
@@ -1674,7 +1681,7 @@ namespace Plugins {
 				{
 					PyNewRef pTopic = PyDict_New();
 					int iTopicLen = (*it++ << 8) + *it++;
-					AddStringToDict(pTopic, "Topic", std::string((const char *)&*it, iTopicLen).c_str());
+					AddStringToDict(pTopic, "Topic", std::string((const char*)&*it, iTopicLen).c_str());
 					it += iTopicLen;
 					AddIntToDict(pTopic, "QoS", *it++ & 0x03);
 					PyList_Append(pTopicList, pTopic);
@@ -1960,32 +1967,32 @@ namespace Plugins {
 			}
 			else if (sVerb == "SUBACK")
 			{
-			// Variable Header
-			PyBorrowedRef pID = PyDict_GetItemString(WriteMessage->m_Object, "PacketIdentifier");
-			long iPacketIdentifier = 0;
-			if (pID.IsLong())
-			{
-				iPacketIdentifier = PyLong_AsLong(pID);
-				MQTTPushBackNumber((int)iPacketIdentifier, vVariableHeader);
-			}
-			else
-			{
-				_log.Log(LOG_ERROR, "(%s) MQTT Subscribe Acknowledgement: No valid PacketIdentifier specified. See Python Plugin wiki page for help.", __func__);
-				return retVal;
-			}
+				// Variable Header
+				PyBorrowedRef pID = PyDict_GetItemString(WriteMessage->m_Object, "PacketIdentifier");
+				long iPacketIdentifier = 0;
+				if (pID.IsLong())
+				{
+					iPacketIdentifier = PyLong_AsLong(pID);
+					MQTTPushBackNumber((int)iPacketIdentifier, vVariableHeader);
+				}
+				else
+				{
+					_log.Log(LOG_ERROR, "(%s) MQTT Subscribe Acknowledgement: No valid PacketIdentifier specified. See Python Plugin wiki page for help.", __func__);
+					return retVal;
+				}
 
-			PyBorrowedRef pDictEntry = PyDict_GetItemString(WriteMessage->m_Object, "QoS");
-			if (pDictEntry.IsLong())
-			{
-				vPayload.push_back((byte)PyLong_AsLong(pDictEntry));
-			}
-			else
-			{
-				_log.Log(LOG_ERROR, "(%s) MQTT Subscribe Acknowledgement: No valid QoS specified, 0 assumed. See Python Plugin wiki page for help.", __func__);
-				vPayload.push_back(0);
-			}
+				PyBorrowedRef pDictEntry = PyDict_GetItemString(WriteMessage->m_Object, "QoS");
+				if (pDictEntry.IsLong())
+				{
+					vPayload.push_back((byte)PyLong_AsLong(pDictEntry));
+				}
+				else
+				{
+					_log.Log(LOG_ERROR, "(%s) MQTT Subscribe Acknowledgement: No valid QoS specified, 0 assumed. See Python Plugin wiki page for help.", __func__);
+					vPayload.push_back(0);
+				}
 
-			retVal.push_back(MQTT_SUBACK);
+				retVal.push_back(MQTT_SUBACK);
 			}
 			else if (sVerb == "UNSUBSCRIBE")
 			{
@@ -2173,7 +2180,7 @@ namespace Plugins {
 		}
 
 		// Build final message
-		unsigned long	iRemainingLength = vVariableHeader.size() + vPayload.size();
+		size_t iRemainingLength = vVariableHeader.size() + vPayload.size();
 		do
 		{
 			byte	encodedByte = iRemainingLength % 128;
@@ -2219,7 +2226,7 @@ namespace Plugins {
 
 	bool CPluginProtocolWS::ProcessWholeMessage(std::vector<byte>& vMessage, const ReadEvent* Message)
 	{
-		while (!vMessage.empty())
+		if (vMessage.size() > 1)
 		{
 			// Look for a complete message
 			std::vector<byte>	vPayload;
@@ -2257,7 +2264,7 @@ namespace Plugins {
 			}
 			iOffset++;
 
-			byte *pbMask = nullptr;
+			byte* pbMask = nullptr;
 			if (bMasked)
 			{
 				if (vMessage.size() < iOffset)
@@ -2282,12 +2289,10 @@ namespace Plugins {
 			}
 
 			PyObject* pDataDict = (PyObject*)PyDict_New();
-			PyNewRef pPayload = nullptr;
+			PyNewRef pPayload;
 
 			// Handle full message
-			PyNewRef pObj = Py_BuildValue("N", PyBool_FromLong(bFinish));
-			if (PyDict_SetItemString(pDataDict, "Finish", pObj) == -1)
-				_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, "Finish", bFinish ? "True" : "False");
+			AddBoolToDict(pDataDict, "Finish", bFinish);
 
 			// Masked data?
 			if (lMaskingKey)
@@ -2297,26 +2302,23 @@ namespace Plugins {
 				{
 					vPayload[i] ^= pbMask[i % 4];
 				}
-				PyNewRef pObj = Py_BuildValue("i", lMaskingKey);
-				if (PyDict_SetItemString(pDataDict, "Mask", pObj) == -1)
-					_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%ld' to dictionary.", __func__, "Mask", lMaskingKey);
+
+				AddLongToDict(pDataDict, "Mask", lMaskingKey);
 			}
 
 			switch (iOpCode)
 			{
 			case 0x01:	// Text message
 			{
-				std::string		sPayload(vPayload.begin(), vPayload.end());
-				pPayload = Py_BuildValue("s", sPayload.c_str());
+				// Force text messages to be returned as Unicode rather than Bytes
+				pPayload = PyNewRef(std::string(vPayload.begin(), vPayload.end()));
 				break;
 			}
 			case 0x02:	// Binary message
 				break;
 			case 0x08:	// Connection Close
 			{
-				PyNewRef pObj = Py_BuildValue("s", "Close");
-				if (PyDict_SetItemString(pDataDict, "Operation", pObj) == -1)
-					_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, "Operation", "Close");
+				AddStringToDict(pDataDict, "Operation", "Close");
 				if (vPayload.size() == 2)
 				{
 					int		iReasonCode = (vPayload[0] << 8) + vPayload[1];
@@ -2327,17 +2329,13 @@ namespace Plugins {
 			case 0x09:	// Ping
 			{
 				pDataDict = (PyObject*)PyDict_New();
-				PyNewRef pObj = Py_BuildValue("s", "Ping");
-				if (PyDict_SetItemString(pDataDict, "Operation", pObj) == -1)
-					_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, "Operation", "Ping");
+				AddStringToDict(pDataDict, "Operation", "Ping");
 				break;
 			}
 			case 0x0A:	// Pong
 			{
 				pDataDict = (PyObject*)PyDict_New();
-				PyNewRef pObj = Py_BuildValue("s", "Pong");
-				if (PyDict_SetItemString(pDataDict, "Operation", pObj) == -1)
-					_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, "Operation", "Pong");
+				AddStringToDict(pDataDict, "Operation", "Pong");
 				break;
 			}
 			default:
@@ -2347,7 +2345,9 @@ namespace Plugins {
 			// If there is a payload but not handled then map it as binary
 			if (!vPayload.empty() && !pPayload)
 			{
-				pPayload = Py_BuildValue("y#", &vPayload[0], vPayload.size());
+				pPayload = PyNewRef(vPayload);
+				if (!pPayload)
+					_log.Log(LOG_ERROR, "(%s) failed build Python object for payload.", __func__);
 			}
 
 			// If there is a payload then add it
@@ -2370,23 +2370,27 @@ namespace Plugins {
 
 	void CPluginProtocolWS::ProcessInbound(const ReadEvent* Message)
 	{
-		//	Although messages can be fragmented, control messages can be inserted in between fragments
-		//	so try to process just the message first, then retained data and the message
-		std::vector<byte>	Buffer = Message->m_Buffer;
-		if (ProcessWholeMessage(Buffer, Message))
+		// Check this isn't an HTTP message (connection/protocol switch may have failed)
+		if (Message->m_Buffer.size() >= 4)
 		{
-			return;		// Message processed
+			std::string		sData(Message->m_Buffer.begin(), Message->m_Buffer.begin() + 4);
+			if (sData == "HTTP")
+			{
+				CPluginProtocolHTTP::ProcessInbound(Message);
+				return;
+			}
 		}
 
 		// Add new message to retained data, process all messages if this one is the finish of a message
 		m_sRetainedData.insert(m_sRetainedData.end(), Message->m_Buffer.begin(), Message->m_Buffer.end());
 
+		// Although messages can be fragmented, control messages can be inserted in between fragments.
+		// see https://datatracker.ietf.org/doc/html/rfc6455#section-5.4
 		// Always process the whole buffer because we can't know if we have whole, multiple or even complete messages unless we work through from the start
-		if (ProcessWholeMessage(m_sRetainedData, Message))
+		while (ProcessWholeMessage(m_sRetainedData, Message))
 		{
-			return;		// Message processed
+			continue;		// Message processed
 		}
-
 	}
 
 	std::vector<byte> CPluginProtocolWS::ProcessOutbound(const WriteDirective* WriteMessage)
@@ -2403,17 +2407,13 @@ namespace Plugins {
 		}
 		else
 		{
+			// If a URL is specified then this is an HTTP message (which must be the WebSocket upgrade message in a valid flow)
 			PyBorrowedRef pURL = PyDict_GetItemString(WriteMessage->m_Object, "URL");
 			if (pURL)
 			{
 				// Is a verb specified?
-				PyBorrowedRef pVerb = PyDict_GetItemString(WriteMessage->m_Object, "Verb");
-				if (!pVerb)
-				{
-					PyNewRef pObj = Py_BuildValue("s", "GET");
-					if (PyDict_SetItemString(WriteMessage->m_Object, "Verb", pObj) == -1)
-						_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, "Verb", "GET");
-				}
+				if (!PyDict_GetItemString(WriteMessage->m_Object, "Verb"))
+					AddStringToDict(WriteMessage->m_Object, "Verb", "GET");
 
 				// Required headers specified?
 				PyBorrowedRef pHeaders = PyDict_GetItemString(WriteMessage->m_Object, "Headers");
@@ -2421,37 +2421,47 @@ namespace Plugins {
 				{
 					pHeaders = (PyObject*)PyDict_New();
 					if (PyDict_SetItemString(WriteMessage->m_Object, "Headers", (PyObject*)pHeaders) == -1)
-						_log.Log(LOG_ERROR, "(%s) failed to add key '%s' to dictionary.", "WS", "Headers");
+						_log.Log(LOG_ERROR, "(%s) failed to create '%s' missing dictionary.", "WS", "Headers");
 					Py_DECREF(pHeaders);
 				}
-				PyBorrowedRef pConnection = PyDict_GetItemString(pHeaders, "Connection");
-				if (!pConnection)
-				{
-					PyNewRef pObj = Py_BuildValue("s", "keep-alive, Upgrade");
-					if (PyDict_SetItemString(pHeaders, "Connection", pObj) == -1)
-						_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, "Connection", "Upgrade");
-				}
-				PyBorrowedRef pUpgrade = PyDict_GetItemString(pHeaders, "Upgrade");
-				if (!pUpgrade)
-				{
-					PyNewRef pObj = Py_BuildValue("s", "websocket");
-					if (PyDict_SetItemString(pHeaders, "Upgrade", pObj) == -1)
-						_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, "Upgrade", "websocket");
-				}
-				PyBorrowedRef pUserAgent = PyDict_GetItemString(pHeaders, "User-Agent");
-				if (!pUserAgent)
-				{
-					PyNewRef pObj = Py_BuildValue("s", "Domoticz/1.0");
-					if (PyDict_SetItemString(pHeaders, "User-Agent", pObj) == -1)
-						_log.Log(LOG_ERROR, "(%s) failed to add key '%s', value '%s' to dictionary.", __func__, "User-Agent", "Domoticz/1.0");
-				}
 
-				// Use parent HTTP protocol object to do the actual formatting
+				// Add default values for missing headers
+				if (!PyDict_GetItemString(pHeaders, "Accept"))
+					AddStringToDict(pHeaders, "Accept", "*/*");
+
+				if (!PyDict_GetItemString(pHeaders, "Accept-Language"))
+					AddStringToDict(pHeaders, "Accept-Language", "en-US,en;q=0.9'");
+
+				if (!PyDict_GetItemString(pHeaders, "Accept-Encoding"))
+					AddStringToDict(pHeaders, "Accept-Encoding", "gzip, deflate");
+
+				if (!PyDict_GetItemString(pHeaders, "Connection"))
+					AddStringToDict(pHeaders, "Connection", "keep-alive, Upgrade");
+
+				if (!PyDict_GetItemString(pHeaders, "Sec-WebSocket-Version"))
+					AddStringToDict(pHeaders, "Sec-WebSocket-Version", "13");
+
+				if (!PyDict_GetItemString(pHeaders, "Sec-WebSocket-Extensions"))
+					AddStringToDict(pHeaders, "Sec-WebSocket-Extensions", "permessage-deflate");
+
+				if (!PyDict_GetItemString(pHeaders, "Upgrade"))
+					AddStringToDict(pHeaders, "Upgrade", "websocket");
+
+				if (!PyDict_GetItemString(pHeaders, "User-Agent"))
+					AddStringToDict(pHeaders, "User-Agent", "Domoticz/1.0");
+
+				if (!PyDict_GetItemString(pHeaders, "Pragma"))
+					AddStringToDict(pHeaders, "Pragma", "no-cache");
+
+				if (!PyDict_GetItemString(pHeaders, "Cache-Control"))
+					AddStringToDict(pHeaders, "Cache-Control", "no-cache");
+
+				// Use parent HTTP protocol object to do the actual formatting and queuing
 				return CPluginProtocolHTTP::ProcessOutbound(WriteMessage);
 			}
 			int iOpCode = 0;
-			long lMaskingKey = 0;
-			long lPayloadLength = 0;
+			int64_t llMaskingKey = 0;
+			size_t lPayloadLength = 0;
 			byte bMaskBit = 0x00;
 
 			PyBorrowedRef pOperation = PyDict_GetItemString(WriteMessage->m_Object, "Operation");
@@ -2505,13 +2515,13 @@ namespace Plugins {
 			{
 				if (pMask.IsLong())
 				{
-					lMaskingKey = PyLong_AsLong(pMask);
+					llMaskingKey = PyLong_AsLongLong(pMask);
 					bMaskBit = 0x80; // Set mask bit in header
 				}
 				else if (pMask.IsString())
 				{
 					std::string sMask = PyUnicode_AsUTF8(pMask);
-					lMaskingKey = atoi(sMask.c_str());
+					llMaskingKey = atoi(sMask.c_str());
 					bMaskBit = 0x80; // Set mask bit in header
 				}
 				else
@@ -2531,44 +2541,54 @@ namespace Plugins {
 			else
 			{
 				retVal.push_back(bMaskBit | 126);
-				retVal.push_back(lPayloadLength >> 24);
-				retVal.push_back((lPayloadLength >> 16) & 0xFF);
-				retVal.push_back((lPayloadLength >> 8) & 0xFF);
-				retVal.push_back(lPayloadLength & 0xFF); // Longer length
+				uint32_t dwPL = static_cast<uint32_t>(lPayloadLength);
+				retVal.push_back(dwPL >> 24);
+				retVal.push_back((dwPL >> 16) & 0xFF);
+				retVal.push_back((dwPL >> 8) & 0xFF);
+				retVal.push_back(dwPL & 0xFF); // Longer length
 			}
 
-			byte *pbMask = nullptr;
+			byte* pbMask = nullptr;
 			if (bMaskBit)
 			{
-				retVal.push_back(lMaskingKey >> 24);
+				retVal.push_back((byte)(llMaskingKey >> 24));
 				pbMask = &retVal[retVal.size() - 1];
-				retVal.push_back((lMaskingKey >> 16) & 0xFF);
-				retVal.push_back((lMaskingKey >> 8) & 0xFF);
-				retVal.push_back(lMaskingKey & 0xFF); // Encode mask
+				retVal.push_back((llMaskingKey >> 16) & 0xFF);
+				retVal.push_back((llMaskingKey >> 8) & 0xFF);
+				retVal.push_back(llMaskingKey & 0xFF); // Encode mask
 			}
 
 			if (pPayload.IsString())
 			{
 				std::string sPayload = PyUnicode_AsUTF8(pPayload);
-				for (int i = 0; i < lPayloadLength; i++)
+				for (size_t i = 0; i < lPayloadLength; i++)
 				{
-					retVal.push_back(sPayload[i] ^ pbMask[i % 4]);
+					if (bMaskBit)
+						retVal.push_back(sPayload[i] ^ pbMask[i % 4]);
+					else
+						retVal.push_back(sPayload[i]);
 				}
 			}
 			else if (pPayload.IsBytes())
 			{
-				byte *pByte = (byte *)PyBytes_AsString(pPayload);
-				for (int i = 0; i < lPayloadLength; i++)
+				byte* pByte = (byte*)PyBytes_AsString(pPayload);
+				for (size_t i = 0; i < lPayloadLength; i++)
 				{
-					retVal.push_back(pByte[i] ^ pbMask[i % 4]);
+					if (bMaskBit)
+						retVal.push_back(pByte[i] ^ pbMask[i % 4]);
+					else
+						retVal.push_back(pByte[i]);
 				}
 			}
 			else if (pPayload.IsByteArray())
 			{
-				byte *pByte = (byte *)PyByteArray_AsString(pPayload);
-				for (int i = 0; i < lPayloadLength; i++)
+				byte* pByte = (byte*)PyByteArray_AsString(pPayload);
+				for (size_t i = 0; i < lPayloadLength; i++)
 				{
-					retVal.push_back(pByte[i] ^ pbMask[i % 4]);
+					if (bMaskBit)
+						retVal.push_back(pByte[i] ^ pbMask[i % 4]);
+					else
+						retVal.push_back(pByte[i]);
 				}
 			}
 		}

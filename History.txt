@@ -1,17 +1,239 @@
-Version 2022.xxxxx (xxxx)
-- Implemented: Blockly, added 'Toggle' set command
-- Implemented: Camera Aspect Ratio
-- Implemented: Commandline option '-weblog <weblogfile>' which creates Apache Combined Logformat logs containg all webrequests
-- Implemented: Fritzbox, up/download statistics
-- Implemented: Service Worker, only when using https and a valid SSL certificate
-- Implemented: Temperature Trend indication on dashboard
-- Fixed: Counters, rounding (amount of decimals) in GUI
-- Fixed: Counter Incremental, counter in report (when used with meter offset)
+Version 2024.x
+- Implemented: RFXCom, Updated SDK
+- Implemented: Support for Honeywell Series 5/PIR
+- Implemented: YouLess, added Water meter
+- Changed: dzVents, possible to pass a Domoticz device ID in notify() through the extra parameter
+- Changed: Energy Dashboard now also available for non-admin users
+- Changed: Google Firebase Cloud Messaging (FCM) alternative way to pass a Domoticz device ID through the extra field ('|Device=<devidx>')
+- Changed: Improved and automated login process for Netatmo devices (to obtain client ID and Password with user selectable scopes)
+- Fixed: Custom Icons, making sure they are valid and loaded OK
+- Fixed: RFXCom 868 MHz Weather device
 
-- Removed: AppCache
+Version 2024.7 (July 13th 2024)
+- Implemented: P1 Meter, Report, Header now also supports simple mode (No T1/T2/R1/R2 but just total)
+- Fixed: Google Cloud Messaging (GCM/FCM) possible crash when notification needed to be send
+
+Version 2024.6 (July 8th 2024)
+- Fixed: EventSystem, LOG_FORCE now always logged
+- Changed: Google Cloud Messaging (GCM) now uses the new v1 API of Google's Firebase Cloud Messaging (FCM)
+
+Version 2024.5 (July 7th 2024)
+- Implemented: Currency Symbol in Location Settings
+- Implemented: dzVents, Added historical data helper 'med' to calculate the median value
+- Implemented: dzVents, Improved logging
+- Implemented: Energy Dashboard
+- Implemented: Enever, Added Budget Energy and Eneco
+- Implemented: Enphase, Live storage data
+- Implemented: Enphase, Option for more Inverter details (ac/dc voltage, temperature, lastupdate)
+- Implemented: Event Editor, Close/Close All menu dropdown
+- Implemented: Event Editor, Storing/Loading opened events
+- Implemented: Hour chart for P1 log
+- Implemented: MQTT-AD Climate Fan Mode
+- Implemented: MQTT-AD Climate Swing Mode
+- Implemented: OpenWeatherMap, API 3.0 support
+- Implemented: P1 Meter, option to specify view (low/high tariff or simple (dynamic contract))
+- Implemented: Possible to query a range of device states via JSON
+- Implemented: SolarEdge, polling Storage devices
+- Fixed: Data Pushers, Forecast for Weather Station subtypes
+- Fixed: Floorplan, better detection of switches
+- Fixed: Hardware Setup, hiding extra parameters when selecting a python plugin
+- Fixed: PythonEx framework, two notifications where send for switch type devices
+- Fixed: Python framework, custom image loading
+- Removed: Cereal Proxy (not used anymore)
+- Changed: EvoHome, now making use of general logging system
+- Changed: MQTT-AD, now also handles brightness scale number values as string
+- Changed: SBFSpot, disabled error 28 error
+- Changed: Selector switch now displays correct state in Data field (and devices overview)
+
+Version 2024.4 (January 30th 2024)
+- Fixed: cWebm, fixing high CPU load caused by time jumps
+- Fixed: Memory leak in master/client setup
+- Fixed: Python, device creation with options was not working correctly
+- Fixed: Room Selection, switching to default room did not always work
+- Fixed: Temperature compare chart for Fahrenheit
+
+Version 2024.3 (January 24th 2024)
+- Implemented: Domoticz Remote Server, added better error message if remote Domoticz device could not be created because accepting new devices is disabled under settings
+- Implemented: InfluxDB Data push, add error message when return status code is forbidden
+- Fixed: Alert sensor notification
+- Fixed: Scripts/Lua/Blockly, setting a setPoint
+
+Version 2024.2 (January 15th 2024)
+- Implemented: Compare chart for most sensor types
+- Implemented: Email, Splitting mime attachments over multiple lines
+- Implemented: Notifications, Option to enable/disable
+- Implemented: OpenZwave is back.... (No Support)
+- Updated: Translations
+- Changed: Comparing charts now uses correct Y-Axis label
+- Changed: Internal, Last received is now handled differently, should solve possible hardware timeout issues
+- Changed: MQTT, QoS is now set to 1 for all messages
+- Fixed: MQTT-AD: Fan creation
+- Fixed: Timer Plans, now also duplicates scenes
+
+Version 2024.1 (January 1th 2024)
+- Implemented: AlfenEve, added charging indication switch
+- Implemented: AlfenEve, added option to specify charge current (or disable this)
+- Implemented: AlfenEve, added Solar charging mode and settings
+- Implemented: Counter report, now possible to remove data point (via shift click) from month chart
+- Implemented: Devices overview, Setpoint log button
+- Implemented: Enever, added support for providers Atoom Alliantie, Energie van Ons, Vandebron, Wout Energie
+- Implemented: Enever, option to specify different providers for Gas/Electricity
+- Implemented: Enever: added two user variables for average gas/electricity price
+- Implemented: Enphase, counter helper to prevent turnover caused by powerloss, reboot or other envoy issues
+- Implemented: Enphase, Initial support for Encharge battery status (needs more work)
+- Implemented: Livesearch, included hardware name and optimized search algorithm to search all entered strings
+- Implemented: Managed Counters, now possible to use negative values
+- Implemented: Mitsubishi WF RAC Airconditioning
+- Implemented: MQTT-AD, added support for climate min_temp/max_temp and temp_step
+- Implemented: MQTT-AD, added support for number voc type
+- Implemented: MQTT-AD, added support for Wh and Wm sensors
+- Implemented: MQTT-AD, don't add new devices when this is disabled in the system
+- Implemented: MQTT-AD: Fan percentage_command_template merged with preset_modes
+- Implemented: MQTT, added option to specify devices to be published to MQTT
+- Implemented: P1 Meter report, now possible to remove data point (via shift click) from month chart
+- Implemented: Persistent Timers (will work in all timer plans)
+- Implemented: SetPoint devices can now be configured with a custom unit, min/max and step size and have a custom icon
+- Implemented: Support for Python 3.12
+- Implemented: TeleInfo, added Tempo field
+- Implemented: Temp/Hum/Baro or combination can be replaced by any other Temp/Hum/Baro or combination
+- Implemented: Temperature report, now possible to remove data point (via shift click) from variation chart
+- Changed: Floorplan, better display of current state for counter devices
+- Changed: Floorplan, Sound Icon state (0 dB = Off else On)
+- Changed: MQTT-AD: better device name generation
+- Changed: Netatmo login, now using the API Token
+- Fixed: EventSystem, corrected event of RGB/W/WW devices
+- Fixed: Export to csv from Charts
+- Fixed: MQTT-AD, RGB dimmers did not work correctly in scenes/timers
+- Fixed: MQTT-AD: better handling of Push-On/Push-Off devices
+- Fixed: MQTT-AD: better handling of Switch commands that needs a 'state' object
+- Fixed: MQTT-AD: fixed brightness for HS lights
+- Fixed: MQTT-AD: prevent blind from updating on non-numeric state changes
+- Fixed: P1 Meter, buffer size increased because of large datagrams on some meters
+- Fixed: Python memory leak
+- Fixed: Sunset/rise timers now correctly set the time for next day
+- Fixed: Switches defined with "Off Delay" are not set to "Off" at startup
+- Removed: OpenZWave (Move to ZWaveJS-UI in combination with MQTT Auto Discovery)
+- Removed: RFXCom, firmware update via web interface (use RFXFlash instead)
+
+Version 2023.2 (July 21 2023)
+- Implemented: 2FA/TOTP (Time-based One-Time Password) and HOTP (HMAC-based One-Time Password)
+- Implemented: Alfen Eve Charger hardware
+- Implemented: Allow a 'user' with shared devices to set it's own favorite devices
+- Implemented: Custom pages, new Angular template examples
+- Implemented: Custom pages, now need at least a user with Viewer rights
+- Implemented: Enever hardware (Live Dutch Gas/Electricity prices for various providers)
+- Implemented: Enphase, (V7 firmware) added support for enabling/disabling power production
+- Implemented: Device reordering for Users with devices
+- Implemented: Libre Hardware Monitor (Windows System monitor replacement for Open Hardware Monitor)
+- Implemented: LUA: Added name state to devicechanged_ext table
+- Implemented: RFXCom, Updated SDK
+- Implemented: RTL433, Added support for volume_m3 meter
+- Implemented: MQTT-AD, added support for number (config) types
+- Implemented: P1 Meter, added Actual Usage/Delivery (total of L1 + L2 + L3)
+- Implemented: P1 Meter, added calculated kWh devices per phase for usage and delivery
+- Implemented: P1 Meter, new way of displaying returned energy
+- Implemented: Users with admin rights and selected devices will now see only those devices
+- Implemented: Users devices editor, option to remove all nodes/devices
+- Implemented: Visual Crossing (replacement for Darksky/Forecast)
+- Implemented: -nocache command line option (ask browser not to cache pages)
+- Fixed: Blinds percentage timers
+- Fixed: Chime structure check
+- Fixed: Counter day charts, better hourly bars and usage
+- Fixed: Device reordering when a room plan was selected
+- Fixed: Forecast button now displays a working forecast
+- Fixed: Install and update fixed for Raspberry Pi 4 with 32bit (armhf) userland
+- Fixed: Floorplan Percentage icon with custom icon
+- Fixed: Settings/Floorplan, Scene Names value was not saved
+- Changed: API: Old RType calls have been replaced with normal calls
+- Changed: MQTT-AD, better Unit calculation for scene/action devices
+- Changed: Debuglogging: setting debugflags automatically sets loglevel DEBUG
+- Updated: Plugin manager: ready for Python 3.11
+- Removed: native GoodWe hardware (use the new GoodWe python plugin instead)
+
+Version 2023.1 (February 14 2023)
+- For a full overview visit: https://www.domoticz.com/wiki/Domoticz_versions_-_Commits for details
+- Implemented: Accept JWT tokens as authentication and Authorization Bearer tokens (either from internal or external IAM service)
+- Implemented: Blinds, added option to schedule 0%
+- Implemented: dzVents, OpenURL PATCH method
+- Implemented: Enphase, redesign and added battery readings (Supports firmware V7)
+- Implemented: Internal OAuth2/OIDC IAM service supporting 4 different flows (OAuth2 (RFC6749), PKCE extension (RFC7636) and JWT Tokens (RFC7519))
+- Implemented: MQTT, added support for Lock status
+- Implemented: MQTT, added support for wildcards in discovery topics
+- Implemented: MQTT, climate preset mode
+- Implemented: New 'auth' debug flag to see IAM related messages
+- Implemented: Now 'Applications' can be registered to get secure access to Domoticz, see 'setup' menu (standard DomoticzUI app is registered by default)
+- Implemented: P1 Meter, added number of (long) power failures, voltage sags/swells
+- Implemented: SECURITY_SETUP.md describing the new/improved security setup
+- Implemented: Support for basic OpenID Connect Discovery ('https://<DOMOTICZURL>/.well-known/openid-configuration')
+- Implemented: Search option in Switches/Scenes/Temperature/Utility and Weather tab
+- Implemented: The Security realm can be configured using the 'vhostname' option (default domoticz.com)
+- Implemented: Timer, Grid option for selected switches and thermostat. Big thanks to syrhus/labelette91580 and xbeaudouin
+- Implemented: User device selection now displays type/subtype
+- Changed: All security related setting are now in 1 settings tab
+- Changed: By default prompt for login to only allow secure access
+- Changed: Default 'admin' user is generated with standard password (see Users)
+- Changed: Dimmer, restores to previous Set Level state after Off
+- Changed: Implicit adding local IP to 'trusted networks' has been removed. Needs to be set explicitly for security reasons!
+- Changed: Lots of security related code cleanup and improvements
+- Changed: Menu option for 'Users' moved to main 'Setup' menu list
+- Changed: MQTT timeout increased to 2 minutes
+- Changed: The following proxy headers are now properly supported 'Forwarded' (RFC7239), 'X-Forwarder-For' and 'X-Real-IP' (in that order)
+- Changed: The secure server (HTTPS) sends proper CORS and Security headers
+- Fixed: Dashboard, scenes/lights hidden when this was disabled in user settings
+- Fixed: Dashboard, mobile display did not display P1 meter current return value correctly
+- Fixed: Dashboard, not showing disabled sections (temperature/weather/utility) when a device has multiple properties (for instance temperature + weather)
+- Fixed: Highcharts dropdown menu z-index problem
+- Fixed: Logout now returns 204 instead of 401
+- Fixed: Waterflow sensor custom icon
+- Fixed: Making sure Custom icons are valid (when someone manually edits the database)
+- Fixed: Mobile display text objects with long lines
+- Fixed: MQTT-AD Climate, fixed setpoint temperature display
+- Fixed: Navigation bar display issues on some mobile devices
+- Fixed: Setpoint popup when using protection
+
+Version 2022.2 (November 5 2022)
+- Implemented: Blockly,	added 'Toggle' set command
+- Implemented: Camera, camera Aspect Ratio
+- Implemented: Commandline option '-weblog <weblogfile>' which creates Apache Combined Logformat logs containg all webrequests
+- Implemented: Counters, support for larger counter values/usage
+- Implemented: Dashboard, temperature Trend indication
+- Implemented: Docker	startup script (for instance to install additional packages)
+- Implemented: EcoDevices, complete support for EcoDevices RT2 with firmware 3.00.xx
+- Implemented: FritzBox, more statistics
+- Implemented: Fritzbox, up/download statistics
+- Implemented: MQTT Auto Discovery Protocol (Zigbee2MQTT/ Z-Wave JS UI)
+- Implemented: P1 Meter, added Current L1/L2/L3 sensor for delivered
+- Implemented: Philips Hue, support color change on some vendors bulb (like LIDL)
+- Implemented: RFXCom, added internal support for Novy Mood, Level Sensor
+- Implemented: SolarEdge, more sensors support
+- Implemented: UVI device, added multiply field to widget
+- Implemented: Xiaomi Gateway, new model for wired single key switch
+- Updated: Mercedes EV, new Token URL (changed November 2022)
+- Changed: All inverted Blinds types should not be used anymore, instead use the regular blinds and set the needed Reverse option
+- Changed: Blinds working (see https://www.domoticz.com/wiki/Blinds)
+- Changed: Energy devices have more precision
+- Changed: kWh devices	MAX Power per phase from 10000 to 18400 (230V*80A)
+- Changed: P1 Meter, changed P1 Max W from 17250 (25A) to 55200 (80A)
+- Changed: P1 Meter, speed up CRC calculation
+- Changed: Webserver, removing AppCache, switching to service worker
+- Fixed: Blockly, keeping last dim level when switching OFF, option for Close state
+- Fixed: Counter incremental, counter in report (when used with meter offset)
+- Fixed: Counter short-term log 1 hour offset
+- Fixed: Counters, rounding (number of decimals) in GUI
 - Fixed: Crash when secure webserver could not start and applying settings
+- Fixed: Dimmer, better handling of last dimmer level when switching on/off
+- Fixed: EvoHome, correct state/mode for EvoHome type
+- Fixed: Floorplan, custom utility icons corrected in Floorplan
+- Fixed: Floorplan, fixed blinds state icon/switching
+- Fixed: Floorplan, making sure the Door Lock is switchable in the Floorplan
+- Fixed: Floorplans, fixed issues with the displaying of some icons
 - Fixed: Notification system, prevent double start
-- For a full detailed overview visit: https://www.domoticz.com/wiki/Domoticz_versions_-_Commits
+- Fixed: P1 Meter, fix for Sibelga smart meters that use a too long string as an identifier
+- Fixed: RFXCom, corrected RFXCom solar sensor reading
+- Fixed: Temperature, corrected chill calculation
+- Fixed: WebGUI, making sure status does not wrap in mobile mode
+- Removed: AppCache
+- Deprecated: OpenZWave, please move to MQTT Auto Discovery and ZWave JS UI (Project stopped a long time ago!)
 
 Version 2022.1 (January 31 2022)
 - Implemented: Added Irrigation icon (also thanks to dbemowsk)
@@ -47,7 +269,6 @@ Version 2022.1 (January 31 2022)
 - Fixed: EvoHome, Fix Web API crash when a new zone wass added
 - Fixed: Notifications, Email notification fix jpeg inline attachment handling for K9 mail
 - Fixed: OpenWeatherMap, Fix to resolve OWM City for default location. Used by OWM based forecast screen
-- For a full detailed overview visit: https://www.domoticz.com/wiki/Domoticz_versions_-_Commits
 
 Version 2021.1 (April 17 2021)
 - Implemented: Added option to set loglevel per hardware device
@@ -124,7 +345,6 @@ Version 2021.1 (April 17 2021)
 - Fixed: User field in device logging for switches, -text-devices and for groups/scenes
 - Fixed: Windows installation respects configured log parameters
 - Fixed: Zwave various issues
-- For a full overview visit: https://www.domoticz.com/wiki/Domoticz_versions_-_Commits for details
 
 Version 2020.2 (April 26th 2020)
 - Implemented: GUI: New Update controller code
@@ -143,7 +363,6 @@ Version 2020.2 (April 26th 2020)
 - Changed: Removed external library dependencies from repository
 - Updated: Translations
 - Updated: TTNMQTT, improved handling CayenneLPP channels
-- For a full overview visit: https://www.domoticz.com/wiki/Domoticz_versions_-_Commits for details
 
 Version 2020.1 (March 22th 2020)
 - Implemented: BuienRadar

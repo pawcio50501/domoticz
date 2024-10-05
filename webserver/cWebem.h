@@ -13,7 +13,8 @@ namespace http
 		{
 			URIGHTS_VIEWER = 0,
 			URIGHTS_SWITCHER,
-			URIGHTS_ADMIN
+			URIGHTS_ADMIN,
+			URIGHTS_CLIENTID=255
 		};
 		enum _eAuthenticationMethod
 		{
@@ -31,6 +32,9 @@ namespace http
 			unsigned long ID;
 			std::string Username;
 			std::string Password;
+			std::string Mfatoken;
+			std::string PrivKey;
+			std::string PubKey;
 			_eUserRights userrights = URIGHTS_VIEWER;
 			int TotSensors = 0;
 			int ActiveTabs = 0;
@@ -51,28 +55,27 @@ namespace http
 			int rights = 0;
 			bool rememberme = false;
 			bool isnew = false;
-			bool forcelogin = false;
 		} WebEmSession;
 
 		typedef struct _tIPNetwork
 		{
 			bool bIsIPv6 = false;
+			std::string ip_string;
 			uint8_t Network[16] = { 0 };
 			uint8_t Mask[16] = { 0 };
 		} IPNetwork;
 
-		// Parsed Authorization header
-		struct ah
-		{
-			std::string method;
-			std::string user;
-			std::string response;
-			std::string uri;
-			std::string cnonce;
-			std::string qop;
-			std::string nc;
-			std::string nonce;
-			std::string ha1;
+		// Parsed Authorization header (RFC2617)
+		struct ah {
+			std::string method;		// HTTP request method
+			std::string user;		// Username
+			std::string response;	// Response with the request-digest
+			std::string uri;		// Digest-Uri
+			std::string cnonce;		// Client Nonce
+			std::string qop;		// Quality of Protection
+			std::string nc;			// Nonce Count
+			std::string nonce;		// Nonce
+			std::string ha1;		// A1 = unq(username-value) ":" unq(realm-value) ":" passwd
 		};
 
 		/**
@@ -103,7 +106,6 @@ namespace http
 		*/
 		class cWebem;
 		typedef std::function<void(std::string &content_part)> webem_include_function;
-		typedef std::function<void(std::wstring &content_part_w)> webem_include_function_w;
 		typedef std::function<void(WebEmSession &session, const request &req, std::string &redirecturi)> webem_action_function;
 		typedef std::function<void(WebEmSession &session, const request &req, reply &rep)> webem_page_function;
 
@@ -127,56 +129,58 @@ namespace http
 
 			/// Handle a request and produce a reply.
 			void handle_request(const request &req, reply &rep) override;
+			bool CheckUserAuthorization(std::string &user, const request &req);
 
-		      private:
+				private:
 			char *strftime_t(const char *format, time_t rawtime);
 			bool CompressWebOutput(const request &req, reply &rep);
 			/// Websocket methods
 			bool is_upgrade_request(WebEmSession &session, const request &req, reply &rep);
 			std::string compute_accept_header(const std::string &websocket_key);
+			bool CheckAuthByPass(const request& req);
 			bool CheckAuthentication(WebEmSession &session, const request &req, reply &rep);
+			bool CheckUserAuthorization(std::string &user, struct ah *ah);
+			bool AllowBasicAuth();
 			void send_authorization_request(reply &rep);
 			void send_remove_cookie(reply &rep);
 			std::string generateSessionID();
 			void send_cookie(reply &rep, const WebEmSession &session);
-			bool AreWeInLocalNetwork(const std::string &sHost, const request &req);
-			int authorize(WebEmSession &session, const request &req, reply &rep);
+			bool parse_cookie(const request &req, std::string &sSID, std::string &sAuthToken, std::string &szTime, bool &expired);
+			bool AreWeInTrustedNetwork(const std::string &sHost);
+			bool IsIPInRange(const std::string &ip, const _tIPNetwork &ipnetwork, const bool &bIsIPv6);
 			void Logout();
 			int parse_auth_header(const request &req, struct ah *ah);
 			std::string generateAuthToken(const WebEmSession &session, const request &req);
 			bool checkAuthToken(WebEmSession &session);
 			void removeAuthToken(const std::string &sessionId);
+			int check_password(struct ah *ah, const std::string &ha1);
 		};
-		// forward declaration for friend declaration
-		class CProxyClient;
+
 		/**
-
 		The webem embedded web server.
-
 		*/
 		class cWebem
 		{
-			friend class CProxyClient;
-
 		      public:
 			cWebem(const server_settings &settings, const std::string &doc_root);
 			~cWebem();
 			void Run();
 			void Stop();
 
-			void RegisterIncludeCode(const char *idname, const webem_include_function &fun);
-
-			void RegisterIncludeCodeW(const char *idname, const webem_include_function_w &fun);
+			// 20230525 No longer in Use! Will be removed soon!
+			//void RegisterIncludeCode(const char *idname, const webem_include_function &fun);
+			//bool Include(std::string &reply);
 
 			void RegisterPageCode(const char *pageurl, const webem_page_function &fun, bool bypassAuthentication = false);
-			void RegisterPageCodeW(const char *pageurl, const webem_page_function &fun, bool bypassAuthentication = false);
-
-			bool Include(std::string &reply);
 
 			void RegisterActionCode(const char *idname, const webem_action_function &fun);
 
 			void RegisterWhitelistURLString(const char *idname);
 			void RegisterWhitelistCommandsString(const char *idname);
+
+			void DebugRegistrations();
+
+			bool ExtractPostData(request &req, const char *pContent_Type);
 
 			bool IsAction(const request &req);
 			bool CheckForAction(WebEmSession &session, request &req);
@@ -187,23 +191,26 @@ namespace http
 			void SetAuthenticationMethod(_eAuthenticationMethod amethod);
 			void SetWebTheme(const std::string &themename);
 			void SetWebRoot(const std::string &webRoot);
-			void AddUserPassword(unsigned long ID, const std::string &username, const std::string &password, _eUserRights userrights, int activetabs);
+			void AddUserPassword(unsigned long ID, const std::string &username, const std::string &password, const std::string &mfatoken, _eUserRights userrights, int activetabs, const std::string &privkey = "", const std::string &pubkey = "");
 			std::string ExtractRequestPath(const std::string &original_request_path);
 			bool IsBadRequestPath(const std::string &original_request_path);
 
+			bool GenerateJwtToken(std::string &jwttoken, const std::string &clientid, const std::string &clientsecret, const std::string &user, const uint32_t exptime, const Json::Value jwtpayload = "");
+			bool FindAuthenticatedUser(std::string &user, const request &req, reply &rep);
+			bool CheckVHost(const request &req);
+			bool findRealHostBehindProxies(const request &req, std::string &realhost);
+			static bool isValidIP(std::string& ip);
+
 			void ClearUserPasswords();
 			std::vector<_tWebUserPassword> m_userpasswords;
-			void AddLocalNetworks(std::string network);
-			void ClearLocalNetworks();
+			void AddTrustedNetworks(std::string network);
+			void ClearTrustedNetworks();
 			std::vector<_tIPNetwork> m_localnetworks;
 			void SetDigistRealm(const std::string &realm);
 			std::string m_DigistRealm;
+			void SetAllowPlainBasicAuth(const bool bAllow);
+			bool m_AllowPlainBasicAuth;
 			void SetZipPassword(const std::string &password);
-
-			// IPs that are allowed to pass proxy headers
-			std::vector<std::string> myRemoteProxyIPs;
-			void AddRemoteProxyIPs(const std::string &ipaddr);
-			void ClearRemoteProxyIPs();
 
 			// Session store manager
 			void SetSessionStore(session_store_impl_ptr sessionStore);
@@ -231,24 +238,24 @@ namespace http
 			_eWebCompressionMode m_gzipmode;
 
 		      private:
-			/// store map between include codes and application functions
-			std::map<std::string, webem_include_function> myIncludes;
-			/// store map between include codes and application functions returning UTF-16 strings
-			std::map<std::string, webem_include_function_w> myIncludes_w;
+			/// store map between include codes and application functions (20230525 No longer in use! Will be removed soon!)
+			// std::map<std::string, webem_include_function> myIncludes;
 			/// store map between action codes and application functions
 			std::map<std::string, webem_action_function> myActions;
 			/// store name walue pairs for form submit action
 			std::map<std::string, webem_page_function> myPages;
-			/// store map between pages and application functions
-			std::map<std::string, webem_page_function> myPages_w;
+
 			void CleanSessions();
+			bool sumProxyHeader(const std::string &sHeader, const request &req, std::vector<std::string> &vHeaderLines);
+			bool parseProxyHeader(const std::vector<std::string> &vHeaderLines, std::vector<std::string> &vHosts);
+			bool parseForwardedProxyHeader(const std::vector<std::string> &vHeaderLines, std::vector<std::string> &vHosts);
 			session_store_impl_ptr mySessionStore; /// session store
 			/// request handler specialized to handle webem requests
 			/// Rene: Beware: myRequestHandler should be declared BEFORE myServer
 			cWebemRequestHandler myRequestHandler;
 			/// boost::asio web server (RK: plain or secure)
 			std::shared_ptr<server_base> myServer;
-			// root of url for reverse proxy servers
+			// root of url
 			std::string m_webRoot;
 			/// sessions management
 			std::mutex m_sessionsMutex;

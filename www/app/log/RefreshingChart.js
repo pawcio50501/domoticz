@@ -116,13 +116,14 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
                                     self.isZoomed = true;
                                     self.consoledebug('Set zoom ' + self + ': left-sticky:' + self.isZoomLeftSticky + ', right-sticky:' + self.isZoomRightSticky);
                                 }
-                                self.seriesSuppliers.forEach(function (seriesSupplier) {
-                                    if (seriesSupplier.chartZoomLevelChanged !== undefined) {
-                                        seriesSupplier.chartZoomLevelChanged(self.chart,
-                                            e.min !== null ? e.min : xAxis.dataMin, e.max !== null ? e.max : xAxis.dataMax);
-                                    }
-                                });
-
+								if (self.seriesSuppliers !== undefined) {
+									self.seriesSuppliers.forEach(function (seriesSupplier) {
+										if (seriesSupplier.chartZoomLevelChanged !== undefined) {
+											seriesSupplier.chartZoomLevelChanged(self.chart,
+												e.min !== null ? e.min : xAxis.dataMin, e.max !== null ? e.max : xAxis.dataMax);
+										}
+									});
+								}
                                 if (self.isMouseDown) {
                                     self.isSynchronizeYaxesRequired = true;
                                 } else {
@@ -156,6 +157,7 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
                         outside: true,
                         crosshairs: true,
                         shared: true,
+						//useHTML: true,
                         valueSuffix: self.dataSupplier.valueSuffix
                     },
                     plotOptions: {
@@ -298,7 +300,8 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
 
             function createDataRequest() {
                 return self.extendDataRequest({
-                    type: 'graph',
+                    type: 'command',
+                    param: 'graph',
                     sensor: self.sensorType,
                     range: self.range,
                     idx: self.device.idx
@@ -472,7 +475,7 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
                     let axisMin, axisMax;
                     const t = self.device.Type;
                     const s = self.device.SubType;
-                    if (['Percentage'].includes(s) || ['Temp', 'Thermostat', 'Humidity', 'Heating'].includes(t)) {
+                    if (['Percentage'].includes(s) || ['Temp', 'Setpoint', 'Humidity', 'Heating'].includes(t)) {
                         axisMin = 0;
                         axisMax = 100;
                     } else if (['Visibility'].includes(s)) {
@@ -594,6 +597,11 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
                 const xAxis = self.chart.xAxis[0];
                 zoom(xAxis.dataMin, xAxis.dataMax);
             }
+
+			self.$scope.changeCompTypeTemp = function() {
+				self.ctrl.var_name = self.$scope.comptype;
+				refreshChartData();
+			}
 
             self.$scope.groupByLabel = function (label) {
                 const matcher = label.match(/^(?<letter>[yq])$/);

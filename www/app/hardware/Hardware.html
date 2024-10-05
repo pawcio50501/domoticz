@@ -39,9 +39,9 @@
 				<button class="btn btn-warning" id="btnimportolddata">Import old Month Data</button>
 				<br><br>
 				<p>
-					You can retreive old month records by running SBFSpot/SMASpot with commandline parameter -v -amXX,<br>
-					where XX is the amount of months you would like to retreive, for example:<br>
-					<b>./SBFSpot -v -am12</b> , this will retreive up to 2 years from now.<br><br>
+					You can retrieve old month records by running SBFSpot/SMASpot with commandline parameter -v -amXX,<br>
+					where XX is the amount of months you would like to retrieve, for example:<br>
+					<b>./SBFSpot -v -am12</b> , this will retrieve up to 2 years from now.<br><br>
 					This process can take a while, when pressing the above button, please wait until the dashboard is shown again!.
 				</p>
 				<input type="hidden" id="idx" name="idx" value="-1">
@@ -205,9 +205,6 @@
 			<input type="hidden" id="idx" name="idx" value="-1">
 			<button class="btn btn-warning" id="defaultbutton">Default</button>
 			<button class="btn btn-danger" id="submitbutton">Set Mode</button>
-			<br>
-			<br>
-			<button class="btn btn-info" id="firmwarebutton">Upgrade Firmware</button>
 		</form>
 	</center>
 </div>
@@ -254,9 +251,6 @@
 			<input type="hidden" id="idx" name="idx" value="-1">
 			<button class="btn btn-warning" id="defaultbutton">Default</button>
 			<button class="btn btn-danger" id="submitbutton">Set Mode</button>
-			<br>
-			<br>
-			<button class="btn btn-info" id="firmwarebutton">Upgrade Firmware</button>
 		</form>
 	</center>
 </div>
@@ -752,9 +746,9 @@
 				<td>
 					<select id="combomodeldenkovidevices" style="width:210px" class="combobox ui-corner-all">
 						<option value="0">DAEnetIP4</option>
-						<option value="1">SmartDEN IP-16R</option>
+						<option value="1">SmartDEN IP-16R-XX</option>
 						<option value="2">SmartDEN IP-32IN</option>
-						<option value="3">SmartDEN IP-Maxi</option>
+						<option value="3">SmartDEN IP-Maxi-XX</option>
 						<option value="4">SmartDEN IP-Watchdog</option>
 						<option value="5">SmartDEN Logger</option>
 						<option value="6">SmartDEN Notifier</option>
@@ -763,8 +757,8 @@
 						<option value="9">DAEnetIP2 8 Relay Module - LM35DZ</option>
 						<option value="10">SmartDEN Opener</option>
 						<option value="11">SmartDEN IP-PLC</option>
-						<option value="12">SmartDEN IP-16R-MT</option>
-						<option value="13">SmartDEN IP-16R-MQ</option>
+						<!--<option value="12">SmartDEN IP-16R-MT</option>
+						<option value="13">SmartDEN IP-16R-MQ</option>-->
 					</select>
 					<br>
 					<span data-i18n="For DAEnetIP2 boards password field must contain username:password. Example admin:admin">For DAEnetIP2 boards password field must contain username:password. Example admin:admin</span>
@@ -842,9 +836,10 @@
 			<tr valign="top">
 				<td align="right" style="width:110px"><label for="ratelimitp1"><span data-i18n="Rate Limit">Rate Limit</span>: </label></td>
 				<td>
-					<input type="text" id="ratelimitp1" style="width: 50px; padding: .2em;" class="text ui-widget-content ui-corner-all">&nbsp;<span data-i18n="(Seconds) 0 = Disabled">Seconds</span>
+					<input type="text" id="ratelimitp1" style="width: 50px; padding: .2em;" class="text ui-widget-content ui-corner-all">&nbsp;Seconds&nbsp;<span data-i18n="(0 = Application default)"></span>
 					<br>
-					<span data-i18n="This limits the amount of meter updates.">This limits the amount of meter updates.</span>
+					<span data-i18n="This limits the amount of meter updates.">This limits the amount of meter updates.</span><br>
+					<strong><font class="warning-text"><span data-i18n="A high update rate could result in performance loss">A high update rate could result in performance loss</span>.</font></strong>
 					<br>
 				</td>
 			</tr>
@@ -997,6 +992,15 @@
 			<tr>
 				<td align="right" style="width:110px"><label><span data-i18n="API Key"></span>:</label></td>
 				<td><input type="text" id="apikey" style="width: 250px; padding: .2em;" class="text ui-widget-content ui-corner-all"></td>
+			</tr>
+			<tr>
+				<td align="right" style="width:110px"><label for="comboapiversion"><span data-i18n="API Version"></span>:</label></td>
+				<td>
+					<select id="comboapiversion" style="width:60px" class="combobox ui-corner-all">
+						<option value="0">2.5</option>
+						<option value="1" selected="selected">3.0</option>
+					</select>
+				</td>
 			</tr>
 			<tr>
 				<td align="right" style="width:110px"><label><span data-i18n="Location"></span>:</label></td>
@@ -1289,6 +1293,117 @@
 			</tr>
 		</table>
 	</div>
+	<div id="divenphase">
+		<br>
+		<table class="display" id="hardwareparamsenphase" border="0" cellpadding="0" cellspacing="20">
+			<tr>
+				<td align="right" style="width:110px"><label for="pollinterval"><span data-i18n="Poll Interval"></span>:</label></td>
+				<td>
+					<select id="pollinterval" name="pollinterval" style="width:60px" class="combobox ui-corner-all">
+						<option value="120">120</option>
+						<option value="60">60</option>
+						<option value="30" selected="selected">30</option>
+						<option value="20">20</option>
+						<option value="10">10</option>
+						<option value="5">5</option>
+					</select>&nbsp;<span data-i18n="(Seconds)">(Seconds)</span>
+				</td>
+			</tr>
+			<tr>
+				<td align="right" style="vertical-align:top;"><span data-i18n="Poll Inverters">Poll Inverters</span>:</td>
+				<td>
+					<input type="checkbox" id="readinverters" name="readinverters"><label for="readinverters"></label><br>
+					<span data-i18n="When enabled this will also collect individual inverter details.">When enabled this will also collect individual inverter details.</span>
+					<p>
+						<br/>
+						<label for="inverterdetails"><span data-i18n="Inverter Details"></span>:</label>
+						<select id="inverterdetails" name="inverterdetails" style="width:90px" class="combobox ui-corner-all">
+							<option value="0">Normal</option>
+							<option value="1">Detailed</option>
+						</select>
+						&nbsp;<span>(Detailed needs Site ID / Installer account)</span>
+					</p>
+				</td>
+			</tr>
+			<tr>
+				<td align="right" style="vertical-align:top;"><span data-i18n="Don't read metered values">Don't read metered values</span>:</td>
+				<td>
+					<input type="checkbox" id="dontreadmeteredvalues" name="dontreadmeteredvalues"><label for="dontreadmeteredvalues"></label><br>
+					<span data-i18n="Enable this in case an Envoy-S Metered is not reporting.">Enable this in case an Envoy-S Metered is not reporting.</span>
+				</td>
+			
+			</tr>
+			<tr>
+				<td align="right" style="width:110px">
+					<label><span data-i18n="Site ID">Site ID</span>: </label>
+				</td>
+				<td>
+					<input type="text" id="siteid" style="width: 250px; padding: .2em;" class="text ui-widget-content ui-corner-all"><br>
+					<span data-i18n="ONLY enter this when using a Installer account. This is needed to check/set Power state. Otherwise leave empty!">ONLY enter this when using a Installer account. This is needed to check/set Power state. Otherwise leave empty!</span>.<br>
+				</td>
+			</tr>
+		</table>
+	</div>
+	<div id="divenever">
+		<br>
+		<table class="display" id="hardwareparamsenever" border="0" cellpadding="0" cellspacing="20">
+			<tr>
+				<td align="right" style="width:140px"><label><span data-i18n="Access token">Access token</span>:</label></td>
+				<td><input type="text" id="AccessToken" style="width: 300px; padding: .2em;" class="text ui-widget-content ui-corner-all"></td>
+			</tr>
+			<tr>
+				<td align="right" <label><span data-i18n="Provider Electricity"></span>:</label></td>
+				<td>
+					<select id="providerAC" name="providerAC" style="width:200px" class="combobox ui-corner-all">
+						<option value="Stock">Stock</option>
+						<option value="AA">Atoom Alliantie</option>
+						<option value="AIP">All in power</option>
+						<option value="ANWB">ANWB Energie</option>
+						<option value="BE">Budget Energie</option>
+						<option value="EE">EasyEnergy</option>
+						<option value="EN">Eneco</option>
+						<option value="EVO">Energie van Ons</option>
+						<option value="EZ">Energy Zero</option>
+						<option value="FR">Frank Energie</option>
+						<option value="GSL">Groenestroom Lokaal</option>
+						<option value="MDE">Mijndomein Energie</option>
+						<option value="NE">NextEnergy</option>
+						<option value="TI">Tibber</option>
+						<option value="VDB">Vandebron</option>
+						<option value="VON">Vrij op naam</option>
+						<option value="WE">Wout Energie</option>
+						<option value="ZG">ZonderGas</option>
+						<option value="ZP">Zonneplan</option>
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<td align="right" <label><span data-i18n="Provider Gas"></span>:</label></td>
+				<td>
+					<select id="providerGas" name="providerGas" style="width:200px" class="combobox ui-corner-all">
+						<option value="EGSI">Stock EGSI</option>
+						<option value="AA">Atoom Alliantie</option>
+						<option value="AIP">All in power</option>
+						<option value="ANWB">ANWB Energie</option>
+						<option value="BE">Budget Energie</option>
+						<option value="EE">EasyEnergy</option>
+						<option value="EN">Eneco</option>
+						<option value="EVO">Energie van Ons</option>
+						<option value="EZ">Energy Zero</option>
+						<option value="FR">Frank Energie</option>
+						<option value="GSL">Groenestroom Lokaal</option>
+						<option value="MDE">Mijndomein Energie</option>
+						<option value="NE">NextEnergy</option>
+						<option value="VDB">Vandebron</option>
+						<option value="VON">Vrij op naam</option>
+						<option value="WE">Wout Energie</option>
+						<option value="ZG">ZonderGas</option>
+						<option value="ZP">Zonneplan</option>
+					</select>
+				</td>
+			</tr>
+		</table>
+	</div>
 	<div id="divhoneywell">
 		<br>
 		<table class="display" id="hardwareparamshoneywell" border="0" cellpadding="0" cellspacing="20">
@@ -1317,6 +1432,61 @@
 			</tr>
 		</table>
 	</div>
+	<div id="divnetatmo">
+		<br>
+		<table class="display" id="hardwareparamsnetatmo" border="0" cellpadding="0" cellspacing="20">
+ 			<tr>
+				<td align="right" style="width:110px"></td>
+				<td>
+					You need to sign up at Netatmo to get the API's Client ID and secret. <br>
+					Please follow the instructions on <a href="https://www.domoticz.com/wiki/Netatmo" target="_blank">www.domoticz.com/wiki/Netatmo</a>
+					<br><br>
+					Press and hold the control key (Windows) or the Command key (Apple) to select multiple scope items.<br>
+					Please select only those scope items that are approiate for your devives.
+					<br><br>
+					The scopes ending with * are not tested yet! Use at your own risk.
+					<br><br>
+ 				</td>
+			</tr>
+ 			<tr>
+				<td align="right" style="width:110px"><label><span data-i18n="Client ID">APP client ID</span>:</label></td>
+				<td><input type="text" id="clientid" onchange="javascript:NetatmoEnableLogin()" style="width: 250px; padding: .2em;" class="text ui-widget-content ui-corner->-all"></td>
+			</tr>
+ 			<tr>
+				<td align="right" style="width:110px"><label><span data-i18n="Client Secret">APP client Secret</span>:</label></td>
+				<td><input type="password" id="clientsecret" onchange="javascript:NetatmoEnableLogin()" style="width: 250px; padding: .2em;" class="text ui-widget-content ui-corner->-all"></td>
+			</tr>
+			<tr>
+				<td align="right" style="width:110px"<label><span data-i18n="Scope"></span>:</label></td>
+				<td>
+					<select id="scope" name="Scope" onchange="javascript:NetatmoEnableLogin()" size="6" style="width:255px" class="combobox ui-corner-all" multiple >
+						<option value="station_R">Weather Station</option>
+						<option value="thermostat_RW">Thermostat </option>
+						<option value="camera_RWA">Indoor Camera</option>
+						<option value="doorbell_RA">Doorbell *</option>
+						<option value="presence_RWA">Presence</option>
+						<option value="carbonmonoxidedetector_R">CO2 Detector</option>
+						<option value="smokedetector_R">Smoke Detector</option>
+						<option value="homecoach_R">Home Coach</option>
+						<option value="magellan_RW">Magellan *</option>
+						<option value="bubendorff_RW">Bubendorff *</option>
+						<option value="smarther_RW">Smarther *</option>
+						<option value="mx_RW">MX *</option>
+						<option value="mhs1_RW">My Home Server 1 *</option>
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<td align="right"><button type="button" disabled class="btnstyle3-dis" id="netatmologin" data-i18n="Login">Login</button></td>
+				<td>
+					<div style="width:250px">
+						<font  color="orange"  id="netatmologinrequiredtext" style="display:none" >
+						Tokens are invalid or expired; please login to obtain new tokens!
+					</div>
+				</td>
+			</tr>
+		</table>
+	</div>
 	<div id="divwinddelen">
 		<br>
 		<table class="display" id="hardwareparamswinddelen" border="0" cellpadding="0" cellspacing="20">
@@ -1340,25 +1510,6 @@
 			<tr>
 				<td align="right" style="width:110px"><label><span data-i18n="Number of winddelen">Number of winddelen</span>:</label></td>
 				<td><input type="text" id="nrofwinddelen" style="width: 50px; padding: .2em;" class="text ui-widget-content ui-corner-all"></td>
-			</tr>
-		</table>
-	</div>
-	<div id="divgoodweweb">
-		<br>
-		<table class="display" id="hardwareparamsgoodweweb" border="0" cellpadding="0" cellspacing="20">
-			<tr>
-				<td align="right" style="width:110px"><label for="comboserverselect"><span data-i18n="Location"></span>:</label></td>
-				<td>
-					<select id="comboserverselect" style="width:200px" class="combobox ui-corner-all">
-						<option value="0">Global</option>
-						<option value="1">Oceania</option>
-						<option value="2">Europe</option>
-					</select>
-				</td>
-			</tr>
-			<tr>
-				<td align="right" style="width:110px"><label><span data-i18n="Username"></span>:</label></td>
-				<td><input type="text" id="username" style="width: 170px; padding: .2em;" class="text ui-widget-content ui-corner-all"></td>
 			</tr>
 		</table>
 	</div>
@@ -1553,6 +1704,7 @@
 						<option value="0xF107" data-i18n="RGBWWZ Switch">RGBWWZ Switch</option>
 						<option value="0x5D01" data-i18n="Scale">Scale (Weight)</option>
 						<option value="0xF43E" data-i18n="Selector Switch">Selector Switch</option>
+						<option value="0xF201" data-i18n="Setpoint">Setpoint</option>
 						<option value="0xF303" data-i18n="Soil Moisture">Soil Moisture</option>
 						<option value="0xF302" data-i18n="Solar Radiation">Solar Radiation</option>
 						<option value="0xF318" data-i18n="Sound Level">Sound Level</option>
@@ -1619,8 +1771,10 @@
 				<td align="right"><label for="lighttype"><span data-i18n="Light Type">Light Type</span>: </label></td>
 				<td>
 					<select id="lighttype" style="width:150px" class="combobox ui-corner-all">
-						<option value="0" data-i18n="Mono">RGB</option>
+						<option value="2" data-i18n="RGB">RGB</option>
 						<option value="1" data-i18n="RGBW">RGBW</option>
+						<option value="3" data-i18n="Mono">Mono</option>
+						<option value="6" data-i18n="RGBWZ">RGBWZ</option>
 					</select>
 				</td>
 			</tr>

@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include "../main/Logger.h"
-#include "../main/localtime_r.h"
 #include "../webserver/Base64.h"
 
 // Part of the Message Construction is taken from jwSMTP library
@@ -17,6 +16,8 @@ struct smtp_upload_status {
 	char* pDataBytes;
 	size_t sDataLength;
 };
+
+#define MAX_ATTACHMENT_ROW_SIZE 72
 
 static size_t smtp_payload_reader(void* ptr, size_t size, size_t nmemb, void* userp)
 {
@@ -84,12 +85,20 @@ void SMTPClient::AddAttachment(const std::string& adata, const std::string& atyp
 void SMTPClient::SetPlainBody(const std::string& body)
 {
 	m_PlainBody = body;
+
+	stdreplace(m_PlainBody, "\r\n", "\n");
+	stdreplace(m_PlainBody, "\n", "\r\n");
+
 	m_HTMLBody = "";
 }
 
 void SMTPClient::SetHTMLBody(const std::string& body)
 {
 	m_HTMLBody = body;
+
+	stdreplace(m_HTMLBody, "\r\n", "\n");
+	stdreplace(m_HTMLBody, "\n", "\r\n");
+
 	m_PlainBody = "";
 }
 
@@ -109,6 +118,7 @@ bool SMTPClient::SendEmail()
 	struct curl_slist* slist1;
 
 	smtp_upload_status smtp_ctx;
+	smtp_ctx.pDataBytes = nullptr;
 	smtp_ctx.bytes_read = 0;
 
 	slist1 = nullptr;
@@ -133,7 +143,7 @@ bool SMTPClient::SendEmail()
 
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
 
-		curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)177);
+		//curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)177);
 		curl_easy_setopt(curl, CURLOPT_URL, szURL.c_str());
 		curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
 		if (!m_Username.empty())
@@ -197,7 +207,9 @@ bool SMTPClient::SendEmail()
 	}
 	catch (...)
 	{
-		_log.Log(LOG_ERROR, "SMTP Mailer: Error sending Email to: %s !", m_Recipients[0].c_str());
+		if (smtp_ctx.pDataBytes != nullptr)
+			delete[] smtp_ctx.pDataBytes;
+		_log.Log(LOG_ERROR, "SMTP Mailer: Exception! Error sending Email to: %s !", m_Recipients[0].c_str());
 		return false;
 	}
 	return true;
@@ -365,8 +377,13 @@ std::string SMTPClient::MakeMessage()
 			ret += "Content-Transfer-Encoding: base64\r\n";
 			ret += "Content-Disposition: attachment;\r\n filename=\"" + a.second + "\"\r\n\r\n";
 
-			ret.insert(ret.end(), a.first.begin(), a.first.end());
-			ret += "\r\n";
+			size_t nbRows = a.first.size() / MAX_ATTACHMENT_ROW_SIZE + 1;
+			for (size_t i = 0; i <= nbRows - 1; i++)
+			{
+				std::string sub_encoded_buf = a.first.substr(i * MAX_ATTACHMENT_ROW_SIZE, MAX_ATTACHMENT_ROW_SIZE);
+				sub_encoded_buf += "\r\n";
+				ret.insert(ret.end(), sub_encoded_buf.begin(), sub_encoded_buf.end());
+			}
 		}
 		ret += "--" + std::string(szBoundaryMixed) + "--\r\n";
 	}

@@ -160,7 +160,7 @@ define(['app', 'livesocket'], function (app) {
 			$("#dialog-addmanuallightdevice #lighttable #combohardware").change(function () {
 				UpdateAddManualDialog();
 			});
-			
+
 			RefreshGpioComboArray();
 			$("#combogpio").html("");
 			$.each($.ComboGpio, function (i, item) {
@@ -175,7 +175,7 @@ define(['app', 'livesocket'], function (app) {
 				var option = $('<option />');
 				option.attr('value', item.idx).text(item.name);
 				$("#combosysfsgpio").append(option);
-            });
+			});
 		}
 
 		RefreshHardwareComboArray = function () {
@@ -247,9 +247,9 @@ define(['app', 'livesocket'], function (app) {
 			//(the status can flick back to the previous status after an update)...now implemented with script side lockout
 			$.ajax({
 				url: "json.htm?type=command&param=switchmodal" +
-				"&idx=" + idx +
-				"&status=" + status +
-				"&action=1",
+					"&idx=" + idx +
+					"&status=" + status +
+					"&action=1",
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -307,7 +307,7 @@ define(['app', 'livesocket'], function (app) {
 			htm += '</ul></div>';
 			return htm;
 		}
-
+		
 		RefreshItem = function (item) {
 			var id = "#lightcontent #" + item.idx;
 			if ($(id + " #name").html() === undefined) {
@@ -322,6 +322,8 @@ define(['app', 'livesocket'], function (app) {
 			var img2 = "";
 			var img3 = "";
 			var status = "";
+
+			//console.log(item);
 
 			var bigtext = TranslateStatusShort(item.Status);
 			if (item.UsedByCamera == true) {
@@ -391,10 +393,21 @@ define(['app', 'livesocket'], function (app) {
 					img = '<img src="images/' + item.Image + '48_On.png" height="48" width="48">';
 				}
 			}
-			else if (
-            (item.SwitchType == "Blinds")
-            || (item.SwitchType.indexOf("Venetian Blinds") == 0)
-            ) {
+			else if (item.SwitchType.indexOf("Blinds") >= 0) {
+				item.Image = item.TypeImg;
+
+				isdimmer = (item.SwitchType.indexOf("Percentage") >= 0 || item.SwitchType.indexOf("Stop") >= 0);
+
+				const closeAction = "Close";
+				const openAction = "Open";
+
+				const selOpenImage = ((item.Status == 'Open') || (item.Status.indexOf('Set ') == 0)) ? "sel" : "";
+				const selCloseImage = ((item.Status == 'Closed')) ? "sel" : "";
+
+				const openImage = '<img src="images/' + item.Image + 'open48' + selOpenImage + '.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'' + openAction + '\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
+				const closeImage = '<img src="images/' + item.Image + '48' + selCloseImage + '.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'' + closeAction + '\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
+
+				img = openImage;
 				if (
 					(item.SubType == "RAEX") ||
 					(item.SubType.indexOf('A-OK') == 0) ||
@@ -411,108 +424,13 @@ define(['app', 'livesocket'], function (app) {
 					(item.SubType.indexOf('ASA') == 0) ||
 					(item.SubType.indexOf('DC106') == 0) ||
 					(item.SubType.indexOf('Confexx') == 0) ||
-					(item.SwitchType.indexOf("Venetian Blinds") == 0)
+					(item.SwitchType.indexOf("Venetian Blinds") == 0) ||
+					(item.SwitchType.indexOf("Stop") >= 0)
 				) {
-					if (item.Status == 'Closed') {
-						img = '<img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-						img3 = '<img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-					}
-					else {
-						img = '<img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-						img3 = '<img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-					}
+					img3 = closeImage;
 				}
 				else {
-					if (item.Status == 'Closed') {
-						img = '<img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-						img2 = '<img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-					}
-					else {
-						img = '<img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-						img2 = '<img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-					}
-				}
-			}
-			else if (item.SwitchType == "Blinds Inverted") {
-				if (
-					(item.SubType == "RAEX") ||
-					(item.SubType.indexOf('A-OK') == 0) ||
-					(item.SubType.indexOf('Hasta') >= 0) ||
-					(item.SubType.indexOf('Media Mount') == 0) ||
-					(item.SubType.indexOf('Forest') == 0) ||
-					(item.SubType.indexOf('Chamberlain') == 0) ||
-					(item.SubType.indexOf('Sunpery') == 0) ||
-					(item.SubType.indexOf('Dolat') == 0) ||
-					(item.SubType.indexOf('ASP') == 0) ||
-					(item.SubType == "Harrison") ||
-					(item.SubType.indexOf('RFY') == 0) ||
-					(item.SubType.indexOf('RTS') == 0) ||
-					(item.SubType.indexOf('ASA') == 0) ||
-					(item.SubType.indexOf('DC106') == 0) ||
-					(item.SubType.indexOf('Confexx') == 0)
-				) {
-					if (item.Status == 'Closed') {
-						img = '<img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-						img3 = '<img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-					}
-					else {
-						img = '<img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-						img3 = '<img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-					}
-				}
-				else {
-					if (item.Status == 'Closed') {
-						img = '<img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-						img2 = '<img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-					}
-					else {
-						img = '<img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-						img2 = '<img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
-					}
-				}
-			}
-			else if (item.SwitchType == "Blinds Percentage") {
-				isdimmer = true;
-				if (item.Status == 'Open') {
-					img = '<img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48">';
-					img2 = '<img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48">';
-				}
-				else {
-					img = '<img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48">';
-					img2 = '<img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48">';
-				}
-			}
-			else if (item.SwitchType == "Blinds Percentage Inverted") {
-				isdimmer = true;
-				if (item.Status == 'Closed') {
-					img = '<img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48">';
-					img2 = '<img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48">';
-				}
-				else if ((item.Status == 'Open') || (item.Status.indexOf('Set ') == 0)) {
-					img = '<img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48">';
-					img2 = '<img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48">';
-				}
-			}
-			else if (item.SwitchType == "Blinds + Stop") {
-				isdimmer = true;
-				if (item.Status == 'Open') {
-					img = '<img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48">';
-					img3 = '<img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48">';
-				}
-				else {
-					img = '<img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48">';
-					img3 = '<img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48">';
-				}
-			}
-			else if (item.SwitchType == "Blinds Inverted + Stop") {
-				isdimmer = true;
-				if (item.Status == 'Closed') {
-					img = '<img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48">';
-					img3 = '<img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48">';
-				}
-				else if ((item.Status == 'Open') || (item.Status.indexOf('Set ') == 0)) {
-					img = '<img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48">';
-					img3 = '<img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48">';
+					img2 = closeImage;
 				}
 			}
 			else if (item.SwitchType == "Smoke Detector") {
@@ -579,6 +497,10 @@ define(['app', 'livesocket'], function (app) {
 			else if (item.SwitchType == "Dimmer") {
 				isdimmer = true;
 				if (item.CustomImage == 0) item.Image = item.TypeImg;
+				if (typeof item.Image == 'undefined') {
+					item.CustomImage = 0;
+					item.Image = item.TypeImg;
+				}
 				item.Image = item.Image.charAt(0).toUpperCase() + item.Image.slice(1);
 				if (
 					(item.Status == 'On') ||
@@ -678,7 +600,7 @@ define(['app', 'livesocket'], function (app) {
 				(item.SubType.indexOf("Itho") == 0) ||
 				(item.SubType.indexOf("Lucci") == 0) ||
 				(item.SubType.indexOf("Westinghouse") == 0)
-				) {
+			) {
 				img = $(id + " #img").html();
 			}
 			else {
@@ -756,6 +678,11 @@ define(['app', 'livesocket'], function (app) {
 					}
 				}
 				bigtext = GetLightStatusText(item);
+				if (item.UsedByCamera == true) {
+					var streamimg = '<img src="images/webcam.png" title="' + $.t('Stream Video') + '" height="16" width="16">';
+					var streamurl = "<a href=\"javascript:ShowCameraLiveStream('" + escape(item.Name) + "'," + item.CameraIdx + "," + item.CameraAspect + ")\">" + streamimg + "</a>";
+					bigtext += "&nbsp;" + streamurl;
+				}
 			}
 			if ($(id + " #bigtext").html() != TranslateStatus(GetLightStatusText(item))) {
 				$(id + " #bigtext").html(bigtext);
@@ -766,14 +693,23 @@ define(['app', 'livesocket'], function (app) {
 			if ($(id + " #lastupdate").html() != item.LastUpdate) {
 				$(id + " #lastupdate").html(item.LastUpdate);
 			}
-			if ($scope.config.ShowUpdatedEffect == true) {
-				$(id + " #name").effect("highlight", { color: '#EEFFEE' }, 1000);
+
+			var searchText = GenerateLiveSearchTextL(item, bigtext);
+			$(id).find('#name').attr('data-search', searchText);
+			
+			if (!document.hidden) {
+				if ($scope.config.ShowUpdatedEffect == true) {
+					$(id + " #name").effect("highlight", { color: '#EEFFEE' }, 1000);
+				}
 			}
+			
+			RefreshLiveSearch();
 		}
 
 		//We only call this once. After this the widgets are being updated automatically by used of the 'jsonupdate' broadcast event.
 		RefreshLights = function () {
-			livesocket.getJson("json.htm?type=devices&filter=light&used=true&order=[Order]&lastupdate=" + $.LastUpdateTime + "&plan=" + window.myglobals.LastPlanSelected, function (data) {
+			var roomPlanId = $routeParams.room || window.myglobals.LastPlanSelected;
+			livesocket.getJson("json.htm?type=command&param=getdevices&filter=light&used=true&order=[Order]&lastupdate=" + $.LastUpdateTime + "&plan=" + roomPlanId, function (data) {
 				if (typeof data.ServerTime != 'undefined') {
 					$rootScope.SetTimeAndSun(data.Sunrise, data.Sunset, data.ServerTime);
 				}
@@ -798,73 +734,17 @@ define(['app', 'livesocket'], function (app) {
 			$('#modal').show();
 
 			var htmlcontent = '';
-			var bShowRoomplan = false;
-			$.RoomPlans = [];
-			$.ajax({
-				url: "json.htm?type=plans",
-				async: false,
-				dataType: 'json',
-				success: function (data) {
-					if (typeof data.result != 'undefined') {
-						var totalItems = data.result.length;
-						if (totalItems > 0) {
-							bShowRoomplan = true;
-							//				if (window.myglobals.ismobile==true) {
-							//				bShowRoomplan=false;
-							//		}
-							if (bShowRoomplan == true) {
-								$.each(data.result, function (i, item) {
-									$.RoomPlans.push({
-										idx: item.idx,
-										name: item.Name
-									});
-								});
-							}
-						}
-					}
-				}
-			});
-
-			var bHaveAddedDevider = false;
+	
+			var bHaveAddedDivider = false;
 
 			var tophtm = "";
-			if ($.RoomPlans.length == 0) {
-				tophtm +=
-					'\t<table border="0" cellpadding="0" cellspacing="0" width="100%">\n' +
-					'\t<tr>\n' +
-					'\t  <td align="left" valign="top" id="timesun"></td>\n' +
-					'\t</tr>\n' +
-					'\t</table>\n';
-			}
-			else {
-				tophtm +=
-					'\t<table border="0" cellpadding="0" cellspacing="0" width="100%">\n' +
-					'\t<tr>\n' +
-					'\t  <td align="left" valign="top" id="timesun"></td>\n' +
-					'<td align="right" valign="top">' +
-					'<span data-i18n="Room">Room</span>:&nbsp;<select id="comboroom" style="width:160px" class="combobox ui-corner-all">' +
-					'<option value="0" data-i18n="All">All</option>' +
-					'</select>' +
-					'</td>' +
-					'\t</tr>\n' +
-					'\t</table>\n';
-			}
-			if (permissions.hasPermission("Admin")) {
-				tophtm +=
-					'\t<table class="bannav" id="bannav" border="0" cellpadding="0" cellspacing="0" width="100%">\n' +
-					'\t<tr>\n' +
-					'\t  <td align="left"><a class="btnstylerev" onclick="AddManualLightDevice();" data-i18n="Manual Light/Switch">Manual Light/Switch</a></td>\n' +
-					'\t  <td align="right"><a class="btnstyle" onclick="AddLightDevice();" data-i18n="Learn Light/Switch">Learn Light/Switch</a></td>\n' +
-					'\t</tr>\n' +
-					'\t</table>\n';
-			}
 
 			var i = 0;
 			var j = 0;
 			var roomPlanId = $routeParams.room || window.myglobals.LastPlanSelected;
 
 			$.ajax({
-				url: "json.htm?type=devices&filter=light&used=true&order=[Order]&plan=" + roomPlanId,
+				url: "json.htm?type=command&param=getdevices&filter=light&used=true&order=[Order]&plan=" + roomPlanId,
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -879,13 +759,13 @@ define(['app', 'livesocket'], function (app) {
 
 						$.each(data.result, function (i, item) {
 							if (j % 3 == 0) {
-								//add devider
-								if (bHaveAddedDevider == true) {
-									//close previous devider
+								//add divider
+								if (bHaveAddedDivider == true) {
+									//close previous divider
 									htmlcontent += '</div>\n';
 								}
 								htmlcontent += '<div class="row divider">\n';
-								bHaveAddedDevider = true;
+								bHaveAddedDivider = true;
 							}
 							var bAddTimer = true;
 							var bIsDimmer = false;
@@ -894,18 +774,12 @@ define(['app', 'livesocket'], function (app) {
 
 							var status = "";
 							var xhtm =
-								'\t<div class="item span4 ' + backgroundClass + '" id="' + item.idx + '">\n' +
+								'\t<div class="item span4 itemBlock ' + backgroundClass + '" id="' + item.idx + '">\n' +
 								'\t  <section>\n';
 							if (
-                  (item.SwitchType == "Blinds")
-                  || (item.SwitchType == "Blinds Inverted")
-                  || (item.SwitchType == "Blinds Percentage")
-                  || (item.SwitchType == "Blinds Percentage Inverted")
-                  || (item.SwitchType == "Blinds + Stop")
-                  || (item.SwitchType == "Blinds Inverted + Stop")
-                  || (item.SwitchType.indexOf("Venetian Blinds") == 0)
-                  || (item.SwitchType.indexOf("Media Player") == 0)
-                  ) {
+								(item.SwitchType.indexOf("Blinds")>=0)
+								|| (item.SwitchType.indexOf("Media Player") == 0)
+							) {
 								if (
 									(item.SubType == "RAEX")
 									|| (item.SubType.indexOf('A-OK') == 0)
@@ -918,13 +792,12 @@ define(['app', 'livesocket'], function (app) {
 									|| (item.SubType.indexOf('ASP') == 0)
 									|| (item.SubType == "Harrison")
 									|| (item.SubType.indexOf('RFY') == 0)
-                  || (item.SubType.indexOf('RTS') == 0)
+									|| (item.SubType.indexOf('RTS') == 0)
 									|| (item.SubType.indexOf('ASA') == 0)
 									|| (item.SubType.indexOf('DC106') == 0)
 									|| (item.SubType.indexOf('Confexx') == 0)
 									|| (item.SwitchType.indexOf("Venetian Blinds") == 0)
-                  || (item.SwitchType == "Blinds + Stop")
-                  || (item.SwitchType == "Blinds Inverted + Stop")
+									|| (item.SwitchType == "Blinds + Stop")
 								) {
 									xhtm += '\t    <table id="itemtabletrippleicon" border="0" cellpadding="0" cellspacing="0">\n';
 								}
@@ -936,14 +809,18 @@ define(['app', 'livesocket'], function (app) {
 								xhtm += '\t    <table id="itemtablenostatus" border="0" cellpadding="0" cellspacing="0">\n';
 							}
 
-							xhtm +=
-								'\t    <tr>\n' +
-								'\t      <td id="name">' + item.Name + '</td>\n' +
-								'\t      <td id="bigtext">';
 							var bigtext = TranslateStatusShort(item.Status);
 							if (item.SwitchType === "Selector" || item.SubType == "Evohome") {
 								bigtext = GetLightStatusText(item);
 							}
+							
+							var searchText = GenerateLiveSearchTextL(item, bigtext);
+
+							xhtm +=
+								'\t    <tr>\n' +
+								'\t      <td id="name" class="item-name" data-idx="'+item.idx+'" data-desc="'+item.Description.replace('"',"'")+'" data-search="'+searchText+'">' + item.Name +'</td>\n' +
+								'\t      <td id="bigtext">';
+
 							if (item.UsedByCamera == true) {
 								var streamimg = '<img src="images/webcam.png" title="' + $.t('Stream Video') + '" height="16" width="16">';
 								var streamurl = "<a href=\"javascript:ShowCameraLiveStream('" + escape(item.Name) + "'," + item.CameraIdx + "," + item.CameraAspect + ")\">" + streamimg + "</a>";
@@ -951,7 +828,7 @@ define(['app', 'livesocket'], function (app) {
 							}
 							if (permissions.hasPermission("Admin")) {
 								if (item.Type == "RFY") {
-									var rfysetup = '<img src="images/devices.png" title="' + $.t('Setup') + '" height="16" width="16" onclick="ShowRFYPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + window.myglobals.ismobile +');">';
+									var rfysetup = '<img src="images/devices.png" title="' + $.t('Setup') + '" height="16" width="16" onclick="ShowRFYPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + window.myglobals.ismobile + ');">';
 									bigtext += "&nbsp;" + rfysetup;
 								}
 							}
@@ -987,10 +864,10 @@ define(['app', 'livesocket'], function (app) {
 							}
 							else if (item.SwitchType == "Door Contact") {
 								if (item.InternalState == "Open") {
-                                    xhtm += '\t      <td id="img"><img src="images/' + item.Image + '48_On.png" title="' + $.t(item.InternalState) + '" height="48" width="48"></td>\n';
+									xhtm += '\t      <td id="img"><img src="images/' + item.Image + '48_On.png" title="' + $.t(item.InternalState) + '" height="48" width="48"></td>\n';
 								}
 								else {
-                                    xhtm += '\t      <td id="img"><img src="images/' + item.Image + '48_Off.png" title="' + $.t(item.InternalState) + '" height="48" width="48"></td>\n';
+									xhtm += '\t      <td id="img"><img src="images/' + item.Image + '48_Off.png" title="' + $.t(item.InternalState) + '" height="48" width="48"></td>\n';
 								}
 								bAddTimer = false;
 							}
@@ -1039,7 +916,20 @@ define(['app', 'livesocket'], function (app) {
 								status = item.Data;
 								bAddTimer = false;
 							}
-							else if ((item.SwitchType == "Blinds") || (item.SwitchType.indexOf("Venetian Blinds") == 0)) {
+							else if (item.SwitchType.indexOf("Blinds") >= 0) {
+								item.Image = item.TypeImg;
+								bIsdimmer = (item.SwitchType.indexOf("Percentage") >= 0 || item.SwitchType.indexOf("Stop") >= 0);
+
+								const closeAction = "Close";
+								const openAction = "Open";
+				
+								const selOpenImage = ((item.Status == 'Open') || (item.Status.indexOf('Set ') == 0)) ? "sel" : "";
+								const selCloseImage = ((item.Status == 'Closed')) ? "sel" : "";
+
+								const openImage = '<img src="images/' + item.Image + 'open48' + selOpenImage + '.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'' + openAction + '\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
+								const closeImage = '<img src="images/' + item.Image + '48' + selCloseImage + '.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'' + closeAction + '\',' + item.Protected + ');" class="lcursor" height="48" width="48">';
+
+								xhtm += '\t      <td id="img">' + openImage + '</td>\n';
 								if (
 									(item.SubType == "RAEX") ||
 									(item.SubType.indexOf('A-OK') == 0) ||
@@ -1056,116 +946,14 @@ define(['app', 'livesocket'], function (app) {
 									(item.SubType.indexOf('ASA') == 0) ||
 									(item.SubType.indexOf('DC106') == 0) ||
 									(item.SubType.indexOf('Confexx') == 0) ||
-									(item.SwitchType.indexOf("Venetian Blinds") == 0)
+									(item.SwitchType.indexOf("Venetian Blinds") == 0) ||
+									(item.SwitchType.indexOf("Stop") >= 0)
 								) {
-									if (item.Status == 'Closed') {
-										xhtm += '\t      <td id="img"><img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-										xhtm += '\t      <td id="img2"><img src="images/blindsstop.png" title="' + $.t("Stop Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Stop\',' + item.Protected + ');" class="lcursor" height="48" width="24"></td>\n';
-										xhtm += '\t      <td id="img3"><img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-									}
-									else {
-										xhtm += '\t      <td id="img"><img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-										xhtm += '\t      <td id="img2"><img src="images/blindsstop.png" title="' + $.t("Stop Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Stop\',' + item.Protected + ');" class="lcursor" height="48" width="24"></td>\n';
-										xhtm += '\t      <td id="img3"><img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-									}
+									xhtm += '\t      <td id="img2"><img src="images/' + item.Image + 'stop.png" title="' + $.t("Stop Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Stop\',' + item.Protected + ');" class="lcursor" height="48" width="24"></td>\n';
+									xhtm += '\t      <td id="img3">' + closeImage + '</td>\n';
 								}
 								else {
-									if (item.Status == 'Closed') {
-										xhtm += '\t      <td id="img"><img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-										xhtm += '\t      <td id="img2"><img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-									}
-									else {
-										xhtm += '\t      <td id="img"><img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-										xhtm += '\t      <td id="img2"><img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-									}
-								}
-							}
-							else if (item.SwitchType == "Blinds Inverted") {
-								if (
-									(item.SubType == "RAEX") ||
-									(item.SubType.indexOf('A-OK') == 0) ||
-									(item.SubType.indexOf('Hasta') >= 0) ||
-									(item.SubType.indexOf('Media Mount') == 0) ||
-									(item.SubType.indexOf('Forest') == 0) ||
-									(item.SubType.indexOf('Chamberlain') == 0) ||
-									(item.SubType.indexOf('Sunpery') == 0) ||
-									(item.SubType.indexOf('Dolat') == 0) ||
-									(item.SubType.indexOf('ASP') == 0) ||
-									(item.SubType == "Harrison") ||
-									(item.SubType.indexOf('RFY') == 0) ||
-									(item.SubType.indexOf('RTS') == 0) ||
-									(item.SubType.indexOf('ASA') == 0) ||
-									(item.SubType.indexOf('DC106') == 0) ||
-									(item.SubType.indexOf('Confexx') == 0)
-								) {
-									if (item.Status == 'Closed') {
-										xhtm += '\t      <td id="img"><img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-										xhtm += '\t      <td id="img2"><img src="images/blindsstop.png" title="' + $.t("Stop Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Stop\',' + item.Protected + ');" class="lcursor" height="48" width="24"></td>\n';
-										xhtm += '\t      <td id="img3"><img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-									}
-									else {
-										xhtm += '\t      <td id="img"><img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-										xhtm += '\t      <td id="img2"><img src="images/blindsstop.png" title="' + $.t("Stop Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Stop\',' + item.Protected + ');" class="lcursor" height="48" width="24"></td>\n';
-										xhtm += '\t      <td id="img3"><img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-									}
-								}
-								else {
-									if (item.Status == 'Closed') {
-										xhtm += '\t      <td id="img"><img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-										xhtm += '\t      <td id="img2"><img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-									}
-									else {
-										xhtm += '\t      <td id="img"><img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-										xhtm += '\t      <td id="img2"><img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-									}
-								}
-							}
-							else if (item.SwitchType == "Blinds Percentage") {
-								bIsDimmer = true;
-								if (item.Status == 'Open') {
-									xhtm += '\t      <td id="img"><img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48"></td>\n';
-									xhtm += '\t      <td id="img2"><img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48"></td>\n';
-								}
-								else {
-									xhtm += '\t      <td id="img"><img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48"></td>\n';
-									xhtm += '\t      <td id="img2"><img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48"></td>\n';
-								}
-							}
-							else if (item.SwitchType == "Blinds Percentage Inverted") {
-								bIsDimmer = true;
-								if (item.Status == 'Closed') {
-									xhtm += '\t	  <td id="img"><img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48"></td>\n';
-									xhtm += '\t	  <td id="img2"><img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48"></td>\n';
-								}
-								else {
-									xhtm += '\t	  <td id="img"><img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48"></td>\n';
-									xhtm += '\t	  <td id="img2"><img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48"></td>\n';
-								}
-							}
-							else if (item.SwitchType == "Blinds + Stop") {
-								bIsDimmer = true;
-								if (item.Status == 'Closed') {
-								  xhtm += '\t      <td id="img"><img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-								  xhtm += '\t      <td id="img2"><img src="images/blindsstop.png" title="' + $.t("Stop Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Stop\',' + item.Protected + ');" class="lcursor" height="48" width="24"></td>\n';
-								  xhtm += '\t      <td id="img3"><img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-								}
-								else {
-								  xhtm += '\t      <td id="img"><img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-								  xhtm += '\t      <td id="img2"><img src="images/blindsstop.png" title="' + $.t("Stop Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Stop\',' + item.Protected + ');" class="lcursor" height="48" width="24"></td>\n';
-								  xhtm += '\t      <td id="img3"><img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-								}
-							}
-							else if (item.SwitchType == "Blinds Inverted + Stop") {
-								bIsDimmer = true;
-								if (item.Status == 'Open') {
-								  xhtm += '\t      <td id="img"><img src="images/blindsopen48.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-								  xhtm += '\t      <td id="img2"><img src="images/blindsstop.png" title="' + $.t("Stop Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Stop\',' + item.Protected + ');" class="lcursor" height="48" width="24"></td>\n';
-								  xhtm += '\t      <td id="img3"><img src="images/blinds48sel.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-								}
-								else {
-								  xhtm += '\t      <td id="img"><img src="images/blindsopen48sel.png" title="' + $.t("Open Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'On\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-								  xhtm += '\t      <td id="img2"><img src="images/blindsstop.png" title="' + $.t("Stop Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Stop\',' + item.Protected + ');" class="lcursor" height="48" width="24"></td>\n';
-								  xhtm += '\t      <td id="img3"><img src="images/blinds48.png" title="' + $.t("Close Blinds") + '" onclick="SwitchLight(' + item.idx + ',\'Off\',' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
+									xhtm += '\t      <td id="img2">' + closeImage + '</td>\n';
 								}
 							}
 							else if (item.SwitchType == "Smoke Detector") {
@@ -1230,6 +1018,10 @@ define(['app', 'livesocket'], function (app) {
 							else if (item.SwitchType == "Dimmer") {
 								bIsDimmer = true;
 								if (item.CustomImage == 0) item.Image = item.TypeImg;
+								if (typeof item.Image == 'undefined') {
+									item.CustomImage = 0;
+									item.Image = item.TypeImg;
+								}
 								item.Image = item.Image.charAt(0).toUpperCase() + item.Image.slice(1);
 								if (
 									(item.Status == 'On') ||
@@ -1309,18 +1101,18 @@ define(['app', 'livesocket'], function (app) {
 							}
 							else if (item.SubType.indexOf("Itho") == 0) {
 								bAddTimer = false;
-								xhtm += '\t      <td id="img"><img src="images/Fan48_On.png" height="48" width="48" class="lcursor" onclick="ShowIthoPopup(event, ' + item.idx + ', ShowLights, ' + item.Protected + ');"></td>\n';
+								xhtm += '\t      <td id="img"><img src="images/Fan48_On.png" height="48" width="48" class="lcursor" onclick="ShowIthoPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + window.myglobals.ismobile + ');"></td>\n';
 							}
 							else if (item.SubType.indexOf("Lucci Air DC") == 0) {
 								bAddTimer = false;
-								xhtm += '\t      <td id="img"><img src="images/Fan48_On.png" height="48" width="48" class="lcursor" onclick="ShowLucciDCPopup(event, ' + item.idx + ', ShowLights, ' + item.Protected + ');"></td>\n';
+								xhtm += '\t      <td id="img"><img src="images/Fan48_On.png" height="48" width="48" class="lcursor" onclick="ShowLucciDCPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + window.myglobals.ismobile + ');"></td>\n';
 							}
 							else if (
 								(item.SubType.indexOf("Lucci") == 0) ||
 								(item.SubType.indexOf("Westinghouse") == 0)
-								) {
-							    bAddTimer = false;
-							    xhtm += '\t      <td id="img"><img src="images/Fan48_On.png" height="48" width="48" class="lcursor" onclick="ShowLucciPopup(event, ' + item.idx + ', ShowLights, ' + item.Protected + ');"></td>\n';
+							) {
+								bAddTimer = false;
+								xhtm += '\t      <td id="img"><img src="images/Fan48_On.png" height="48" width="48" class="lcursor" onclick="ShowLucciPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + window.myglobals.ismobile + ');"></td>\n';
 							}
 							else {
 								if (
@@ -1350,9 +1142,10 @@ define(['app', 'livesocket'], function (app) {
 							xhtm +=
 								'\t      <td id="status">' + status + '</td>\n' +
 								'\t      <td id="lastupdate">' + item.LastUpdate + '</td>\n' +
-								'\t      <td id="type">' + item.Type + ', ' + item.SubType + ', ' + item.SwitchType;
+							  '\t      <td id="type">' + item.Type + ', ' + item.SubType + ', ' + item.SwitchType;
+
 							if (item.SwitchType == "Dimmer") {
-								if (item.DimmerType && item.DimmerType!="abs") {
+								if (item.DimmerType && item.DimmerType != "abs") {
 									// Don't show dimmer slider if the device does not support absolute dimming
 								}
 								else {
@@ -1368,14 +1161,8 @@ define(['app', 'livesocket'], function (app) {
 							else if (item.SwitchType == "Blinds Percentage") {
 								xhtm += '<br><div style="margin-left:108px; margin-top:7px;" class="dimslider dimsmall" id="slider" data-idx="' + item.idx + '" data-type="blinds" data-maxlevel="' + item.MaxDimLevel + '" data-isprotected="' + item.Protected + '" data-svalue="' + item.LevelInt + '"></div>';
 							}
-							else if (item.SwitchType == "Blinds Percentage Inverted") {
-								xhtm += '<br><div style="margin-left:108px; margin-top:7px;" class="dimslider dimsmall" id="slider" data-idx="' + item.idx + '" data-type="blinds_inv" data-maxlevel="' + item.MaxDimLevel + '" data-isprotected="' + item.Protected + '" data-svalue="' + item.LevelInt + '"></div>';
-							}
 							else if (item.SwitchType == "Blinds + Stop") {
 								xhtm += '<br><div style="margin-left:132px; margin-top:12px;" class="dimslider dimsmall3" id="slider" data-idx="' + item.idx + '" data-type="blinds" data-maxlevel="' + item.MaxDimLevel + '" data-isprotected="' + item.Protected + '" data-svalue="' + item.LevelInt + '"></div>';
-							}
-							else if (item.SwitchType == "Blinds Inverted + Stop") {
-								xhtm += '<br><div style="margin-left:132px; margin-top:12px;" class="dimslider dimsmall3" id="slider" data-idx="' + item.idx + '" data-type="blinds_inv" data-maxlevel="' + item.MaxDimLevel + '" data-isprotected="' + item.Protected + '" data-svalue="' + item.LevelInt + '"></div>';
 							}
 							else if (item.SwitchType == "Selector") {
 								if (item.SelectorStyle === 0) {
@@ -1425,12 +1212,12 @@ define(['app', 'livesocket'], function (app) {
 								xhtm +=
 									'<a class="btnsmall" href="#/Devices/' + item.idx + '/LightEdit" data-i18n="Edit">Edit</a> ';
 								if (bAddTimer == true) {
-									var timerLink = '#/Devices/'+item.idx+'/Timers';
+									var timerLink = '#/Devices/' + item.idx + '/Timers';
 									if (item.Timers == "true") {
-										xhtm += '<a class="btnsmall-sel" href="'+timerLink+'" data-i18n="Timers">Timers</a> ';
+										xhtm += '<a class="btnsmall-sel" href="' + timerLink + '" data-i18n="Timers">Timers</a> ';
 									}
 									else {
-										xhtm += '<a class="btnsmall" href="'+timerLink+'" data-i18n="Timers">Timers</a> ';
+										xhtm += '<a class="btnsmall" href="' + timerLink + '" data-i18n="Timers">Timers</a> ';
 									}
 								}
 								if (item.SwitchType == "Smoke Detector") {
@@ -1444,7 +1231,7 @@ define(['app', 'livesocket'], function (app) {
 										xhtm += '<a id="resetbtn" class="btnsmall-dis" onclick="ResetSecurityStatus(' + item.idx + ',\'Normal\',ShowLights);" data-i18n="Reset">Reset</a> ';
 									}
 								}
-								var notificationLink = '#/Devices/'+item.idx+'/Notifications';
+								var notificationLink = '#/Devices/' + item.idx + '/Notifications';
 								if (item.Notifications == "true")
 									xhtm += '<a class="btnsmall-sel" href="' + notificationLink + '" data-i18n="Notifications">Notifications</a>';
 								else
@@ -1462,8 +1249,10 @@ define(['app', 'livesocket'], function (app) {
 					}
 				}
 			});
-			if (bHaveAddedDevider == true) {
-				//close previous devider
+
+
+			if (bHaveAddedDivider == true) {
+				//close previous divider
 				htmlcontent += '</div>\n';
 			}
 			if (j == 0) {
@@ -1472,29 +1261,10 @@ define(['app', 'livesocket'], function (app) {
 			$('#modal').hide();
 			$element.html(tophtm + htmlcontent);
 			$element.i18n();
-			if (bShowRoomplan == true) {
-				$.each($.RoomPlans, function (i, item) {
-					var option = $('<option />');
-					option.attr('value', item.idx).text(item.name);
-					$element.find("#comboroom").append(option);
-				});
-				if (typeof roomPlanId != 'undefined') {
-					$element.find("#comboroom").val(roomPlanId);
-				}
-				$element.find("#comboroom").change(function () {
-					var idx = $element.find("#comboroom option:selected").val();
-					window.myglobals.LastPlanSelected = idx;
-
-					$route.updateParams({
-						room: idx > 0 ? idx : undefined
-					});
-					$location.replace();
-					$scope.$apply();
-				});
-			}
+			WatchDescriptions();
 
 			if ($scope.config.AllowWidgetOrdering == true) {
-				if (permissions.hasPermission("Admin")) {
+				if (permissions.hasPermission("User")) {
 					if (window.myglobals.ismobileint == false) {
 						$element.find(".span4").draggable({
 							drag: function () {
@@ -1506,10 +1276,7 @@ define(['app', 'livesocket'], function (app) {
 						$element.find(".span4").droppable({
 							drop: function () {
 								var myid = $(this).attr("id");
-								var roomid = $element.find("#comboroom option:selected").val();
-								if (typeof roomid == 'undefined') {
-									roomid = 0;
-								}
+								var roomid = window.myglobals.LastPlanSelected;
 								$.ajax({
 									url: "json.htm?type=command&param=switchdeviceorder&idx1=" + myid + "&idx2=" + $.devIdx + "&roomid=" + roomid,
 									async: false,
@@ -1524,6 +1291,7 @@ define(['app', 'livesocket'], function (app) {
 				}
 			}
 			$rootScope.RefreshTimeAndSun();
+
 
 			//Create Dimmer Sliders
 			$element.find('.dimslider').slider({
@@ -1561,21 +1329,13 @@ define(['app', 'livesocket'], function (app) {
 						var bigtext;
 						if (fPercentage == 0) {
 							img = '<img src="images/' + imgname + 'ff.png" title="' + $.t("Turn On") + '" onclick="SwitchLight(' + idx + ',\'On\',' + isProtected + ');" class="lcursor" height="48" width="48">';
-							if (dtype == "blinds") {
-								bigtext = "Open";
-							}
-							else if (dtype == "blinds_inv") {
-								bigtext = "Closed";
-							}
-							else {
-								bigtext = "Off";
-							}
+							bigtext = fPercentage + " %";
 						}
 						else {
 							img = '<img src="images/' + imgname + 'n.png" title="' + $.t("Turn Off") + '" onclick="SwitchLight(' + idx + ',\'Off\',' + isProtected + ');" class="lcursor" height="48" width="48">';
 							bigtext = fPercentage + " %";
 						}
-						if ((dtype != "blinds") && (dtype != "blinds_inv") && !isled) {
+						if ((dtype != "blinds") && !isled) {
 							if ($(id + " #img").html() != img) {
 								$(id + " #img").html(img);
 							}
@@ -1599,7 +1359,7 @@ define(['app', 'livesocket'], function (app) {
 			//Create Selector selectmenu
 			$element.find('.selectorlevels select').selectmenu({
 				//Config
-				width: '75%',
+				width: false,	// prevents inline width
 				value: 0,
 				//Selector selectmenu events
 				create: function (event, ui) {
@@ -1666,7 +1426,7 @@ define(['app', 'livesocket'], function (app) {
 				option.attr('value', item.idx).text(item.name);
 				$("#dialog-addmanuallightdevice #lighttable #combolighttype2").append(option);
 			});
-			
+
 			$("#dialog-addmanuallightdevice #he105params").hide();
 			$("#dialog-addmanuallightdevice #blindsparams").hide();
 			$("#dialog-addmanuallightdevice #lightingparams_enocean").hide();
@@ -1721,11 +1481,11 @@ define(['app', 'livesocket'], function (app) {
 		UpdateAddManualDialog = function () {
 			var hwdId = $("#dialog-addmanuallightdevice #lighttable #combohardware option:selected").val();
 			var hardware;
-			
+
 			$.each($.ComboHardware, function (i, item) {
 				if (item.idx == hwdId) {
 					hardware = item;
-                }
+				}
 			});
 			if (hardware != undefined && hardware.config != undefined) {
 				UpdateAddManualDialogForConfiguredHardware(hardware);
@@ -1733,7 +1493,7 @@ define(['app', 'livesocket'], function (app) {
 			} else {
 				$("#dialog-addmanuallightdevice #lighttable #combolighttype").show();
 				$("#dialog-addmanuallightdevice #lighttable #combolighttype2").hide();
-            }
+			}
 			var lighttype = $("#dialog-addmanuallightdevice #lighttable #combolighttype option:selected").val();
 			var bIsARCType = ((lighttype < 20) || (lighttype == 101));
 			var bIsType5 = 0;
@@ -1861,12 +1621,12 @@ define(['app', 'livesocket'], function (app) {
 				//Openwebnet Bus IR Detection
 				totrooms = 10;
 				totpointofloads = 10
-            }
-            else if (lighttype == 407) {
-                //Openwebnet Bus Custom
-                totrooms = 200;
-                totbus = 10;//maximum 10 local buses
-            }
+			}
+			else if (lighttype == 407) {
+				//Openwebnet Bus Custom
+				totrooms = 200;
+				totbus = 10;//maximum 10 local buses
+			}
 
 
 			$("#dialog-addmanuallightdevice #he105params").hide();
@@ -1977,7 +1737,7 @@ define(['app', 'livesocket'], function (app) {
 				$("#dialog-addmanuallightdevice #lighting3params").hide();
 				$("#dialog-addmanuallightdevice #homeconfortparams").show();
 			}
-			else if ((lighttype >= 304) && (lighttype <= 313)) {
+			else if ((lighttype >= 304) && (lighttype <= 315)) {
 				//Fan (Itho)
 				$("#dialog-addmanuallightdevice #lighting1params").hide();
 				$("#dialog-addmanuallightdevice #lighting2params").hide();
@@ -2056,23 +1816,23 @@ define(['app', 'livesocket'], function (app) {
 				$("#dialog-addmanuallightdevice #lighting2params").hide();
 				$("#dialog-addmanuallightdevice #lighting3params").hide();
 				$("#dialog-addmanuallightdevice #openwebnetparamsIRdetec").show();
-            }
-            else if (lighttype == 407) {
-                //Openwebnet Bus Custom
-                $("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd1  >option").remove();
-                for (ii = 1; ii < totrooms + 1; ii++) {
-                    $('#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd1').append($('<option></option>').val(ii).html(ii));
-                }
-                $("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd2  >option").remove();
-                $("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd2").append($('<option></option>').val(0).html("local bus"));
-                for (ii = 1; ii < totbus; ii++) {
-                    $("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd2").append($('<option></option>').val(ii).html(ii));
-                }
-                $("#dialog-addmanuallightdevice #lighting1params").hide();
-                $("#dialog-addmanuallightdevice #lighting2params").hide();
-                $("#dialog-addmanuallightdevice #lighting3params").hide();
-                $("#dialog-addmanuallightdevice #openwebnetparamsCustom").show();
-            }
+			}
+			else if (lighttype == 407) {
+				//Openwebnet Bus Custom
+				$("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd1  >option").remove();
+				for (ii = 1; ii < totrooms + 1; ii++) {
+					$('#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd1').append($('<option></option>').val(ii).html(ii));
+				}
+				$("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd2  >option").remove();
+				$("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd2").append($('<option></option>').val(0).html("local bus"));
+				for (ii = 1; ii < totbus; ii++) {
+					$("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd2").append($('<option></option>').val(ii).html(ii));
+				}
+				$("#dialog-addmanuallightdevice #lighting1params").hide();
+				$("#dialog-addmanuallightdevice #lighting2params").hide();
+				$("#dialog-addmanuallightdevice #lighting3params").hide();
+				$("#dialog-addmanuallightdevice #openwebnetparamsCustom").show();
+			}
 			else if (bIsARCType == 1) {
 				$('#dialog-addmanuallightdevice #lightparams1 #combohousecode >option').remove();
 				$('#dialog-addmanuallightdevice #lightparams1 #combounitcode >option').remove();
@@ -2155,7 +1915,7 @@ define(['app', 'livesocket'], function (app) {
 					hardware = item;
 				}
 			});
-			
+
 			mParams += "&hwdid=" + hwdID;
 
 			var name = $("#dialog-addmanuallightdevice #devicename");
@@ -2177,7 +1937,7 @@ define(['app', 'livesocket'], function (app) {
 			var lighttype = $("#dialog-addmanuallightdevice #lighttable #combolighttype option:selected").val();
 			mParams += "&lighttype=" + lighttype;
 
-			
+
 
 			if (lighttype == 106) {
 				//Blyss
@@ -2199,17 +1959,17 @@ define(['app', 'livesocket'], function (app) {
 			}
 			else if (lighttype == 68) {
 				//GPIO
-                mParams += "&id=GPIO&unitcode=" + $("#dialog-addmanuallightdevice #lightingparams_gpio #combogpio option:selected").val();
+				mParams += "&id=GPIO&unitcode=" + $("#dialog-addmanuallightdevice #lightingparams_gpio #combogpio option:selected").val();
 			}
 			else if (lighttype == 69) {
 				//SysfsGpio
-                ID =
-                    $("#dialog-addmanuallightdevice #lightparams2 #combocmd1 option:selected").text() +
-                    $("#dialog-addmanuallightdevice #lightparams2 #combocmd2 option:selected").text() +
-                    $("#dialog-addmanuallightdevice #lightparams2 #combocmd3 option:selected").text() +
-                    $("#dialog-addmanuallightdevice #lightparams2 #combocmd4 option:selected").text();
-                mParams += "&id=" + ID + "&unitcode=" + $("#dialog-addmanuallightdevice #lightingparams_sysfsgpio #combosysfsgpio option:selected").val();
-            }
+				ID =
+					$("#dialog-addmanuallightdevice #lightparams2 #combocmd1 option:selected").text() +
+					$("#dialog-addmanuallightdevice #lightparams2 #combocmd2 option:selected").text() +
+					$("#dialog-addmanuallightdevice #lightparams2 #combocmd3 option:selected").text() +
+					$("#dialog-addmanuallightdevice #lightparams2 #combocmd4 option:selected").text();
+				mParams += "&id=" + ID + "&unitcode=" + $("#dialog-addmanuallightdevice #lightingparams_sysfsgpio #combosysfsgpio option:selected").val();
+			}
 			else if ((lighttype < 20) || (lighttype == 101)) {
 				mParams += "&housecode=" + $("#dialog-addmanuallightdevice #lightparams1 #combohousecode option:selected").val();
 				mParams += "&unitcode=" + $("#dialog-addmanuallightdevice #lightparams1 #combounitcode option:selected").val();
@@ -2237,7 +1997,7 @@ define(['app', 'livesocket'], function (app) {
 				mParams += "&housecode=" + $("#dialog-addmanuallightdevice #homeconfortparams #combohousecode option:selected").val();
 				mParams += "&unitcode=" + $("#dialog-addmanuallightdevice #homeconfortparams #combounitcode option:selected").val();
 			}
-			else if ((lighttype >= 304)&&(lighttype <= 313)) {
+			else if ((lighttype >= 304) && (lighttype <= 315)) {
 				//Fan
 				ID =
 					$("#dialog-addmanuallightdevice #fanparams #combocmd1 option:selected").text() +
@@ -2302,20 +2062,20 @@ define(['app', 'livesocket'], function (app) {
 				var ID = ("0019" + ("0000" + appID.toString(16)).slice(-4)); // WHO_DRY_CONTACT_IR_DETECTION (25 = 0x19)
 				var unitcode = "0";
 				mParams += "&id=" + ID.toUpperCase() + "&unitcode=" + unitcode;
-            }
-            else if (lighttype == 407) {
-                //Openwebnet Bus Custom
-                var appID = parseInt($("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd1 option:selected").val());
-                var ID = ("F00" + ("0000" + appID.toString(16)).slice(-4));
-                var unitcode = $("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd2 option:selected").val();
+			}
+			else if (lighttype == 407) {
+				//Openwebnet Bus Custom
+				var appID = parseInt($("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd1 option:selected").val());
+				var ID = ("F00" + ("0000" + appID.toString(16)).slice(-4));
+				var unitcode = $("#dialog-addmanuallightdevice #openwebnetparamsCustom #combocmd2 option:selected").val();
 
-                //var intRegex = /^[0-9*#]$/; 
-                //if (!intRegex.test(cmdText)) {
-                //    ShowNotify($.t('Open command error. Please use only number, \'*\' or \'#\''), 2500, true);
-                //    return "";
-                //}
-                mParams += "&id=" + ID + "&unitcode=" + unitcode + "&StrParam1=" + encodeURIComponent($("#dialog-addmanuallightdevice #openwebnetparamsCustom #inputcmd1").val());
-            }
+				//var intRegex = /^[0-9*#]$/; 
+				//if (!intRegex.test(cmdText)) {
+				//    ShowNotify($.t('Open command error. Please use only number, \'*\' or \'#\''), 2500, true);
+				//    return "";
+				//}
+				mParams += "&id=" + ID + "&unitcode=" + unitcode + "&StrParam1=" + encodeURIComponent($("#dialog-addmanuallightdevice #openwebnetparamsCustom #inputcmd1").val());
+			}
 			else {
 				//AC
 				var ID = "";
@@ -2443,10 +2203,31 @@ define(['app', 'livesocket'], function (app) {
 				$.myglobals.WeekdayStr.push($(this).text());
 			});
 
+			//Get SwitchTypes
+			$.ajax({
+				url: "json.htm?type=command&param=getswitchtypes",
+				async: false,
+				dataType: 'json',
+				success: function (data) {
+					if (typeof data.result != 'undefined') {
+						$("#dialog-addlightdevice #comboswitchtype").html("");
+						$("#dialog-addmanuallightdevice #comboswitchtype").html("");
+						$.each(data.result, function (stcode, stdesc) {
+							if (stdesc != null) {
+								var option = $('<option />');
+								option.attr('value', stcode).text(stdesc);
+								$("#dialog-addlightdevice #comboswitchtype").append(option);
+								$("#dialog-addmanuallightdevice #comboswitchtype").append(option);
+							}
+						});
+					}
+				}
+			});
+
 			$scope.$on('device_update', function (event, deviceData) {
 				RefreshItem(deviceData);
 			});
-
+	
 			$(window).resize(function () { $scope.ResizeDimSliders(); });
 
 			$("#dialog-addlightdevice").dialog({
@@ -2473,7 +2254,7 @@ define(['app', 'livesocket'], function (app) {
 						if (bValid) {
 							$(this).dialog("close");
 							$.ajax({
-								url: "json.htm?type=setused&idx=" + $.devIdx + '&name=' + encodeURIComponent($("#dialog-addlightdevice #devicename").val()) + '&switchtype=' + $("#dialog-addlightdevice #comboswitchtype").val() + '&used=true&maindeviceidx=' + MainDeviceIdx,
+								url: "json.htm?type=command&param=setused&idx=" + $.devIdx + '&name=' + encodeURIComponent($("#dialog-addlightdevice #devicename").val()) + '&switchtype=' + $("#dialog-addlightdevice #comboswitchtype").val() + '&used=true&maindeviceidx=' + MainDeviceIdx,
 								async: false,
 								dataType: 'json',
 								success: function (data) {
@@ -2574,8 +2355,53 @@ define(['app', 'livesocket'], function (app) {
 				EnableDisableSubDevices("#dialog-addmanuallightdevice #howtable #subdevice", true);
 			});
 
+
+
+			//handles TopBar Links
+			$scope.tblinks=[];
+			if (permissions.hasPermission("Admin")) {
+				$scope.tblinks = [
+					{
+						onclick:"AddLightDevice", 
+						text: "Learn Light/Switch",
+						i18n: "Learn Light/Switch", 
+						icon: "camera"
+					},
+					{
+						onclick:"AddManualLightDevice", 
+						text: "Manual Light/Switch",
+						i18n: "Manual Light/Switch", 
+						icon: "plus-circle"
+					}
+				];
+			}
+
+			//handles RoomPlans
+			var ctrl={};
+			ctrl.RoomPlans=$rootScope.GetRoomPlans();	
+			var roomPlanId = $routeParams.room || window.myglobals.LastPlanSelected;
+	
+			if (typeof roomPlanId != 'undefined') {
+				ctrl.roomSelected = roomPlanId;
+				window.myglobals.LastPlanSelected = roomPlanId;
+			}
+			ctrl.changeRoom = function () {
+				var idx = ctrl.roomSelected;
+				window.myglobals.LastPlanSelected = idx;
+	
+				$route.updateParams({
+						room: idx >= 0 ? idx : undefined
+					});
+					$location.replace();
+			};
+			$scope.ctrl=ctrl;
+
 			ShowLights();
+
 		};
+
+
+
 
 		$scope.$on('$destroy', function () {
 			$(window).off("resize");

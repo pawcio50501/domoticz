@@ -3,7 +3,6 @@
 #include "../main/Helper.h"
 #include "../main/Logger.h"
 #include "../main/SQLHelper.h"
-#include "../main/localtime_r.h"
 #include "../main/RFXtrx.h"
 #include "hardwaretypes.h"
 #include "../httpclient/HTTPClient.h"
@@ -11,8 +10,6 @@
 #include "../webserver/Base64.h"
 #include "../main/WebServer.h"
 #include "../main/LuaHandler.h"
-
-#define round(a) ( int ) ( a + .5 )
 
 CHttpPoller::CHttpPoller(const int ID, const std::string& username, const std::string& password, const std::string& url, const std::string& extradata, const unsigned short refresh) :
 m_username(CURLEncode::URLEncode(username)),
@@ -48,7 +45,7 @@ void CHttpPoller::Init()
 
 bool CHttpPoller::WriteToHardware(const char* /*pdata*/, const unsigned char /*length*/)
 {
-	return false;
+	return true;
 }
 
 bool CHttpPoller::StartHardware()

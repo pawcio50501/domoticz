@@ -6,13 +6,12 @@
 class CThermosmart : public CDomoticzHardwareBase
 {
       public:
-	CThermosmart(int ID, const std::string &Username, const std::string &Password, int Mode1, int Mode2, int Mode3, int Mode4, int Mode5, int Mode6);
+	CThermosmart(int ID, const std::string &Username, const std::string &Password, int Mode1);
 	~CThermosmart() override = default;
 	bool WriteToHardware(const char *pdata, unsigned char length) override;
 	void SetSetpoint(int idx, float temp);
 
       private:
-	void SendSetPointSensor(unsigned char Idx, float Temp, const std::string &defaultname);
 	void SetPauseStatus(bool bIsPause);
 	void SetOutsideTemp(float temp);
 	bool GetOutsideTemperatureFromDomoticz(float &tvalue);
@@ -20,7 +19,6 @@ class CThermosmart : public CDomoticzHardwareBase
 	bool Login();
 	void Logout();
 	void Init();
-	void SetModes(int Mode1, int Mode2, int Mode3, int Mode4, int Mode5, int Mode6);
 	bool StartHardware() override;
 	bool StopHardware() override;
 	void Do_Work();

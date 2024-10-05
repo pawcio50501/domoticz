@@ -4,18 +4,15 @@
 #include "../main/Logger.h"
 #include "../httpclient/UrlEncode.h"
 #include "hardwaretypes.h"
-#include "../main/localtime_r.h"
 #include "../httpclient/HTTPClient.h"
 #include "../main/json_helper.h"
 #include "../main/RFXtrx.h"
 #include "../main/mainworker.h"
 #include "../main/SQLHelper.h"
 
-#define round(a) (int)(a + .5)
-
 #ifdef _DEBUG
-//#define DEBUG_MeteorologiskR
-//#define DEBUG_MeteorologiskW
+#define DEBUG_MeteorologiskR
+#define DEBUG_MeteorologiskW
 #endif
 
 #ifdef DEBUG_MeteorologiskW
@@ -237,6 +234,9 @@ void CMeteorologisk::GetMeterDetails()
 
 	Json::Value timeseries = root["properties"]["timeseries"];
 
+	//First value is actual value
+	int iSelectedTimeserie = 0;
+/*
 	int iSelectedTimeserie = -1;
 	time_t now = mytime(nullptr);
 
@@ -257,7 +257,7 @@ void CMeteorologisk::GetMeterDetails()
 			iSelectedTimeserie = i;
 		}
 	}
-
+*/
 	if ((iSelectedTimeserie < 0) || (iSelectedTimeserie >= (int)timeseries.size()))
 	{
 		Log(LOG_ERROR, "Invalid data received, or unknown location!");
@@ -278,7 +278,7 @@ void CMeteorologisk::GetMeterDetails()
 
 	if (instantData["relative_humidity"].empty() == false)
 	{
-		humidity = round(instantData["relative_humidity"].asFloat());
+		humidity = ground(instantData["relative_humidity"].asFloat());
 	}
 	if (instantData["air_pressure_at_sea_level"].empty() == false)
 	{

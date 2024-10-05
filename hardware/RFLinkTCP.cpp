@@ -3,7 +3,6 @@
 #include "../main/Logger.h"
 #include "../main/Helper.h"
 #include <iostream>
-#include "../main/localtime_r.h"
 
 CRFLinkTCP::CRFLinkTCP(const int ID, const std::string &IPAddress, const unsigned short usIPPort):
 	m_szIPAddress(IPAddress)
@@ -43,7 +42,7 @@ bool CRFLinkTCP::StopHardware()
 
 void CRFLinkTCP::OnConnect()
 {
-	Log(LOG_STATUS,"connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS,"Connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	m_bDoRestart=false;
 	m_bIsStarted=true;
 	m_rfbufferpos = 0;
@@ -56,14 +55,14 @@ void CRFLinkTCP::OnConnect()
 void CRFLinkTCP::OnDisconnect()
 {
 	// Note: No need to set m_bDoRestart = true here, the connection is automatically reinited by ASyncTCP
-	Log(LOG_STATUS,"disconnected");
+	Log(LOG_STATUS,"Disconnected");
 }
 
 void CRFLinkTCP::Do_Work()
 {
 	bool bFirstTime=true;
 	int sec_counter = 0;
-	Log(LOG_STATUS, "trying to connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Trying to connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	connect(m_szIPAddress,m_usIPPort);
 	while (!IsStopRequested(1000))
 	{
@@ -92,14 +91,14 @@ void CRFLinkTCP::Do_Work()
 
 		if ((m_bDoRestart) && (sec_counter % 30 == 0))
 		{
-			Log(LOG_STATUS, "trying to connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+			Log(LOG_STATUS, "Trying to connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 			disconnect();
 			connect(m_szIPAddress, m_usIPPort);
 		}
 	}
 	terminate();
 
-	Log(LOG_STATUS,"TCP/IP Worker stopped...");
+	Log(LOG_STATUS,"Worker stopped...");
 }
 
 void CRFLinkTCP::OnData(const unsigned char *pData, size_t length)

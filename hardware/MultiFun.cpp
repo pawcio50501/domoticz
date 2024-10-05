@@ -6,7 +6,6 @@
 #include "../main/Logger.h"
 #include "../main/RFXtrx.h"
 #include "../main/Helper.h"
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 #include "../main/SQLHelper.h"
 #include "csocket.h"
@@ -17,8 +16,6 @@
 
 #define BUFFER_LENGHT 100
 #define MULTIFUN_POLL_INTERVAL 10 //TODO - to settings on www
-
-#define round(a) ( int ) ( a + .5 )
 
 #define sensorsCount 16
 #define registersCount 34
@@ -236,11 +233,11 @@ bool MultiFun::WriteToHardware(const char *pdata, const unsigned char /*length*/
 		}
 	}
 
-	if (output->ICMND.packettype == pTypeThermostat && output->LIGHTING2.subtype == sTypeThermSetpoint)
+	if (output->ICMND.packettype == pTypeSetpoint && output->LIGHTING2.subtype == sTypeSetpoint)
 	{
-		const _tThermostat *therm = reinterpret_cast<const _tThermostat*>(pdata);
+		const _tSetpoint* therm = reinterpret_cast<const _tSetpoint*>(pdata);
 
-		float temp = therm->temp;
+		float temp = therm->value;
 		int calculatedTemp = (int)temp;
 
 		if ((therm->id2 == 0x1F || therm->id2 == 0x20) ||
@@ -481,13 +478,13 @@ void MultiFun::GetRegisters(bool firstTime)
 						temp = (float)((value & 0x0FFF) * 0.2);
 					}
 					m_isWeatherWork[i - 0x1C] = (value & 0x8000) == 0x8000;
-					SendSetPointSensor((uint8_t)i, 1, 1, temp, name);
+					SendSetPointSensor(0, (uint8_t)i, 1, 1, 1, temp, name);
 					break;
 				}
 
 				case 0x1E:
 				{
-					SendSetPointSensor(0x1E, 1, 1, (float)value, "H.W.U. Temperature");
+					SendSetPointSensor(0, 0x1E, 1, 1, 1, (float)value, "H.W.U. Temperature");
 					break;
 				}
 
@@ -500,7 +497,7 @@ void MultiFun::GetRegisters(bool firstTime)
 					if (m_isSensorExists[i - 0x1F])
 					{
 						float temp = (float)((value & 0x0FFF) * 0.2);
-						SendSetPointSensor((uint8_t)i, 1, 1, temp, name);
+						SendSetPointSensor(0, (uint8_t)i, 1, 1, 1, temp, name);
 					}
 					else
 					{

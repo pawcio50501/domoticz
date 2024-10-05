@@ -4,15 +4,12 @@
 #include "../main/Helper.h"
 #include "../main/RFXtrx.h"
 #include "../main/SQLHelper.h"
-#include "../main/localtime_r.h"
 #include "hardwaretypes.h"
 #include <string>
 #include <sstream>
 #include <algorithm>
 #include <iostream>
 #include <ctime>
-
-#define round(a) ( int ) ( a + .5 )
 
 KMTronicBase::KMTronicBase()
 {

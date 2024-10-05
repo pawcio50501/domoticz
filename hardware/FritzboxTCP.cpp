@@ -3,7 +3,6 @@
 #include "../main/Logger.h"
 #include "../main/Helper.h"
 #include <iostream>
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 
 #include "../main/SQLHelper.h"
@@ -75,7 +74,7 @@ bool FritzboxTCP::StopHardware()
 
 void FritzboxTCP::OnConnect()
 {
-	Log(LOG_STATUS, "connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	m_bIsStarted = true;
 	m_bufferpos = 0;
 
@@ -84,7 +83,7 @@ void FritzboxTCP::OnConnect()
 
 void FritzboxTCP::OnDisconnect()
 {
-	Log(LOG_STATUS, "disconnected");
+	Log(LOG_STATUS, "Disconnected");
 }
 
 void FritzboxTCP::Do_Work()
@@ -114,7 +113,7 @@ void FritzboxTCP::Do_Work()
 
 void FritzboxTCP::OnData(const unsigned char* pData, size_t length)
 {
-	ParseData(pData, length);
+	ParseData(pData, (int)length);
 }
 
 void FritzboxTCP::OnError(const boost::system::error_code& error)

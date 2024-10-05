@@ -5,7 +5,6 @@
 #include "../httpclient/HTTPClient.h"
 #include "../httpclient/UrlEncode.h"
 #include "hardwaretypes.h"
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 #include "../main/json_helper.h"
 
@@ -161,6 +160,13 @@ bool CYouLess::GetP1Details()
 		m_bHaveP1OrS0 = true;
 	}
 
+	if (!root["wtr"].empty())
+	{
+		//Water Meter
+		float mcntr = root["wtr"].asFloat();
+		SendMeterSensor(m_HwdID, 1, 255, mcntr, "Water");
+	}
+
 	if (!root["cs0"].empty())
 	{
 		//S0 Meter
@@ -172,6 +178,7 @@ bool CYouLess::GetP1Details()
 			m_bHaveP1OrS0 = true;
 		}
 	}
+
 	return m_bHaveP1OrS0;
 }
 
@@ -203,7 +210,7 @@ void CYouLess::GetMeterDetails()
 		Log(LOG_ERROR,"Error connecting to: %s", m_szIPAddress.c_str());
 		return;
 	}
-	int fpos;
+	size_t fpos;
 	std::string pusage=stdstring_trim(results[0]);
 	fpos = pusage.find_first_of(' ');
 	if (fpos!=std::string::npos)

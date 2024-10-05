@@ -24,11 +24,10 @@ define(['app.notifications', 'angular-websocket'], function (appNotificationsMod
 		init();
 
 		return {
-			/**
-			 * @deprecated prefer to use domoticzApi service instead
-			 */
 			getJson: getJson,
 			sendRequest: sendRequest,
+			subscribeTo: subscribeTo,
+			unsubscribeFrom: unsubscribeFrom
 		};
 
 		function init() {
@@ -58,6 +57,9 @@ define(['app.notifications', 'angular-websocket'], function (appNotificationsMod
 					return;
 				case "date_time":
 					handleTimeUpdate(msg);
+					return;
+				case "log":
+					handleLog(msg);
 					return;
 			}
 
@@ -115,6 +117,15 @@ define(['app.notifications', 'angular-websocket'], function (appNotificationsMod
 			}
 		}
 
+		function handleLog(msg) {
+			if (typeof msg.message !== 'undefined') {
+				$rootScope.$broadcast('log', {
+					level: msg.level,
+					message: msg.message
+				});
+			}
+		}
+
 		function getJson(url, callback_fn) {
 			if (!callback_fn) {
 				callback_fn = function (data) {
@@ -153,13 +164,54 @@ define(['app.notifications', 'angular-websocket'], function (appNotificationsMod
 				webSocket.$$send(requestobj);
 			});
 		}
+		
+		function subscribeTo(topic) {
+			return $q(function (resolve, reject) {
+				var requestId = ++requestsCount;
+
+				var requestobj = {
+					event: "subscribe",
+					requestid: requestId,
+					topic: topic
+				};
+
+				var requestInfo = {
+					requestId: requestId,
+					callback: resolve
+				};
+
+				requestsQueue.push(requestInfo);
+				webSocket.$$send(requestobj);
+			});
+		}
+		function unsubscribeFrom(topic) {
+			return $q(function (resolve, reject) {
+				var requestId = ++requestsCount;
+
+				var requestobj = {
+					event: "unsubscribe",
+					requestid: requestId,
+					topic: topic
+				};
+
+				var requestInfo = {
+					requestId: requestId,
+					callback: resolve
+				};
+
+				requestsQueue.push(requestInfo);
+				webSocket.$$send(requestobj);
+			});
+		}
+		
+		
 	});
 
 	/* The stub below can be used to override all ajax calls to websocket requests at the same time without changing the other code */
 	/*
 	var oAjax = $.ajax;
 	$.ajax = function (settings) {
-		if (settings.url.substr(0, 9) == "json.htm?" && settings.url.match(/type=devices/)) {
+		if (settings.url.substr(0, 9) == "json.htm?" && settings.url.match(/param=getdevices/)) {
 			if (typeof settings.context === 'undefined') settings.context = settings;
 			return websocket.SendAsync(settings);
 		}

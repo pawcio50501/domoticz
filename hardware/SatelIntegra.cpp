@@ -6,7 +6,6 @@
 #include "../main/Logger.h"
 #include "../main/RFXtrx.h"
 #include "../main/Helper.h"
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 #include "../main/SQLHelper.h"
 
@@ -16,8 +15,6 @@
 
 #define SATEL_TEMP_POLL_INTERVAL_MS 120*1000 // 120 sec
 #define HEARTBEAT_INTERVAL_MS 12*1000 // 12 sec
-
-#define round(a) ( int ) ( a + .5 )
 
 using SatelModel = struct
 {
@@ -189,8 +186,6 @@ void SatelIntegra::Do_Work()
 
 			if (ReadNewData())
 			{
-				SetHeartbeatReceived();
-
 				if (m_newData[3] & 8)
 				{
 					ReadAlarm();
@@ -280,7 +275,7 @@ bool SatelIntegra::ConnectToIntegra()
 #else
 	fcntl(m_socket, F_SETFL, O_NONBLOCK);
 #endif
-	Log(LOG_STATUS, "connected to %s:%d", m_IPAddress.c_str(), m_IPPort);
+	Log(LOG_STATUS, "Connected to %s:%d", m_IPAddress.c_str(), m_IPPort);
 
 	return true;
 }
@@ -341,7 +336,7 @@ bool SatelIntegra::GetInfo()
 				cmd[0] = 0x7C; // INT-RS/ETHM version
 				if (SendCommand(cmd, 1, buffer, 13) > 0)
 				{
-					m_data32 = ((buffer[12] & 1) == 1) && (m_modelIndex == 72); // supported and required 256 PLUS
+					 m_data32 = ((buffer[12] & 1) == 1) && (m_modelIndex == 8); // supported and required 256 PLUS INTEGRA, m_modelIndex tabel explained @ line 34-42
 
 					Log(LOG_STATUS, "ETHM-1 ver. %c.%c%c %c%c%c%c-%c%c-%c%c (32 bytes mode = %s)",
 						buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7], buffer[8], buffer[9], buffer[10], buffer[11], m_data32 ? "true" : "false");
@@ -380,9 +375,9 @@ bool SatelIntegra::ReadZonesState(const bool firstTime)
 	unsigned char buffer[33];
 
 	unsigned int zonesCount = models[m_modelIndex].zones;
-	if ((zonesCount > 128) && (!m_data32))
+	if ((zonesCount > 256) && (!m_data32))
 	{
-		zonesCount = 128;
+		zonesCount = 256;
 	}
 
 	unsigned char cmd[2];
@@ -456,9 +451,9 @@ bool SatelIntegra::ReadTemperatures(const bool firstTime)
 	unsigned char buffer[33];
 
 	unsigned int zonesCount = models[m_modelIndex].zones;
-	if ((zonesCount > 128) && (!m_data32))
+	if ((zonesCount > 256) && (!m_data32))
 	{
-		zonesCount = 128;
+		zonesCount = 256;
 	}
 
 	for (unsigned int index = 0; index < zonesCount; ++index)
@@ -536,9 +531,9 @@ bool SatelIntegra::ReadOutputsState(const bool firstTime)
 		unsigned int bitNumber;
 
 		unsigned int outputsCount = models[m_modelIndex].outputs;
-		if ((outputsCount > 128) && (!m_data32))
+		if ((outputsCount > 256) && (!m_data32))
 		{
-			outputsCount = 128;
+			outputsCount = 256;
 		}
 
 		for (unsigned int index = 0; index < outputsCount; ++index)
@@ -751,7 +746,7 @@ void SatelIntegra::ReportOutputState(const int Idx, const bool state)
 		std::string sTmp = std_format("%08X", Idx);
 		std::string devname;
 
-		m_sql.UpdateValue(m_HwdID, sTmp.c_str(), 1, pTypeGeneral, sTypeTextStatus, 12, 255, 0, state ? "On" : "Off", devname, true, m_Name.c_str());
+		m_sql.UpdateValue(m_HwdID, 0, sTmp.c_str(), 1, pTypeGeneral, sTypeTextStatus, 12, 255, 0, state ? "On" : "Off", devname, true, m_Name.c_str());
 	}
 }
 
@@ -768,7 +763,7 @@ void SatelIntegra::ReportAlarm(const bool isAlarm)
 
 	std::string devname;
 
-	m_sql.UpdateValue(m_HwdID, "Alarm", 2, pTypeGeneral, sTypeAlert, 12, 255, isAlarm ? 4 : 1, isAlarm ? "Alarm !" : "Normal", devname, true, m_Name.c_str());
+	m_sql.UpdateValue(m_HwdID, 0, "Alarm", 2, pTypeGeneral, sTypeAlert, 12, 255, isAlarm ? 4 : 1, isAlarm ? "Alarm !" : "Normal", devname, true, m_Name.c_str());
 }
 
 void SatelIntegra::ReportTemperature(const int Idx, const int temp)
@@ -1117,7 +1112,7 @@ int SatelIntegra::SendCommand(const unsigned char* cmd, const unsigned int cmdLe
 	struct timeval tv;
 	tv.tv_sec = 3;
 	tv.tv_usec = 0;
-	if (select(m_socket + 1, &rfds, nullptr, nullptr, &tv) < 0)
+	if (select((int)m_socket + 1, &rfds, nullptr, nullptr, &tv) < 0)
 	{
 		Log(LOG_ERROR, "connection lost.");
 		DestroySocket();
@@ -1229,7 +1224,7 @@ std::pair<unsigned char*, unsigned int> SatelIntegra::getFullFrame(const unsigne
 	result.push_back(0xFE);
 	result.push_back(0x0D);
 
-	unsigned int resultSize = result.size();
+	size_t resultSize = result.size();
 	unsigned char* pResult = new unsigned char[resultSize];
 	memset(pResult, 0, resultSize);
 	std::list<unsigned char>::iterator it = result.begin();
@@ -1238,5 +1233,5 @@ std::pair<unsigned char*, unsigned int> SatelIntegra::getFullFrame(const unsigne
 		pResult[index] = *it;
 	}
 
-	return { pResult, resultSize };
+	return { pResult, static_cast<unsigned int>(resultSize) };
 }

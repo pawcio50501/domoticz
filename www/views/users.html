@@ -4,7 +4,7 @@
 	<table id="userdevicestable" border="0" cellpadding="0" cellspacing="0" width="100%">
 		<tr>
 			<td>
-				<select id="devices" class="multiselect" multiple="multiple" name="devices[]">
+				<select style="width: 80%" id="devices" class="multiselect" multiple="multiple" name="devices[]">
 				</select>
 			</td>
 		</tr>
@@ -12,6 +12,7 @@
 			<td>
 				<br>
 				<a class="btnstyle3" onclick="SaveUserDevices();" data-i18n="Save">Save</a>
+				<a class="btn btn-danger" onclick="ClearUserDevices();" data-i18n="Clear">Clear</a>
 			</td>
 		</tr>
 	</table>

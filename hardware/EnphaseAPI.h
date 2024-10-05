@@ -2,6 +2,7 @@
 
 #include "DomoticzHardware.h"
 #include "hardwaretypes.h"
+#include "CounterHelper.h"
 
 namespace Json
 {
@@ -10,28 +11,87 @@ namespace Json
 
 class EnphaseAPI : public CDomoticzHardwareBase
 {
-      public:
-	EnphaseAPI(int ID, const std::string &IPAddress, unsigned short usIPPort);
+public:
+	EnphaseAPI(
+		int ID,
+		const std::string& IPAddress,
+		unsigned short usIPPort,
+		int PollInterval,
+		const bool bPollInverters,
+		const bool iInverterDetails,
+		const bool bDontGetMeteredValues,
+		const std::string& szUsername,
+		const std::string& szPassword,
+		const std::string &szSiteID);
 	~EnphaseAPI() override = default;
-	bool WriteToHardware(const char *pdata, unsigned char length) override;
-
-      private:
+	bool WriteToHardware(const char* pdata, unsigned char length) override;
+	std::string m_szSoftwareVersion;
+private:
 	bool StartHardware() override;
 	bool StopHardware() override;
 	void Do_Work();
 
-	bool getProductionDetails(Json::Value &result);
+	bool GetSerialSoftwareVersion();
+	bool GetOwnerToken();
+	bool GetInstallerToken();
+	bool getProductionDetails(Json::Value& result);
+	bool getGridStatus();
+	bool getPowerStatus();
+	bool getInverterDetails();
+	bool getInventoryDetails(Json::Value& result);
+	bool getLivedataDetails(Json::Value& result);
+	bool getDevStatusDetails(Json::Value& result);
 
-	void parseProduction(const Json::Value &root);
-	void parseConsumption(const Json::Value &root);
-	void parseNetConsumption(const Json::Value &root);
+	void parseProduction(const Json::Value& root);
+	void parseConsumption(const Json::Value& root);
+	void parseInventory(const Json::Value& root);
+	void parseLivedata(const Json::Value& root);
+	void parseDevStatus(const Json::Value& root);
 
+	bool SetPowerActive(const bool bActive);
+
+	bool CheckAuthJWT(const std::string& szToken, const bool bDisplayErrors);
+
+	bool IsItSunny();
 	int getSunRiseSunSetMinutes(bool bGetSunRise);
 
-      private:
+	bool NeedToken();
+
+	std::string MakeURL(const char* szPath);
+
+	uint64_t UpdateValueInt(const char* ID, unsigned char unit, unsigned char devType, unsigned char subType, unsigned char signallevel, unsigned char batterylevel, int nValue,
+		const char* sValue, std::string& devname, bool bUseOnOffAction = true, const std::string& user = "");
+private:
+	int m_poll_interval = 30;
+
+	std::string m_szSerial;
+	std::string m_szToken;
+	std::string m_szTokenInstaller;
 	std::string m_szIPAddress;
-	P1Power m_p1power;
-	P1Power m_c1power;
-	P1Power m_c2power;
+	std::string m_szInstallerPassword; // derived from serial number
+
+	std::string m_szUsername;
+	std::string m_szPassword;
+	std::string m_szSiteID;
+
+	bool m_bGetInverterDetails = false;
+	bool m_bDontGetMeteredValues = false;
+	int iInverterDetailsLevel = 0;
+
+	bool m_bHaveConsumption = false;
+	bool m_bHaveNetConsumption = false;
+	bool m_bHaveStorage = false;
+
+	bool m_bOldFirmware = false;
+
+	bool m_bCheckedInventory = false;
+	bool m_bHaveInventory = false;
+
+	bool m_bHaveDevStatus = false;
+
+	bool m_bHaveLiveData = true;
+
+	CounterHelper m_ProductionCounter;
+
 	std::shared_ptr<std::thread> m_thread;
 };

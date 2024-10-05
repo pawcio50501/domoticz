@@ -1,5 +1,4 @@
 #include "stdafx.h"
-#include "../main/localtime_r.h"
 #include "../main/Logger.h"
 #include "../main/mainworker.h"
 #include "../main/Helper.h"
@@ -9,7 +8,7 @@
 #include "../main/json_helper.h"
 #include "hardwaretypes.h"
 #include "XiaomiGateway.h"
-#include <openssl/aes.h>
+#include <openssl/evp.h>
 #include <boost/asio.hpp>
 #include "XiaomiDeviceSupport.h"
 
@@ -26,7 +25,6 @@ Protocol is Zigbee and WiFi, and the gateway and
 Domoticz need to be in the same network/subnet with multicast working
 */
 
-#define round(a) (int)(a + .5)
 // Removing this vector and use unitcode to tell what kind of device each is
 // std::vector<std::string> arrAqara_Wired_ID;
 
@@ -80,6 +78,7 @@ typedef enum
 #define MODEL_SELECTOR_WIRED_WALL_SINGLE_1 "ctrl_neutral1"
 #define MODEL_SELECTOR_WIRED_WALL_SINGLE_2 "ctrl_ln1"
 #define MODEL_SELECTOR_WIRED_WALL_SINGLE_3 "ctrl_ln1.aq1"
+#define MODEL_SELECTOR_WIRED_WALL_SINGLE_4 "switch_b1lacn02"
 #define NAME_SELECTOR_WIRED_WALL_SINGLE "Xiaomi Wired Single Wall Switch"
 
 // Xiaomi Wired Dual Wall Switch | QBKG12LM (QBKG26LM)
@@ -1107,26 +1106,47 @@ void XiaomiGateway::Do_Work()
 std::string XiaomiGateway::GetGatewayKey()
 {
 #ifdef WWW_ENABLE_SSL
-	const unsigned char *key = (unsigned char *)m_GatewayPassword.c_str();
-	unsigned char iv[AES_BLOCK_SIZE] = { 0x17, 0x99, 0x6d, 0x09, 0x3d, 0x28, 0xdd, 0xb3, 0xba, 0x69, 0x5a, 0x2e, 0x6f, 0x58, 0x56, 0x2e };
-	std::string token = XiaomiGatewayTokenManager::GetInstance().GetToken(m_GatewayIp);
-	unsigned char *plaintext = (unsigned char *)token.c_str();
-	unsigned char ciphertext[128];
+	unsigned char iv[EVP_MAX_IV_LENGTH] = { 0x17, 0x99, 0x6d, 0x09, 0x3d, 0x28, 0xdd, 0xb3, 0xba, 0x69, 0x5a, 0x2e, 0x6f, 0x58, 0x56, 0x2e };
 
-	AES_KEY encryption_key;
-	AES_set_encrypt_key(key, 128, &(encryption_key));
-	AES_cbc_encrypt((unsigned char *)plaintext, ciphertext, sizeof(plaintext) * 8, &encryption_key, iv, AES_ENCRYPT);
+	unsigned char key[EVP_MAX_KEY_LENGTH];
+	memset(&key, 0, sizeof(key));
+	memcpy(&key, m_GatewayPassword.c_str(), std::max((int)m_GatewayPassword.size(), EVP_MAX_KEY_LENGTH));
 
-	char gatewaykey[128];
-	for (int i = 0; i < 16; i++)
+	unsigned char token[EVP_MAX_KEY_LENGTH];
+	memset(&token, 0, sizeof(token));
+	std::string sToken = XiaomiGatewayTokenManager::GetInstance().GetToken(m_GatewayIp);
+	memcpy(&token, sToken.c_str(), std::max((int)sToken.size(), EVP_MAX_KEY_LENGTH));
+
+	std::vector<unsigned char> encrypted;
+	encrypted.resize(32);
+
+	auto ctx = std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
+
+	EVP_CipherInit_ex(ctx.get(), EVP_aes_128_cbc(), nullptr, key, iv, 1);
+
+	int actual_size = 0;
+	EVP_CipherUpdate(ctx.get(),
+		&encrypted[0], &actual_size,
+		reinterpret_cast<unsigned char*>(&token[0]), 16);
+
+	//int final_size;
+	//EVP_CipherFinal_ex(ctx.get(), &encrypted[actual_size], &final_size);
+	//actual_size += final_size;
+
+	encrypted.resize(actual_size);
+
+	std::stringstream sstr;
+	for (size_t index = 0; index < encrypted.size(); ++index)
 	{
-		sprintf(&gatewaykey[i * 2], "%02X", ciphertext[i]);
+		sstr << std::hex << std::setw(2) << std::setfill('0') << std::uppercase <<
+			static_cast<unsigned int>(encrypted[index]);
 	}
+
 #ifdef _DEBUG
 	Log(LOG_STATUS, "GetGatewayKey Password - %s", m_GatewayPassword.c_str());
-	Log(LOG_STATUS, "GetGatewayKey key - %s", gatewaykey);
+	Log(LOG_STATUS, "GetGatewayKey key - %s", sstr.str());
 #endif
-	return gatewaykey;
+	return sstr.str();
 #else
 	Log(LOG_ERROR, "GetGatewayKey NO SSL AVAILABLE");
 	return std::string("");
@@ -1340,7 +1360,8 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 				{
 					name = NAME_GATEWAY;
 				}
-				else if (model == MODEL_SELECTOR_WIRED_WALL_SINGLE_1 || model == MODEL_SELECTOR_WIRED_WALL_SINGLE_2 || model == MODEL_SELECTOR_WIRED_WALL_SINGLE_3)
+				else if (model == MODEL_SELECTOR_WIRED_WALL_SINGLE_1 || model == MODEL_SELECTOR_WIRED_WALL_SINGLE_2 || model == MODEL_SELECTOR_WIRED_WALL_SINGLE_3 ||
+					model == MODEL_SELECTOR_WIRED_WALL_SINGLE_4)
 				{
 					type = STYPE_END; // type = STYPE_OnOff; // TODO: fix this hack
 					name = NAME_SELECTOR_WIRED_WALL_SINGLE;

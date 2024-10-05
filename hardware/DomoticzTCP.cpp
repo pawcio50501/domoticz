@@ -1,17 +1,17 @@
 #include "stdafx.h"
 #include "DomoticzTCP.h"
+#include "../main/json_helper.h"
 #include "../main/Logger.h"
 #include "../main/Helper.h"
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
+#include "../main/SQLHelper.h"
 #include "../main/WebServerHelper.h"
-#include "../webserver/proxyclient.h"
 
 #define RETRY_DELAY 30
 
 extern http::server::CWebServerHelper m_webservers;
 
-DomoticzTCP::DomoticzTCP(const int ID, const std::string &IPAddress, const unsigned short usIPPort, const std::string &username, const std::string &password)
+DomoticzTCP::DomoticzTCP(const int ID, const std::string& IPAddress, const unsigned short usIPPort, const std::string& username, const std::string& password)
 	: m_szIPAddress(IPAddress)
 	, m_username(username)
 	, m_password(password)
@@ -19,40 +19,12 @@ DomoticzTCP::DomoticzTCP(const int ID, const std::string &IPAddress, const unsig
 	m_HwdID = ID;
 	m_usIPPort = usIPPort;
 	m_bIsStarted = false;
-#ifndef NOCLOUD
-	b_useProxy = IsValidAPIKey(m_szIPAddress);
-	b_ProxyConnected = false;
-#endif
 }
-
-#ifndef NOCLOUD
-bool DomoticzTCP::IsValidAPIKey(const std::string &IPAddress)
-{
-	if (IPAddress.find('.') != std::string::npos)
-	{
-		// we assume an IPv4 address or host name
-		return false;
-	}
-	if (IPAddress.find(':') != std::string::npos)
-	{
-		// we assume an IPv6 address
-		return false;
-	}
-	// just a simple check
-	return IPAddress.length() == 15;
-}
-#endif
 
 bool DomoticzTCP::StartHardware()
 {
 	RequestStart();
 
-#ifndef NOCLOUD
-	b_useProxy = IsValidAPIKey(m_szIPAddress);
-	if (b_useProxy) {
-		return StartHardwareProxy();
-	}
-#endif
 	//Start worker thread
 	m_thread = std::make_shared<std::thread>([this] { Do_Work(); });
 	SetThreadNameInt(m_thread->native_handle());
@@ -62,12 +34,6 @@ bool DomoticzTCP::StartHardware()
 
 bool DomoticzTCP::StopHardware()
 {
-#ifndef NOCLOUD
-	if (b_useProxy) {
-		return StopHardwareProxy();
-	}
-#endif
-
 	if (m_thread)
 	{
 		RequestStop();
@@ -80,29 +46,104 @@ bool DomoticzTCP::StopHardware()
 
 void DomoticzTCP::OnConnect()
 {
-	Log(LOG_STATUS, "connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	if (!m_username.empty())
 	{
-		std::string sAuth = std_format("AUTH;%s;%s", m_username.c_str(), m_password.c_str());
-		WriteToHardware(sAuth.c_str(), (unsigned char)sAuth.size());
+		std::string sAuth = std_format("SIGNv2;%s;%s", m_username.c_str(), m_password.c_str());
+		WriteToHardware(sAuth);
 	}
 	sOnConnected(this);
 }
 
 void DomoticzTCP::OnDisconnect()
 {
-	Log(LOG_STATUS, "disconnected from: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Disconnected from: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 }
 
-void DomoticzTCP::OnData(const unsigned char *pData, size_t length)
+void DomoticzTCP::OnData(const uint8_t* pData, size_t length)
 {
-	if (length == 6 && strstr(reinterpret_cast<const char *>(pData), "NOAUTH") != nullptr)
+	if (length == 6 && strstr(reinterpret_cast<const char*>(pData), "NOAUTH") != nullptr)
 	{
 		Log(LOG_ERROR, "Authentication failed for user %s on %s:%d", m_username.c_str(), m_szIPAddress.c_str(), m_usIPPort);
 		return;
 	}
-	std::lock_guard<std::mutex> l(readQueueMutex);
-	onInternalMessage((const unsigned char *)pData, length, false); // Do not check validity, this might be non RFX-message
+
+	std::lock_guard<std::mutex> l(m_readMutex);
+
+	std::vector<char> uhash = HexToBytes(m_password);
+
+	std::string szEncoded = std::string((const char*)pData, length);
+	std::string szDecoded;
+
+	AESDecryptData(szEncoded, szDecoded, (const uint8_t*)uhash.data());
+
+	Json::Value root;
+
+	bool ret = ParseJSon(szDecoded, root);
+	if ((!ret) || (!root.isObject()))
+	{
+		Log(LOG_ERROR, "Invalid data received!");
+		return;
+	}
+
+	if (root["OrgHardwareID"].empty() == true)
+	{
+		Log(LOG_ERROR, "Invalid data received, or no data returned!");
+		return;
+	}
+
+	try
+	{
+		int OrgHardwareID = root["OrgHardwareID"].asInt();
+		int OrgDeviceRowID = root["OrgDeviceRowID"].asInt();
+		std::string DeviceID = root["DeviceID"].asString();
+		int Unit = root["Unit"].asInt();
+		std::string Name = root["Name"].asString();
+		int Type = root["Type"].asInt();
+		int SubType = root["SubType"].asInt();
+		int SwitchType = root["SwitchType"].asInt();
+		int SignalLevel = root["SignalLevel"].asInt();
+		int BatteryLevel = root["BatteryLevel"].asInt();
+		int nValue = root["nValue"].asInt();
+		std::string sValue = root["sValue"].asString();
+		std::string LastUpdate = root["LastUpdate"].asString();
+		int LastLevel = root["LastLevel"].asInt();
+		std::string Options = root["Options"].asString();
+		std::string Color = root["Color"].asString();
+
+		uint64_t idx = m_sql.UpdateValue(m_HwdID, OrgHardwareID, DeviceID.c_str(), Unit, Type, SubType, SignalLevel, BatteryLevel, nValue, sValue.c_str(), Name, true, m_Name.c_str());
+		if (idx == (uint64_t)-1)
+		{
+			if (!m_sql.m_bAcceptNewHardware)
+			{
+				Log(LOG_STATUS, "Device creation failed, Domoticz settings prevent accepting new devices. (device ID %s)", DeviceID.c_str());
+				return;
+			}
+
+			Log(LOG_ERROR, "Failed to update device %s", DeviceID.c_str());
+			return;
+		}
+
+		auto result = m_sql.safe_query("SELECT SwitchType, Options, Color FROM DeviceStatus WHERE (ID==%q)", std::to_string(idx).c_str());
+
+		int oldSwitchType = atoi(result[0][0].c_str());
+		std::string oldOptions = result[0][1];
+		std::string oldColor = result[0][2];
+
+		if (SwitchType != oldSwitchType)
+			m_sql.UpdateDeviceValue("SwitchType", SwitchType, std::to_string(idx));
+		if (Options != oldOptions)
+			m_sql.UpdateDeviceValue("Options", Options, std::to_string(idx));
+		if (Color != oldColor)
+			m_sql.UpdateDeviceValue("Color", Color, std::to_string(idx));
+
+		m_sql.UpdateDeviceValue("LastUpdate", LastUpdate, std::to_string(idx));
+
+	}
+	catch (const std::exception& e)
+	{
+		Log(LOG_ERROR, "Exception: Invalid data received! (%s)", e.what());
+	}
 }
 
 void DomoticzTCP::OnError(const boost::system::error_code& error)
@@ -139,144 +180,149 @@ void DomoticzTCP::Do_Work()
 	Log(LOG_STATUS, "Worker stopped...");
 }
 
-bool DomoticzTCP::WriteToHardware(const char *pdata, const unsigned char length)
+bool DomoticzTCP::WriteToHardware(const char* pdata, unsigned char length)
 {
-#ifndef NOCLOUD
-	if (b_useProxy)
-	{
-		if (isConnectedProxy())
-		{
-			writeProxy(pdata, length);
-			return true;
-		}
-	}
-	else if (ASyncTCP::isConnected())
-	{
-		write(std::string((const char*)pdata, length));
-		return true;
-	}
-#else
-	if (ASyncTCP::isConnected())
-	{
-		write(std::string((const char*)pdata, length));
-		return true;
-	}
-#endif
-	return false;
-}
-
-bool DomoticzTCP::isConnected()
-{
-#ifndef NOCLOUD
-	if (b_useProxy)
-		return isConnectedProxy();
-#endif
-	return ASyncTCP::isConnected();
-}
-
-#ifndef NOCLOUD
-bool DomoticzTCP::CompareToken(const std::string &aToken)
-{
-	return (aToken == token);
-}
-
-bool DomoticzTCP::CompareId(const std::string &instanceid)
-{
-	return (m_szIPAddress == instanceid);
-}
-
-bool DomoticzTCP::StartHardwareProxy()
-{
-	if (m_bIsStarted) {
-		return false; // dont start twice
-	}
-	m_bIsStarted = true;
-	return ConnectInternalProxy();
-}
-
-bool DomoticzTCP::ConnectInternalProxy()
-{
-	http::server::CProxyClient *proxy;
-	const int version = 1;
-	// we temporarily use the instance id as an identifier for this connection, meanwhile we get a token from the proxy
-	// this means that we connect connect twice to the same server
-	token = m_szIPAddress;
-	proxy = m_webservers.GetProxyForMaster(this);
-	if (proxy) {
-		proxy->ConnectToDomoticz(m_szIPAddress, m_username, m_password, this, version);
-		sOnConnected(this); // we do need this?
-	}
-	else {
-		Log(LOG_STATUS, "Delaying Domoticz master login");
-	}
+	if (!ASyncTCP::isConnected())
+		return false;
+	write(std::string(pdata, length));
 	return true;
 }
 
-bool DomoticzTCP::StopHardwareProxy()
+bool DomoticzTCP::WriteToHardware(const std::string& szData)
 {
-	DisconnectProxy();
-	m_bIsStarted = false;
-	// Avoid dangling pointer if this hardware is removed.
-	m_webservers.RemoveMaster(this);
+	if (!ASyncTCP::isConnected())
+		return false;
+	write(szData);
 	return true;
 }
 
-void DomoticzTCP::DisconnectProxy()
+bool AssambleDeviceInfo(const std::string& idx, Json::Value& root)
 {
-	http::server::CProxyClient *proxy;
-
-	proxy = m_webservers.GetProxyForMaster(this);
-	if (proxy) {
-		proxy->DisconnectFromDomoticz(token, this);
-	}
-	b_ProxyConnected = false;
+	auto result = m_sql.safe_query("SELECT OrgHardwareID, DeviceID, Unit, Type, SubType FROM DeviceStatus WHERE (ID==%q)", idx.c_str());
+	if (result.empty())
+		return false;
+	int iIndex = 0;
+	root["HardwareID"] = atoi(result[0][iIndex++].c_str());
+	root["DeviceID"] = result[0][iIndex++];
+	root["Unit"] = atoi(result[0][iIndex++].c_str());
+	root["Type"] = atoi(result[0][iIndex++].c_str());
+	root["SubType"] = atoi(result[0][iIndex++].c_str());
+	return true;
 }
 
-bool DomoticzTCP::isConnectedProxy()
+bool DomoticzTCP::SwitchLight(const uint64_t idx, const std::string& switchcmd, const int level, _tColor color, const bool ooc, const std::string& User)
 {
-	return b_ProxyConnected;
+	Json::Value root;
+	if (!AssambleDeviceInfo(std::to_string(idx), root))
+		return false;
+	root["action"] = "SwitchLight";
+	root["switchcmd"] = switchcmd;
+	root["level"] = level;
+	root["color"] = color.toJSONString();
+	root["ooc"] = ooc;
+	root["User"] = User;
+
+	std::string szSend = JSonToRawString(root);
+	std::vector<char> uhash = HexToBytes(m_password);
+	std::string szEncrypted;
+	AESEncryptData(szSend, szEncrypted, (const uint8_t*)uhash.data());
+	return WriteToHardware(szEncrypted);
 }
 
-void DomoticzTCP::writeProxy(const char *data, size_t size)
+bool DomoticzTCP::SetSetPoint(const std::string& idx, const float TempValue)
 {
-	/* send data to slave */
-	if (isConnectedProxy()) {
-		http::server::CProxyClient *proxy = m_webservers.GetProxyForMaster(this);
-		if (proxy) {
-			proxy->WriteMasterData(token, data, size);
-		}
-	}
+	Json::Value root;
+	if (!AssambleDeviceInfo(idx, root))
+		return false;
+	root["action"] = "SetSetpoint";
+	root["TempValue"] = TempValue;
+
+	std::string szSend = JSonToRawString(root);
+	std::vector<char> uhash = HexToBytes(m_password);
+	std::string szEncrypted;
+	AESEncryptData(szSend, szEncrypted, (const uint8_t*)uhash.data());
+	return WriteToHardware(szEncrypted);
 }
 
-void DomoticzTCP::FromProxy(const unsigned char *data, size_t datalen)
+bool DomoticzTCP::SetSetPointEvo(const std::string& idx, float TempValue, const std::string& newMode, const std::string& until)
 {
-	/* data received from slave */
-	std::lock_guard<std::mutex> l(readQueueMutex);
-	onInternalMessage(data, datalen);
+	Json::Value root;
+	if (!AssambleDeviceInfo(idx, root))
+		return false;
+	root["action"] = "SetSetpointEvo";
+	root["TempValue"] = TempValue;
+	root["newMode"] = newMode;
+	root["until"] = until;
+
+	std::string szSend = JSonToRawString(root);
+	std::vector<char> uhash = HexToBytes(m_password);
+	std::string szEncrypted;
+	AESEncryptData(szSend, szEncrypted, (const uint8_t*)uhash.data());
+	return WriteToHardware(szEncrypted);
 }
 
-std::string DomoticzTCP::GetToken()
+bool DomoticzTCP::SetThermostatState(const std::string& idx, int newState)
 {
-	return token;
+	Json::Value root;
+	if (!AssambleDeviceInfo(idx, root))
+		return false;
+	root["action"] = "SetThermostatState";
+	root["newState"] = newState;
+
+	std::string szSend = JSonToRawString(root);
+	std::vector<char> uhash = HexToBytes(m_password);
+	std::string szEncrypted;
+	AESEncryptData(szSend, szEncrypted, (const uint8_t*)uhash.data());
+	return WriteToHardware(szEncrypted);
 }
 
-void DomoticzTCP::Authenticated(const std::string &aToken, bool authenticated)
+bool DomoticzTCP::SwitchEvoModal(const std::string& idx, const std::string& status, const std::string& action, const std::string& ooc, const std::string& until)
 {
-	b_ProxyConnected = authenticated;
-	token = aToken;
-	if (authenticated) {
-		Log(LOG_STATUS, "Domoticz TCP connected via Proxy.");
-	}
+	Json::Value root;
+	if (!AssambleDeviceInfo(idx, root))
+		return false;
+	root["action"] = "SwitchEvoModal";
+	root["status"] = status;
+	root["evo_action"] = action;
+	root["ooc"] = ooc;
+	root["until"] = until;
+
+	std::string szSend = JSonToRawString(root);
+	std::vector<char> uhash = HexToBytes(m_password);
+	std::string szEncrypted;
+	AESEncryptData(szSend, szEncrypted, (const uint8_t*)uhash.data());
+	return WriteToHardware(szEncrypted);
 }
 
-void DomoticzTCP::SetConnected(bool connected)
+#ifdef WITH_OPENZWAVE
+bool DomoticzTCP::SetZWaveThermostatMode(const std::string& idx, int tMode)
 {
-	if (connected) {
-		ConnectInternalProxy();
-	}
-	else {
-		b_ProxyConnected = false;
-	}
+	Json::Value root;
+	if (!AssambleDeviceInfo(idx, root))
+		return false;
+	root["action"] = "SetZWaveThermostatMode";
+	root["tMode"] = tMode;
+
+	std::string szSend = JSonToRawString(root);
+	std::vector<char> uhash = HexToBytes(m_password);
+	std::string szEncrypted;
+	AESEncryptData(szSend, szEncrypted, (const uint8_t*)uhash.data());
+	return WriteToHardware(szEncrypted);
+}
+
+bool DomoticzTCP::SetZWaveThermostatFanMode(const std::string& idx, int fMode)
+{
+	Json::Value root;
+	if (!AssambleDeviceInfo(idx, root))
+		return false;
+	root["action"] = "SetZWaveThermostatFanMode";
+	root["fMode"] = fMode;
+
+	std::string szSend = JSonToRawString(root);
+	std::vector<char> uhash = HexToBytes(m_password);
+	std::string szEncrypted;
+	AESEncryptData(szSend, szEncrypted, (const uint8_t*)uhash.data());
+	return WriteToHardware(szEncrypted);
 }
 #endif
 

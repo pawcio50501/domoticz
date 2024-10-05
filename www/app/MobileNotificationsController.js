@@ -90,7 +90,7 @@ define(['app'], function (app) {
 			var oTable = $('#mobiletable').dataTable();
 			oTable.fnClearTable();
 			$.ajax({
-				url: "json.htm?type=mobiles",
+				url: "json.htm?type=command&param=getmobiles",
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -202,7 +202,7 @@ define(['app'], function (app) {
 					if (typeof data.result != 'undefined') {
 						$.each(data.result, function (i, item) {
 							var option = $('<option />');
-							option.attr('value', item.value).text(item.name);
+							option.attr('value', item.idx).text(item.name);
 							$("#userdevices #userdevicestable #devices").append(option);
 						});
 					}

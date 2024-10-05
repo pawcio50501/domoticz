@@ -12,7 +12,6 @@
 #include "../main/WebServer.h"
 #include "../webserver/Base64.h"
 #include "../webserver/cWebem.h"
-#include "../main/localtime_r.h"
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
@@ -111,14 +110,13 @@ void CInfluxPush::UpdateSettings()
 
 void CInfluxPush::OnDeviceReceived(int m_HwdID, uint64_t DeviceRowIdx, const std::string &DeviceName, const unsigned char *pRXCommand)
 {
-	if (m_bLinkActive)
-	{
-		DoInfluxPush(DeviceRowIdx);
-	}
+	DoInfluxPush(DeviceRowIdx);
 }
 
-void CInfluxPush::DoInfluxPush(const uint64_t DeviceRowIdx)
+void CInfluxPush::DoInfluxPush(const uint64_t DeviceRowIdx, const bool bForced)
 {
+	if (!m_bLinkActive)
+		return;
 	if (!IsLinkInDatabase(DeviceRowIdx))
 		return;
 
@@ -171,7 +169,7 @@ void CInfluxPush::DoInfluxPush(const uint64_t DeviceRowIdx)
 		pItem.stimestamp = atime;
 		pItem.svalue = sendValue;
 
-		if (targetType == 0)
+		if ((targetType == 0) && (!bForced))
 		{
 			// Only send on change
 			auto itt = m_PushedItems.find(szKey);
@@ -214,7 +212,11 @@ void CInfluxPush::Do_Work()
 				sSendData += '\n';
 
 			std::stringstream sziData;
-			sziData << item.skey << " value=" << item.svalue;
+			sziData << item.skey << " value=";
+			if (item.skey.find("Text,") == 0)
+				sziData << "\"" << item.svalue << "\"";
+			else
+				sziData << item.svalue;
 			if (m_bInfluxDebugActive)
 			{
 				_log.Log(LOG_NORM, "InfluxLink: value %s", sziData.str().c_str());
@@ -247,7 +249,10 @@ void CInfluxPush::Do_Work()
 					bool bHaveError = false;
 					std::string szMessage;
 
-					if (szCode == "unauthorized")
+					if (
+						(szCode == "unauthorized")
+						|| (szCode == "forbidden")
+						)
 					{
 						bHaveError = true;
 						szMessage = root["message"].asString();
@@ -418,6 +423,11 @@ namespace http
 			std::string linkactive = request::findValue(&req, "linkactive");
 			if (idx == "0")
 			{
+				//check if we already have this link
+				auto result = m_sql.safe_query("SELECT ID FROM PushLink WHERE (PushType==%d AND DeviceRowID==%d AND DelimitedValue==%d AND TargetType==%d)",
+					CBasePush::PushType::PUSHTYPE_INFLUXDB, deviceidi, atoi(valuetosend.c_str()), targettypei);
+				if (!result.empty())
+					return; //already have this
 				m_sql.safe_query("INSERT INTO PushLink (PushType,DeviceRowID,DelimitedValue,TargetType,TargetVariable,TargetDeviceID,TargetProperty,IncludeUnit,Enabled) VALUES "
 						 "(%d,'%d',%d,%d,'%q',%d,'%q',%d,%d)",
 						 CBasePush::PushType::PUSHTYPE_INFLUXDB, deviceidi, atoi(valuetosend.c_str()), targettypei, "-", 0, "-", 0, atoi(linkactive.c_str()));

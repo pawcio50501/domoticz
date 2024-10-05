@@ -4,14 +4,13 @@
 #include "../main/Logger.h"
 #include "../httpclient/HTTPClient.h"
 #include "hardwaretypes.h"
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 #include "../main/SQLHelper.h"
 #include <sstream>
 
 //http://sterbox.eu/index.php/sterbox
 
-#define STERBOX_POLL_INTERVAL 8
+#define STERBOX_POLL_INTERVAL 5
 
 CSterbox::CSterbox(const int ID, const std::string &IPAddress, const unsigned short usIPPort, const std::string &username, const std::string &password) :
 m_szIPAddress(IPAddress),
@@ -215,8 +214,7 @@ void CSterbox::GetMeterDetails()
 	std::string tmpinp;
 	tmpstr = results[0];
 	size_t ii;
-	size_t jj;
-	int pos1;
+	size_t pos1;
 
 	if (m_Username.empty())
 	{
@@ -240,7 +238,7 @@ void CSterbox::GetMeterDetails()
 				tmpstr = tmpstr.substr(pos1+1);
 				//Log(LOG_ERROR,"OU Status: %s", tmpstr.c_str());
 				StringSplit(tmpstr, ",", outputs);
-				for (jj = 0; jj < inputs.size(); jj++)
+				for (int jj = 0; jj < (int)inputs.size(); jj++)
 				{
 					tmpinp = inputs[jj];
 					//if (( jj < 4 || jj > 7  ))
@@ -276,7 +274,7 @@ void CSterbox::GetMeterDetails()
 				tmpstr = tmpstr.substr(pos1+1);
 				//Log(LOG_ERROR,"OU Status: %s", tmpstr.c_str());
 				StringSplit(tmpstr, ",", outputs);
-				for (jj = 0; jj < inputs.size(); jj++)
+				for (int jj = 0; jj < (int)inputs.size(); jj++)
 				{
 					tmpinp = inputs[jj];
 					//if (( jj > 3 && jj < 8  ))
@@ -322,7 +320,7 @@ void CSterbox::GetMeterDetails()
 				//Log(LOG_ERROR,"Pass : %s", m_Password.c_str());
 
 				}
-				for (jj = 0; jj < 3; jj++)
+				for (int jj = 0; jj < 3; jj++)
 				{
 					tmpstr2 = outputs[jj];
 					tmpinp = analog[jj];

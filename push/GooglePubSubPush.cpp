@@ -3,7 +3,6 @@
 #include "../hardware/hardwaretypes.h"
 #include <json/json.h>
 #include "../main/Helper.h"
-#include "../main/localtime_r.h"
 #include "../main/Logger.h"
 #include "../main/RFXtrx.h"
 #include "../main/SQLHelper.h"
@@ -150,23 +149,17 @@ void CGooglePubSubPush::DoGooglePubSubPush(const uint64_t DeviceRowIdx)
 		sendValue = sValue;
 
 		unsigned long tzoffset = get_tzoffset();
-
-#ifdef WIN32
-		unsigned __int64 localTime = lastUpdate;
-		unsigned __int64 localTimeUtc = lastUpdate - tzoffset;
-#else
-		unsigned long long int localTime = lastUpdate;
-		unsigned long long int localTimeUtc = lastUpdate - tzoffset;
-#endif
+		uint64_t localTime = lastUpdate;
+		uint64_t localTimeUtc = localTime - tzoffset;
 
 		char szLocalTime[21];
-		sprintf(szLocalTime, "%llu", localTime);
+		sprintf(szLocalTime, "%" PRIu64, localTime);
 		char szLocalTimeUtc[21];
-		sprintf(szLocalTimeUtc, "%llu", localTimeUtc);
+		sprintf(szLocalTimeUtc, "%" PRIu64, localTimeUtc);
 		char szLocalTimeMs[21];
-		sprintf(szLocalTimeMs, "%llu", localTime * 1000);
+		sprintf(szLocalTimeMs, "%" PRIu64, localTime * 1000);
 		char szLocalTimeUtcMs[21];
-		sprintf(szLocalTimeUtcMs, "%llu", localTimeUtc * 1000);
+		sprintf(szLocalTimeUtcMs, "%" PRIu64, localTimeUtc * 1000);
 
 		std::string llastUpdate = get_lastUpdate(localTimeUtc);
 
@@ -410,6 +403,11 @@ namespace http {
 			if ((targettypei == 2) && (targetdeviceid.empty()))
 				return;
 			if (idx == "0") {
+				//check if we already have this link
+				auto result = m_sql.safe_query("SELECT ID FROM PushLink WHERE (PushType==%d AND DeviceRowID==%d AND DelimitedValue==%d AND TargetType==%d)",
+					CBasePush::PushType::PUSHTYPE_GOOGLE_PUB_SUB, deviceidi, atoi(valuetosend.c_str()), targettypei);
+				if (!result.empty())
+					return; //already have this
 				m_sql.safe_query(
 					"INSERT INTO PushLink (PushType, DeviceRowID,DelimitedValue,TargetType,TargetVariable,TargetDeviceID,TargetProperty,IncludeUnit,Enabled) VALUES ('%d','%d','%d','%d','%q','%d','%q','%d','%d')",
 					CBasePush::PushType::PUSHTYPE_GOOGLE_PUB_SUB,

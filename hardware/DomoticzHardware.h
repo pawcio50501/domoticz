@@ -4,12 +4,6 @@
 #include <boost/signals2.hpp>
 
 #include "../main/RFXNames.h"
-#include "../main/StoppableTask.h"
-// type support
-#include <cereal/types/string.hpp>
-#include <cereal/types/memory.hpp>
-// the archiver
-#include <cereal/archives/portable_binary.hpp>
 
 enum _eLogLevel : uint32_t;
 enum _eDebugLevel : uint32_t;
@@ -18,6 +12,7 @@ enum _eDebugLevel : uint32_t;
 class CDomoticzHardwareBase : public StoppableTask
 {
 	friend class MainWorker;
+	friend class CounterHelper;
 
 	public:
 	CDomoticzHardwareBase();
@@ -73,7 +68,7 @@ class CDomoticzHardwareBase : public StoppableTask
 		__attribute__((format(printf, 3, 4)))
 #endif
 		;
-	uint32_t m_LogLevelEnabled; //bitwise _eLogLevel 7 = LOG_NORM | LOG_STATUS | LOG_ERROR
+	uint32_t m_LogLevelEnabled = 7; //bitwise _eLogLevel 7 = LOG_NORM | LOG_STATUS | LOG_ERROR
       protected:
 	virtual bool StartHardware() = 0;
 	virtual bool StopHardware() = 0;
@@ -82,7 +77,6 @@ class CDomoticzHardwareBase : public StoppableTask
 	void StartHeartbeatThread();
 	void StartHeartbeatThread(const char *ThreadName);
 	void StopHeartbeatThread();
-	void HandleHBCounter(int iInterval);
 
 	// Sensor Helpers
 	void SendTempSensor(int NodeID, int BatteryLevel, float temperature, const std::string &defaultname, int RssiLevel = 12);
@@ -92,7 +86,7 @@ class CDomoticzHardwareBase : public StoppableTask
 	void SendTempHumBaroSensor(int NodeID, int BatteryLevel, float temperature, int humidity, float pressure, int forecast, const std::string &defaultname, int RssiLevel = 12);
 	void SendTempHumBaroSensorFloat(int NodeID, int BatteryLevel, float temperature, int humidity, float pressure, uint8_t forecast, const std::string &defaultname, int RssiLevel = 12);
 	void SendTempBaroSensor(uint8_t NodeID, int BatteryLevel, float temperature, float pressure, const std::string &defaultname);
-	void SendSetPointSensor(uint8_t NodeID, uint8_t ChildID, unsigned char SensorID, float Temp, const std::string &defaultname);
+	void SendSetPointSensor(const uint8_t ID1, const uint8_t ID2, const uint8_t ID3, const uint8_t ID4, const uint8_t Unit, const float Value, const std::string &defaultname);
 	void SendKwhMeterOldWay(int NodeID, int ChildID, int BatteryLevel, double musage, double mtotal, const std::string &defaultname, int RssiLevel = 12);
 	void SendKwhMeter(int NodeID, int ChildID, int BatteryLevel, double musage, double mtotal, const std::string &defaultname, int RssiLevel = 12);
 	void SendWattMeter(uint8_t NodeID, uint8_t ChildID, int BatteryLevel, float musage, const std::string &defaultname, int RssiLevel = 12);
@@ -129,12 +123,16 @@ class CDomoticzHardwareBase : public StoppableTask
 	std::string GetTextSensorText(int NodeID, int ChildID, bool &bExists);
 	bool CheckPercentageSensorExists(int NodeID, int ChildID);
 	void SendCustomSensor(int NodeID, uint8_t ChildID, int BatteryLevel, float CustomValue, const std::string &defaultname, const std::string &defaultLabel, int RssiLevel = 12);
-	void SendZWaveAlarmSensor(int NodeID, uint8_t InstanceID, int BatteryLevel, uint8_t aType, int aValue, const std::string &alarmLabel, const std::string &defaultname);
 	void SendFanSensor(int Idx, int BatteryLevel, int FanSpeed, const std::string &defaultname);
 	void SendSecurity1Sensor(int NodeID, int DeviceSubType, int BatteryLevel, int Status, const std::string &defaultname, const std::string &userName, int RssiLevel = 12);
 	void SendSelectorSwitch(int NodeID, uint8_t ChildID, const std::string &sValue, const std::string &defaultname, int customImage, bool nDropdown, const std::string &LevelNames,
 				const std::string &LevelActions, bool bHideOff, const std::string &userName);
 	int MigrateSelectorSwitch(int NodeID, uint8_t ChildID, const std::string &LevelNames, const std::string &LevelActions, bool bMigrate);
+	void CreateBlindSwitch(int NodeID, uint8_t ChildID, _eSwitchType switchtype, bool bDeviceUsed, bool bReversePosition, bool bReverseState, uint8_t cmnd, uint8_t level, const std::string &defaultName, const std::string &userName, int32_t batteryLevel, uint8_t rssiLevel = 12);
+	void SendBlindSwitch(int NodeID, uint8_t ChildID, uint8_t cmnd, uint8_t level, const std::string &defaultName, const std::string &userName, int32_t batteryLevel, uint8_t rssiLevel = 12);
+#ifdef WITH_OPENZWAVE
+	void SendZWaveAlarmSensor(int NodeID, uint8_t InstanceID, int BatteryLevel, uint8_t aType, int aValue, const std::string& alarmLabel, const std::string& defaultname);
+#endif
 	int m_iHBCounter = { 0 };
 	bool m_bIsStarted = { false };
 

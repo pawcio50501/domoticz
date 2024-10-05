@@ -3,56 +3,34 @@
 #include "RFXNames.h"
 #include "../hardware/hardwaretypes.h"
 #include <string>
-#include "StoppableTask.h"
 
 struct tScheduleItem
 {
-	bool bEnabled;
-	bool bIsScene;
-	bool bIsThermostat;
+	bool bEnabled = false;
+	bool bIsScene = false;
+	bool bIsThermostat = false;
 	std::string DeviceName;
-	uint64_t RowID;
-	uint64_t TimerID;
-	unsigned char startDay;
-	unsigned char startMonth;
-	unsigned short startYear;
-	unsigned char startHour;
-	unsigned char startMin;
-	_eTimerType	timerType;
-	_eTimerCommand timerCmd;
-	int Level;
+	uint64_t RowID = 0;
+	uint64_t TimerID = 0;
+	unsigned char startDay = 0;
+	unsigned char startMonth = 0;
+	unsigned short startYear = 0;
+	unsigned char startHour = 0;
+	unsigned char startMin = 0;
+	_eTimerType	timerType = TTYPE_ONTIME;
+	_eTimerCommand timerCmd = TCMD_ON;
+	int Level = 0;
 	_tColor Color;
-	float Temperature;
-	bool bUseRandomness;
-	int Days;
-	int MDay;
-	int Month;
-	int Occurence;
+	float Temperature = 0.F;
+	bool bUseRandomness = false;
+	int Days = 0;
+	int MDay = 0;
+	int Month = 0;
+	int Occurence = 0;
 	//internal
-	time_t startTime;
+	time_t startTime = 0;
 
 	tScheduleItem() {
-		bEnabled = false;
-		bIsScene = false;
-		bIsThermostat = false;
-		RowID = 0;
-		TimerID = 0;
-		startDay = 0;
-		startMonth = 0;
-		startYear = 0;
-		startHour = 0;
-		startMin = 0;
-		timerType = TTYPE_ONTIME;
-		timerCmd = TCMD_ON;
-		Level = 0;
-		Temperature = 0.0f;
-		bUseRandomness = false;
-		Days = 0;
-		MDay = 0;
-		Month = 0;
-		Occurence = 0;
-		//internal
-		startTime = 0;
 	}
 
 	bool operator==(const tScheduleItem &comp) const {
@@ -73,7 +51,7 @@ public:
 
   void ReloadSchedules();
 
-  void SetSunRiseSetTimers(const std::string &sSunRise, const std::string &sSunSet, const std::string &sSunAtSouth, const std::string &sCivTwStart, const std::string &sCivTwEnd,
+  void SetSunRiseSetTimes(const std::string &sSunRise, const std::string &sSunSet, const std::string &sSunAtSouth, const std::string &sCivTwStart, const std::string &sCivTwEnd,
 			   const std::string &sNautTwStart, const std::string &sNauTtwEnd, const std::string &sAstTwStart, const std::string &sAstTwEnd);
 
   std::vector<tScheduleItem> GetScheduleItems();
@@ -98,6 +76,7 @@ private:
 	//will set the new/next startTime
 	//returns false if timer is invalid (like no sunset/sunrise known yet)
 	bool AdjustScheduleItem(tScheduleItem *pItem, bool bForceAddDay);
+	void AdjustSunRiseSetSchedules();
 	//will check if anything needs to be scheduled
 	void CheckSchedules();
 	void DeleteExpiredTimers();

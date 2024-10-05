@@ -3,14 +3,11 @@
 #include "../main/Helper.h"
 #include "../main/Logger.h"
 #include "hardwaretypes.h"
-#include "../main/localtime_r.h"
 #include "../main/RFXtrx.h"
 #include "../main/SQLHelper.h"
 #include "../httpclient/HTTPClient.h"
 #include "../main/mainworker.h"
 #include "../main/json_helper.h"
-
-#define round(a) (int)(a + .5)
 
 //#define DEBUG_ICYThermostat
 
@@ -87,21 +84,6 @@ void CICYThermostat::Do_Work()
 bool CICYThermostat::WriteToHardware(const char * /*pdata*/, const unsigned char /*length*/)
 {
 	return false;
-}
-
-void CICYThermostat::SendSetPointSensor(const unsigned char Idx, const float Temp, const std::string &defaultname)
-{
-	_tThermostat thermos;
-	thermos.subtype = sTypeThermSetpoint;
-	thermos.id1 = 0;
-	thermos.id2 = 0;
-	thermos.id3 = 0;
-	thermos.id4 = Idx;
-	thermos.dunit = 0;
-
-	thermos.temp = Temp;
-
-	sDecodeRXMessage(this, (const unsigned char *)&thermos, defaultname.c_str(), 255, nullptr);
 }
 
 bool CICYThermostat::GetSerialAndToken()
@@ -246,7 +228,7 @@ void CICYThermostat::GetMeterDetails()
 		Log(LOG_ERROR, "Invalid data received!");
 		return;
 	}
-	SendSetPointSensor(1, root["temperature1"].asFloat(), "Room Setpoint");
+	SendSetPointSensor(0, 0, 0, 1, 0, root["temperature1"].asFloat(), "Room Setpoint");
 	if (root["temperature2"].empty() == true)
 	{
 		Log(LOG_ERROR, "Invalid data received!");

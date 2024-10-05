@@ -41,8 +41,7 @@ define(['app'], function (app) {
 		}
 
 		function getPlans() {
-			return domoticzApi.sendRequest({
-				type: 'plans',
+			return domoticzApi.sendCommand('getplans',{
 				displayhidden: '1'
 			})
 				.then(domoticzApi.errorHandler)
@@ -52,9 +51,7 @@ define(['app'], function (app) {
 		}
 
 		function getPlanDevices(planId) {
-			return domoticzApi.sendRequest({
-				type: 'command',
-				param: 'getplandevices',
+			return domoticzApi.sendCommand('getplandevices',{
 				idx: planId
 			})
 				.then(domoticzApi.errorHandler)
@@ -63,11 +60,10 @@ define(['app'], function (app) {
 				})
 		}
 
-		function getPlanAvailableDevices() {
-			return domoticzApi.sendRequest({
-				type: 'command',
-				param: 'getunusedplandevices',
-				unique: 'false',
+		function getPlanAvailableDevices(planId) {
+			return domoticzApi.sendCommand('getunusedplandevices', {
+				actplan: planId,
+				unique: 'true'
 			})
 				.then(domoticzApi.errorHandler)
 				.then(function(response) {
@@ -171,7 +167,7 @@ define(['app'], function (app) {
 			}
 
 			function refreshPlanAvailableDevices() {
-				dzRoomPlanApi.getPlanAvailableDevices().then(function(devices) {
+				dzRoomPlanApi.getPlanAvailableDevices(dzRoomPlanApi.selectedPlan).then(function(devices) {
 					var regex = new RegExp('^\\[(.*)\] (.*)$');
 
 					$ctrl.devices = devices.map(function (device) {
@@ -245,7 +241,7 @@ define(['app'], function (app) {
 				table.on('click', '.js-remove', function () {
 					var plan = table.api().row($(this).closest('tr')).data();
 
-					bootbox.confirm('Are you sure you want to delete this Plan?')
+					bootbox.confirm($.t("Are you sure you want to delete this Plan?"))
 						.then(function () {
 							return dzRoomPlanApi.removePlan(plan.idx);
 						})
@@ -288,9 +284,9 @@ define(['app'], function (app) {
 			};
 
 			function orderRenderer(value) {
-				var upIcon = '<button class="btn btn-icon js-move-up"><img src="../../images/up.png" /></button>';
-				var downIcon = '<button class="btn btn-icon js-move-down"><img src="../../images/down.png" /></button>';
-				var emptyIcon = '<img src="../../images/empty16.png" width="16" height="16" />';
+				var upIcon = '<button class="btn btn-icon js-move-up"><img src="./images/up.png" /></button>';
+				var downIcon = '<button class="btn btn-icon js-move-down"><img src="./images/down.png" /></button>';
+				var emptyIcon = '<img src="./images/empty16.png" width="16" height="16" />';
 
 				if (value === '1') {
 					return downIcon + emptyIcon;
@@ -303,8 +299,8 @@ define(['app'], function (app) {
 
 			function actionsRenderer() {
 				var actions = [];
-				actions.push('<button class="btn btn-icon js-rename" title="' + $.t('Rename') + '"><img src="../../images/rename.png" /></button>');
-				actions.push('<button class="btn btn-icon js-remove" title="' + $.t('Remove') + '"><img src="../../images/delete.png" /></button>');
+				actions.push('<button class="btn btn-icon js-rename" title="' + $.t('Rename') + '"><img src="./images/rename.png" /></button>');
+				actions.push('<button class="btn btn-icon js-remove" title="' + $.t('Remove') + '"><img src="./images/delete.png" /></button>');
 				return actions.join('&nbsp;');
 			}
 		}
@@ -350,7 +346,7 @@ define(['app'], function (app) {
 				table.on('click', '.js-remove', function () {
 					var device = table.api().row($(this).closest('tr')).data();
 
-					bootbox.confirm('Are you sure to delete this Active Device?\n\nThis action can not be undone...?')
+					bootbox.confirm($.t("Are you sure to delete this Active Device?\n\nThis action can not be undone...?"))
 						.then(function () {
 							return dzRoomPlanApi.removeDeviceFromPlan(device.idx);
 						})
@@ -375,9 +371,9 @@ define(['app'], function (app) {
 			};
 
 			function orderRenderer(value, renderType, plan, record) {
-				var upIcon = '<button class="btn btn-icon js-move-up"><img src="../../images/up.png" /></button>';
-				var downIcon = '<button class="btn btn-icon js-move-down"><img src="../../images/down.png" /></button>';
-				var emptyIcon = '<img src="../../images/empty16.png" width="16" height="16" />';
+				var upIcon = '<button class="btn btn-icon js-move-up"><img src="./images/up.png" /></button>';
+				var downIcon = '<button class="btn btn-icon js-move-down"><img src="./images/down.png" /></button>';
+				var emptyIcon = '<img src="./images/empty16.png" width="16" height="16" />';
 
 				if (record.row === 0) {
 					return downIcon + emptyIcon;
@@ -390,7 +386,7 @@ define(['app'], function (app) {
 
 			function actionsRenderer() {
 				var actions = [];
-				actions.push('<button class="btn btn-icon js-remove" title="' + $.t('Remove') + '"><img src="../../images/delete.png" /></button>');
+				actions.push('<button class="btn btn-icon js-remove" title="' + $.t('Remove') + '"><img src="./images/delete.png" /></button>');
 				return actions.join('&nbsp;');
 			}
 		}
@@ -503,6 +499,12 @@ define(['app'], function (app) {
 		$ctrl.selectPlan = selectPlan;
 		$ctrl.removeAllDevicesFromPlan = removeAllDevicesFromPlan;
 
+
+		goBack = function () {
+			window.history.back();
+		}
+
+
 		init();
 
 		function init() {
@@ -510,6 +512,17 @@ define(['app'], function (app) {
 			$ctrl.planDevices = [];
 			$ctrl.planAvailableDevices = [];
 			$ctrl.refreshPlans();
+
+			//handles topBar Links
+			$scope.tblinks = [
+				{
+					onclick: "goBack", 
+					text: "Back", 
+					i18n: "Back", 
+					icon: "reply"
+				}
+			];
+
 		}
 
 		function addPlan() {
@@ -522,6 +535,7 @@ define(['app'], function (app) {
 
 		function addDeviceToPlan() {
 			var scope = $scope.$new(true);
+			dzRoomPlanApi.selectedPlan = $ctrl.selectedPlan.idx;
 
 			$uibModal
 				.open(Object.assign({ scope: scope }, selectDeviceModal)).result
@@ -554,7 +568,7 @@ define(['app'], function (app) {
 		}
 
 		function removeAllDevicesFromPlan() {
-			bootbox.confirm('Are you sure to delete ALL Active Devices?\n\nThis action can not be undone!!')
+			bootbox.confirm($.t("Are you sure to delete ALL Active Devices?\n\nThis action can not be undone!!"))
 				.then(function () {
 					return dzRoomPlanApi.removeAllDevicesFromPlan($ctrl.selectedPlan.idx);
 				})

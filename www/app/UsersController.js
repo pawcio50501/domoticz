@@ -9,6 +9,10 @@ define(['app'], function (app) {
 						async: false,
 						dataType: 'json',
 						success: function (data) {
+							if (data.status != "OK") {
+								ShowNotify(data.message, 2500, true);
+								return;
+							}
 							RefreshUserTable();
 						},
 						error: function () {
@@ -82,6 +86,10 @@ define(['app'], function (app) {
 				async: false,
 				dataType: 'json',
 				success: function (data) {
+					if (data.status != "OK") {
+						ShowNotify(data.message, 2500, true);
+						return;
+					}
 					RefreshUserTable();
 				},
 				error: function () {
@@ -93,7 +101,7 @@ define(['app'], function (app) {
 		SaveUserDevices = function () {
 			var selecteddevices = $("#usercontent .multiselect option:selected").map(function () { return this.value }).get().join(";");
 			$.ajax({
-				url: "json.htm?type=setshareduserdevices&idx=" + $.devIdx + "&devices=" + selecteddevices,
+				url: "json.htm?type=command&param=setshareduserdevices&idx=" + $.devIdx + "&devices=" + encodeURIComponent(selecteddevices),
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -102,6 +110,21 @@ define(['app'], function (app) {
 				error: function () {
 					ShowNotify($.t('Problem setting User Devices!'), 2500, true);
 				}
+			});
+		}
+
+		ClearUserDevices = function () {
+            bootbox.confirm($.t("Are you sure to delete ALL Nodes?\n\nThis action can not be undone!"), function (result) {
+				$.ajax({
+					url: "json.htm?type=command&param=clearshareduserdevices&idx=" + $.devIdx,
+					async: false,
+					dataType: 'json',
+					success: function (data) {
+						ShowUsers();
+					},
+					error: function () {
+					}
+				});
 			});
 		}
 
@@ -125,7 +148,7 @@ define(['app'], function (app) {
 			$("#usercontent .multiselect").multiselect(defaultOptions);
 
 			$.ajax({
-				url: "json.htm?type=getshareduserdevices&idx=" + idx,
+				url: "json.htm?type=command&param=getshareduserdevices&idx=" + idx,
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -178,7 +201,7 @@ define(['app'], function (app) {
 			var oTable = $('#usertable').dataTable();
 			oTable.fnClearTable();
 			$.ajax({
-				url: "json.htm?type=users",
+				url: "json.htm?type=command&param=getusers",
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -196,8 +219,11 @@ define(['app'], function (app) {
 							else if (item.Rights == 1) {
 								rightstr = $.t("User");
 							}
-							else {
+							else if (item.Rights == 2) {
 								rightstr = $.t("Admin");
+							}
+							else {
+								rightstr = $.t("-Unknown-");
 							}
 
 							var sharedstr = $.t("No");
@@ -317,7 +343,7 @@ define(['app'], function (app) {
 					if (typeof data.result != 'undefined') {
 						$.each(data.result, function (i, item) {
 							var option = $('<option />');
-							option.attr('value', item.value).text(item.name);
+							option.attr('value', item.idx).text(item.name_type);
 							$("#userdevices #userdevicestable #devices").append(option);
 						});
 					}

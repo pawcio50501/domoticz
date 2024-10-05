@@ -17,15 +17,14 @@
 #include "../../main/Logger.h"
 #include "../../main/SQLHelper.h"
 #include "../../main/mainworker.h"
-#include "../../main/localtime_r.h"
 #include "../../tinyxpath/tinyxml.h"
 
 #include "../../notifications/NotificationHelper.h"
 
 #define ADD_STRING_TO_DICT(pPlugin, pDict, key, value)                                                                                      \
 	{                                                                                                                                       \
-		PyNewRef	pObj = Py_BuildValue("s", value.c_str());                                                                               \
-		if (PyDict_SetItemString(pDict, key, pObj) == -1)                                                                                   \
+		PyNewRef	pStr(value);                                                                               \
+		if (!pStr || PyDict_SetItemString(pDict, key, pStr) == -1)                                                                                   \
 			pPlugin->Log(LOG_ERROR, "Failed to add key '%s', value '%s' to dictionary.", key, value.c_str());     \
 	}
 
@@ -70,12 +69,6 @@ namespace Plugins
 	{
 		if (m_pPlugin)
 		{
-			if (PyErr_Occurred())
-			{
-				m_pPlugin->Log(LOG_NORM, "Python error was set during unlock for '%s'", m_Text.c_str());
-				m_pPlugin->LogPythonException();
-				PyErr_Clear();
-			}
 			m_pPlugin->ReleaseThread();
 		}
 	}
@@ -85,18 +78,41 @@ namespace Plugins
 		CPlugin* pPlugin = CPlugin::FindPlugin();
 		if (!pPlugin)
 		{
-			_log.Log(LOG_ERROR, "%s, illegal operation, Plugin has not started yet.", __func__);
+			_log.Log(LOG_ERROR, "CPlugin:%s, illegal operation, Plugin has not started yet.", __func__);
 		}
 		else
 		{
 			if (pPlugin->m_bDebug & PDM_PYTHON)
 			{
+				PyBorrowedRef	pArg(args);
+				if (!pArg.IsTuple())
+				{
+					pPlugin->Log(LOG_ERROR, "%s: Invalid parameter, expected 'tuple' got '%s'.", __func__, pArg.Type().c_str());
+					Py_RETURN_NONE;
+				}
+
+				Py_ssize_t	tupleSize = PyTuple_Size(pArg);
+				if (tupleSize != 1)
+				{
+					pPlugin->Log(LOG_ERROR, "%s: Invalid parameter, expected single parameter, got %d parameters.", __func__, (int)tupleSize);
+					Py_RETURN_NONE;
+				}
+
 				char *msg;
 				if (!PyArg_ParseTuple(args, "s", &msg))
 				{
-					// TODO: Dump data to aid debugging
-					pPlugin->Log(LOG_ERROR, "%s failed to parse parameters: string expected.", __func__);
-					pPlugin->LogPythonException(std::string(__func__));
+					PyErr_Clear();
+					PyObject* pObject;
+					if (PyArg_ParseTuple(args, "O", &pObject))
+					{
+						std::string	sMessage = PyBorrowedRef(pObject);
+						pPlugin->Log(LOG_NORM, sMessage);
+					}
+					else
+					{
+						pPlugin->Log(LOG_ERROR, "%s: Failed to parse parameters: string expected.", __func__);
+						pPlugin->LogPythonException(std::string(__func__));
+					}
 				}
 				else
 				{
@@ -117,11 +133,35 @@ namespace Plugins
 		}
 		else
 		{
+			PyBorrowedRef	pArg(args);
+			if (!pArg.IsTuple())
+			{
+				pPlugin->Log(LOG_ERROR, "%s: Invalid parameter, expected 'tuple' got '%s'.", __func__, pArg.Type().c_str());
+				Py_RETURN_NONE;
+			}
+
+			Py_ssize_t	tupleSize = PyTuple_Size(pArg);
+			if (tupleSize != 1)
+			{
+				pPlugin->Log(LOG_ERROR, "%s: Invalid parameter, expected single parameter, got %d parameters.", __func__, (int)tupleSize);
+				Py_RETURN_NONE;
+			}
+
 			char *msg;
 			if (!PyArg_ParseTuple(args, "s", &msg))
 			{
-				pPlugin->Log(LOG_ERROR, "%s failed to parse parameters: string expected.", __func__);
-				pPlugin->LogPythonException(std::string(__func__));
+				PyErr_Clear();
+				PyObject*	pObject;
+				if (PyArg_ParseTuple(args, "O", &pObject))
+				{
+					std::string	sMessage = PyBorrowedRef(pObject);
+					pPlugin->Log(LOG_NORM, sMessage);
+				}
+				else
+				{
+					pPlugin->Log(LOG_ERROR, "%s: Failed to parse parameters: string expected.", __func__);
+					pPlugin->LogPythonException(std::string(__func__));
+				}
 			}
 			else
 			{
@@ -141,11 +181,35 @@ namespace Plugins
 		}
 		else
 		{
+			PyBorrowedRef	pArg(args);
+			if (!pArg.IsTuple())
+			{
+				pPlugin->Log(LOG_ERROR, "%s: Invalid parameter, expected 'tuple' got '%s'.", __func__, pArg.Type().c_str());
+				Py_RETURN_NONE;
+			}
+
+			Py_ssize_t	tupleSize = PyTuple_Size(pArg);
+			if (tupleSize != 1)
+			{
+				pPlugin->Log(LOG_ERROR, "%s: Invalid parameter, expected single parameter, got %d parameters.", __func__, (int)tupleSize);
+				Py_RETURN_NONE;
+			}
+
 			char *msg;
 			if (!PyArg_ParseTuple(args, "s", &msg))
 			{
-				pPlugin->Log(LOG_ERROR, "%s failed to parse parameters: string expected.", __func__);
-				pPlugin->LogPythonException(std::string(__func__));
+				PyErr_Clear();
+				PyObject* pObject;
+				if (PyArg_ParseTuple(args, "O", &pObject))
+				{
+					std::string	sMessage = PyBorrowedRef(pObject);
+					pPlugin->Log(LOG_STATUS, sMessage);
+				}
+				else
+				{
+					pPlugin->Log(LOG_ERROR, "%s: Failed to parse parameters: string expected.", __func__);
+					pPlugin->LogPythonException(std::string(__func__));
+				}
 			}
 			else
 			{
@@ -165,12 +229,35 @@ namespace Plugins
 		}
 		else
 		{
+			PyBorrowedRef	pArg(args);
+			if (!pArg.IsTuple())
+			{
+				pPlugin->Log(LOG_ERROR, "%s: Invalid parameter, expected 'tuple' got '%s'.", __func__, pArg.Type().c_str());
+				Py_RETURN_NONE;
+			}
+
+			Py_ssize_t	tupleSize = PyTuple_Size(pArg);
+			if (tupleSize != 1)
+			{
+				pPlugin->Log(LOG_ERROR, "%s: Invalid parameter, expected single parameter, got %d parameters.", __func__, (int)tupleSize);
+				Py_RETURN_NONE;
+			}
+
 			char *msg;
 			if ((PyTuple_Size(args) != 1) || !PyArg_ParseTuple(args, "s", &msg))
 			{
-				// TODO: Dump data to aid debugging
-				pPlugin->Log(LOG_ERROR, "%s failed to parse parameters: string expected.", __func__);
-				pPlugin->LogPythonException(std::string(__func__));
+				PyErr_Clear();
+				PyObject* pObject;
+				if (PyArg_ParseTuple(args, "O", &pObject))
+				{
+					std::string	sMessage = PyBorrowedRef(pObject);
+					pPlugin->Log(LOG_ERROR, sMessage);
+				}
+				else
+				{
+					pPlugin->Log(LOG_ERROR, "%s: Failed to parse parameters: string expected.", __func__);
+					pPlugin->LogPythonException(std::string(__func__));
+				}
 			}
 			else
 			{
@@ -569,6 +656,7 @@ namespace Plugins
 		}
 		pModState->pDeviceClass = CDeviceType;
 		pModState->pUnitClass = nullptr;
+		Py_INCREF(CDeviceType);	// PyModule_AddObject steals a reference
 		PyModule_AddObject(pModule, "Device", (PyObject*)CDeviceType);
 
 		if (!CConnectionType)
@@ -576,6 +664,7 @@ namespace Plugins
 			CConnectionType = (PyTypeObject*)PyType_FromSpec(&ConnectionSpec);
 			PyType_Ready(CConnectionType);
 		}
+		Py_INCREF(CConnectionType);	// PyModule_AddObject steals a reference
 		PyModule_AddObject(pModule, "Connection", (PyObject*)CConnectionType);
 
 		if (!CImageType)
@@ -583,6 +672,8 @@ namespace Plugins
 			CImageType = (PyTypeObject*)PyType_FromSpec(&ImageSpec);
 			PyType_Ready(CImageType);
 		}
+		PyObject* refTracker = (PyObject*)CImageType;
+		Py_INCREF(CImageType);	// PyModule_AddObject steals a reference
 		PyModule_AddObject(pModule, "Image", (PyObject*)CImageType);
 
 		return pModule;
@@ -611,6 +702,7 @@ namespace Plugins
 							  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HEAPTYPE, DeviceExSlots };
 
 		pModState->pDeviceClass = (PyTypeObject*)PyType_FromSpec(&DeviceExSpec);	// Calls PyType_Ready internally from, 3.9 onwards
+		Py_INCREF(pModState->pDeviceClass);	// PyModule_AddObject steals a reference
 		PyModule_AddObject(pModule, "Device", (PyObject *)pModState->pDeviceClass);
 		PyType_Ready(pModState->pDeviceClass);
 
@@ -628,6 +720,7 @@ namespace Plugins
 								Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HEAPTYPE, UnitExSlots };
 
 		pModState->pUnitClass = (PyTypeObject*)PyType_FromSpec(&UnitExSpec);
+		Py_INCREF(pModState->pUnitClass);	// PyModule_AddObject steals a reference
 		PyModule_AddObject(pModule, "Unit", (PyObject*)pModState->pUnitClass);
 		PyType_Ready(pModState->pUnitClass);
 
@@ -636,6 +729,7 @@ namespace Plugins
 			CConnectionType = (PyTypeObject*)PyType_FromSpec(&ConnectionSpec);
 			PyType_Ready(CConnectionType);
 		}
+		Py_INCREF(CConnectionType);	// PyModule_AddObject steals a reference
 		PyModule_AddObject(pModule, "Connection", (PyObject*)CConnectionType);
 
 		if (!CImageType)
@@ -643,6 +737,7 @@ namespace Plugins
 			CImageType = (PyTypeObject*)PyType_FromSpec(&ImageSpec);
 			PyType_Ready(CImageType);
 		}
+		Py_INCREF(CImageType);	// PyModule_AddObject steals a reference
 		PyModule_AddObject(pModule, "Image", (PyObject*)CImageType);
 
 		return pModule;
@@ -993,7 +1088,8 @@ namespace Plugins
 					}
 				}
 			}
-
+			if (m_bIsStopped)			
+				continue; 
 			if (Now >= (m_LastHeartbeat + m_iPollInterval))
 			{
 				//	Add heartbeat to message queue
@@ -1068,7 +1164,7 @@ namespace Plugins
 				//	Python loads the 'site' module automatically and adds extra search directories for module loading
 				//	This code makes the plugin framework function the same way
 				//
-				void *pSiteModule = PyImport_ImportModule("site");
+				PyNewRef	pSiteModule = PyImport_ImportModule("site");
 				if (!pSiteModule)
 				{
 					Log(LOG_ERROR, "(%s) failed to load 'site' module, continuing.", m_PluginKey.c_str());
@@ -1106,22 +1202,48 @@ namespace Plugins
 			// Update the path itself
 			PySys_SetPath((wchar_t *)sPath.c_str());
 
+			// Get reference to global 'Py_None' instance for comparisons
+			if (!Py_None)
+			{
+				PyNewRef		global_dict = PyDict_New();
+				PyNewRef		local_dict = PyDict_New();
+				PyNewRef		pCode = Py_CompileString("# Eval will return 'None'\n", "<domoticz>", Py_file_input);
+				if (pCode)
+				{
+					PyNewRef	pEval = PyEval_EvalCode(pCode, global_dict, local_dict);
+					Py_None = pEval;
+					Py_INCREF(Py_None);
+				}
+				else
+				{
+					Log(LOG_ERROR, "Failed to compile script to set global Py_None");
+				}
+			}
+
 			try
 			{
 				//
 				//	Load the 'faulthandler' module to get a python stackdump during a segfault
 				//
-				void *pFaultModule = PyImport_ImportModule("faulthandler");
+				PyNewRef	pFaultModule = PyImport_ImportModule("faulthandler");
 				if (!pFaultModule)
 				{
 					Log(LOG_ERROR, "(%s) failed to load 'faulthandler' module, continuing.", m_PluginKey.c_str());
 				}
 				else
 				{
-					PyNewRef	pFunc = PyObject_GetAttrString((PyObject *)pFaultModule, "enable");
+					PyNewRef	pFunc = PyObject_GetAttrString((PyObject*)pFaultModule, "is_enabled");
 					if (pFunc && PyCallable_Check(pFunc))
 					{
-						PyNewRef pRetObj = PyObject_CallObject(pFunc, nullptr);
+						PyNewRef	pRetObj = PyObject_CallObject(pFunc, nullptr);
+						if (!pRetObj.IsTrue())
+						{
+							PyNewRef	pFunc = PyObject_GetAttrString((PyObject*)pFaultModule, "enable");
+							if (pFunc && PyCallable_Check(pFunc))
+							{
+								PyNewRef pRetObj = PyObject_CallObject(pFunc, nullptr);
+							}
+						}
 					}
 				}
 			}
@@ -1154,25 +1276,6 @@ namespace Plugins
 				goto Error;
 			}
 			pModState->pPlugin = this;
-
-			// Get reference to global 'Py_None' instance for comparisons
-			if (!Py_None)
-			{
-				PyBorrowedRef	global_dict = PyModule_GetDict(m_PyModule);
-				PyNewRef		local_dict = PyDict_New();
-				PyNewRef		pCode = Py_CompileString("# Eval will return 'None'\n", "<domoticz>", Py_file_input);
-				if (pCode)
-				{
-					PyNewRef	pEval = PyEval_EvalCode(pCode, global_dict, local_dict);
-					Py_None = pEval;
-					Py_INCREF(Py_None);
-				}
-				else
-				{
-					Log(LOG_ERROR, "Failed to compile script to set global Py_None");
-				}
-			}
-
 
 			//	Add start command to message queue
 			MessagePlugin(new onStartCallback());
@@ -1240,8 +1343,8 @@ namespace Plugins
 				goto Error;
 			}
 
-			PyNewRef pObj = Py_BuildValue("i", m_HwdID);
-			if (PyDict_SetItemString(pParamsDict, "HardwareID", pObj) == -1)
+			PyNewRef pHwdID(m_HwdID);
+			if (PyDict_SetItemString(pParamsDict, "HardwareID", pHwdID) == -1)
 			{
 				Log(LOG_ERROR, "(%s) failed to add key 'HardwareID', value '%d' to dictionary.", m_PluginKey.c_str(), m_HwdID);
 				goto Error;
@@ -1572,6 +1675,11 @@ namespace Plugins
 		CConnection *pConnection = pMessage->m_pConnection;
 
 		pConnection->pProtocol->ProcessInbound(pMessage);
+
+		if (PyErr_Occurred())
+		{
+			LogPythonException("ProcessInbound");
+		}
 	}
 
 	void CPlugin::ConnectionWrite(CDirectiveBase *pMess)
@@ -1934,6 +2042,12 @@ namespace Plugins
 	{
 		if (m_PyInterpreter)
 		{
+			if (PyErr_Occurred())
+			{
+				Log(LOG_NORM, "Python error was set during unlock for '%s'",  m_PluginKey.c_str());
+				LogPythonException();
+				PyErr_Clear();
+			}	
 			if (!PyEval_SaveThread())
 			{
 				Log(LOG_ERROR, "Attempt to release GIL returned NULL value");
@@ -2036,6 +2150,37 @@ namespace Plugins
 		{
 			Log(LOG_ERROR, "%s: Unknown execption thrown", __func__);
 		}
+	}
+
+	long CPlugin::PythonThreadCount()
+	{
+		long	lRetVal = 0;
+
+		if (m_PyModule)
+		{
+			PyBorrowedRef	pModuleDict = PyModule_GetDict(m_PyModule);
+			if (pModuleDict)
+			{
+				PyBorrowedRef	pThreadModule = PyDict_GetItemString(pModuleDict, "threading");
+				if (pThreadModule)
+				{
+					PyNewRef pFunc = PyObject_GetAttrString(pThreadModule, "active_count");
+					if (pFunc && PyCallable_Check(pFunc))
+					{
+						PyNewRef	pReturnValue = PyObject_CallObject(pFunc, nullptr);
+						if (pReturnValue.IsLong())
+						{
+							lRetVal = PyLong_AsLong(pReturnValue) - 1;
+							if (lRetVal)
+							{
+								Log(LOG_NORM, "Warning: Plugin has %d Python threads running.", (int)lRetVal);
+							}
+						}
+					}
+				}
+			}
+		}
+		return lRetVal;
 	}
 
 	void CPlugin::Stop()
@@ -2144,8 +2289,26 @@ namespace Plugins
 				PyDict_Clear((PyObject*)m_DeviceDict);
 			}
 
+			// if threading module is running then check no threads are still running
+			for (int i=10; PythonThreadCount() && i; i--)
+			{
+				sleep_milliseconds(1000);
+			}
+			if (PythonThreadCount())
+				Log(LOG_NORM, "Abandoning wait for Plugin thread shutdown, hang or crash may result.");
+			if (m_PyInterpreter)
+			{
+				if (PyErr_Occurred()) // get the errors occured during onStopCallback message handling
+				{
+					Log(LOG_NORM, "Python error was set during onStopCallback for '%s'",  m_PluginKey.c_str());
+					LogPythonException();
+					PyErr_Clear();
+ 				}
+			}
+
 			// Stop Python
 			Py_XDECREF(m_PyModule);
+			m_PyModule = nullptr;
 			Py_XDECREF(m_DeviceDict);
 			if (m_ImageDict)
 				Py_XDECREF(m_ImageDict);
@@ -2161,11 +2324,11 @@ namespace Plugins
 		}
 		catch (std::exception *e)
 		{
-			Log(LOG_ERROR, "%s: Execption thrown releasing Interpreter: %s", __func__, e->what());
+			Log(LOG_ERROR, "%s: Exception thrown releasing Interpreter: %s", __func__, e->what());
 		}
 		catch (...)
 		{
-			Log(LOG_ERROR, "%s: Unknown execption thrown releasing Interpreter", __func__);
+			Log(LOG_ERROR, "%s: Unknown exception thrown releasing Interpreter", __func__);
 		}
 
 		m_PyModule = nullptr;
@@ -2189,37 +2352,41 @@ namespace Plugins
 
 	bool CPlugin::LoadSettings()
 	{
-		PyBorrowedRef	pModuleDict = PyModule_GetDict(PythonModule()); // returns a borrowed referece to the __dict__ object for the module
-		if (m_SettingsDict)
-			Py_XDECREF(m_SettingsDict);
-		m_SettingsDict = PyDict_New();
-		if (PyDict_SetItemString(pModuleDict, "Settings", (PyObject *)m_SettingsDict) == -1)
+		// Only load/reload settings if the plugin initial import was successful
+		if (PythonModule())
 		{
-			Log(LOG_ERROR, "(%s) failed to add Settings dictionary.", m_PluginKey.c_str());
-			return false;
-		}
-
-		// load associated settings to make them available to python
-		std::vector<std::vector<std::string>> result;
-		result = m_sql.safe_query("SELECT Key, nValue, sValue FROM Preferences");
-		if (!result.empty())
-		{
-			// Add settings strings into the settings dictionary with Unit as the key
-			for (const auto &sd : result)
+			PyBorrowedRef	pModuleDict = PyModule_GetDict(PythonModule()); // returns a borrowed referece to the __dict__ object for the __main__ module
+			if (m_SettingsDict)
+				Py_XDECREF(m_SettingsDict);
+			m_SettingsDict = PyDict_New();
+			if (PyDict_SetItemString(pModuleDict, "Settings", (PyObject*)m_SettingsDict) == -1)
 			{
-				PyNewRef	pValue;
-				if (!sd[2].empty())
+				Log(LOG_ERROR, "(%s) failed to add Settings dictionary.", m_PluginKey.c_str());
+				return false;
+			}
+
+			// load associated settings to make them available to python
+			std::vector<std::vector<std::string>> result;
+			result = m_sql.safe_query("SELECT Key, nValue, sValue FROM Preferences");
+			if (!result.empty())
+			{
+				// Add settings strings into the settings dictionary with Unit as the key
+				for (const auto& sd : result)
 				{
-					pValue = PyUnicode_FromString(sd[2].c_str());
-				}
-				else
-				{
-					pValue = PyUnicode_FromString(sd[1].c_str());
-				}
-				if (PyDict_SetItemString((PyObject *)m_SettingsDict, sd[0].c_str(), pValue))
-				{
-					Log(LOG_ERROR, "(%s) failed to add setting '%s' to settings dictionary.", m_PluginKey.c_str(), sd[0].c_str());
-					return false;
+					PyNewRef	pValue;
+					if (!sd[2].empty())
+					{
+						pValue = PyUnicode_FromString(sd[2].c_str());
+					}
+					else
+					{
+						pValue = PyUnicode_FromString(sd[1].c_str());
+					}
+					if (PyDict_SetItemString((PyObject*)m_SettingsDict, sd[0].c_str(), pValue))
+					{
+						Log(LOG_ERROR, "(%s) failed to add setting '%s' to settings dictionary.", m_PluginKey.c_str(), sd[0].c_str());
+						return false;
+					}
 				}
 			}
 		}
@@ -2287,8 +2454,6 @@ namespace Plugins
 	{
 		if (!m_DeviceDict)
 			return true;
-
-		return false;
 
 		PyObject *key, *value;
 		Py_ssize_t pos = 0;
@@ -2502,11 +2667,8 @@ namespace Plugins
 					szTypeImage = "Contact48";
 					break;
 				case STYPE_Blinds:
-				case STYPE_BlindsInverted:
 				case STYPE_BlindsPercentage:
-				case STYPE_BlindsPercentageInverted:
 				case STYPE_BlindsPercentageWithStop:
-				case STYPE_BlindsPercentageInvertedWithStop:
 				case STYPE_VenetianBlindsUS:
 				case STYPE_VenetianBlindsEU:
 					szTypeImage = "blinds48";

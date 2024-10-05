@@ -27,8 +27,11 @@ return {
 	process = function (device, data, domoticz, utils, adapterManager)
 
 		if device.deviceSubType == "Hot Water" then
-
-			if device.rawData[2] == "On" then device.state = "On" else device.state = "Off" end
+			if device.rawData[2] == "On" then
+				device.state = "On"
+			else
+				device.state = "Off"
+			end
 			device.mode = tostring(device.rawData[3] or "n/a")
 			device.untilDate = tostring(device.rawData[4] or "n/a")
 
@@ -37,24 +40,26 @@ return {
 					mode = mode .. "&until=" .. untilDate
 				 end
 				local url = domoticz.settings['Domoticz url'] ..
-					"/json.htm?type=setused&idx=" .. device.id ..
+					"/json.htm?type=command&param=setused&idx=" .. device.id ..
 					"&setpoint=&state=" .. state ..
 					"&mode=" .. mode ..
 					"&used=true"
 				return domoticz.openURL(url)
 			end
-
 		elseif device.deviceSubType == "Relay" then
-			device.state = device._state == 'Off' and 'Off' or 'On'
-			if device.state == 'Off' then
-				device.level = 0
-			else
-				device.level = device._state:match('%d+') or 100
-			end
-			device.active = device.state ~= 'Off'
+			device.state = device._state == 0 and 'Off' or 'On'
+			device.level = device._state / 2
+			device.active = device.state ~= 'Off'		
 		else
-			if device.hardwareTypeValue == 75 and device.deviceType == 'Heating' and device.deviceSubType == 'Evohome' then
-				device.mode = device._state
+			if device.deviceType == 'Heating' and device.deviceSubType == 'Evohome' then
+				if data.data._state == nil then
+					device.state = device.rawData[2]
+					device.mode = tostring(device.rawData[3])
+				else
+					device._state = data.data._state
+					device.mode = data.data._state
+				
+				end
 			else
 				device.state = device.rawData[2]
 				device.mode = tostring(device.rawData[3])

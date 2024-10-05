@@ -42,7 +42,7 @@ define(function () {
             this.icon = new DeviceIcon(this);
 
             this.isDimmer = function () {
-                return ['Dimmer', 'Blinds Percentage', 'Blinds Percentage Inverted', 'Blinds + Stop', 'Blinds Inverted + Stop', 'TPI'].includes(this.SwitchType);
+                return ['Dimmer', 'Blinds Percentage', 'Blinds + Stop', 'TPI'].includes(this.SwitchType);
             };
 
             this.isSelector = function () {
@@ -104,7 +104,7 @@ define(function () {
                 var options = [];
                 var step = step || 5;
 
-                for (var i = step; i <= 100; i += step) {
+                for (var i = 0; i <= 100; i += step) {
                     options.push({
                         label: i + '%',
                         value: i
@@ -165,6 +165,8 @@ define(function () {
                     return '%';
                 } else if (this.Type === 'Weight') {
                     return this.SwitchTypeVal === 0 ? 'kg' : 'lbs';
+                } else if (this.Type === 'Rain') {
+                    return 'mm';
                 } else {
                     return '?';
                 }
@@ -179,7 +181,7 @@ define(function () {
                     'Voltage', 'Current', 'Pressure', 'Custom Sensor', 'kWh',
                     'Sound Level', 'Solar Radiation', 'Visibility', 'Distance',
                     'Soil Moisture', 'Leaf Wetness', 'Waterflow', 'Lux', 'Percentage',
-                    'Text', 'Alert', 'Temperature'
+                    'Text', 'Alert', 'Temperature', 'SetPoint'
                 ];
 
                 if (deviceTypes.some(function(item) {

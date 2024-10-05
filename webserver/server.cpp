@@ -7,7 +7,6 @@
 #include <fstream>
 #include "../main/Logger.h"
 #include "../main/Helper.h"
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 
 namespace http {
@@ -32,7 +31,6 @@ namespace server {
 
 	void server_base::init(const init_connectionhandler_func &init_connection_handler, accept_handler_func accept_handler)
 	{
-
 		init_connection_handler();
 
 		if (!new_connection_)
@@ -185,9 +183,6 @@ ssl_server::ssl_server(const server_settings &settings, request_handler &user_re
 }
 
 void ssl_server::init_connection() {
-
-	new_connection_.reset(new connection(io_service_, connection_manager_, request_handler_, timeout_, context_));
-
 	// the following line gets the passphrase for protected private server keys
 	context_.set_password_callback([this](auto &&...) { return get_passphrase(); });
 
@@ -263,21 +258,20 @@ void ssl_server::init_connection() {
 		std::ifstream ifs(settings_.tmp_dh_file_path.c_str());
 		std::string content((std::istreambuf_iterator<char>(ifs)),
 				(std::istreambuf_iterator<char>()));
-		if (content.find("BEGIN DH PARAMETERS") != std::string::npos) {
+		if (content.find("DH PARAMETERS") != std::string::npos) {
 			context_.use_tmp_dh_file(settings_.tmp_dh_file_path);
-			_log.Debug(DEBUG_WEBSERVER, "[web:%s] 'BEGIN DH PARAMETERS' found in file %s", settings_.listening_port.c_str(), settings_.tmp_dh_file_path.c_str());
+			_log.Debug(DEBUG_WEBSERVER, "[web:%s] 'DH PARAMETERS' found in file %s", settings_.listening_port.c_str(), settings_.tmp_dh_file_path.c_str());
 		} else {
 			_log.Log(LOG_ERROR, "[web:%s] missing SSL DH parameters from file %s", settings_.listening_port.c_str(), settings_.tmp_dh_file_path.c_str());
 		}
 	} else {
 		_log.Log(LOG_ERROR, "[web:%s] missing SSL DH parameters file %s!", settings_.listening_port.c_str(), settings_.tmp_dh_file_path.c_str());
 	}
+	new_connection_.reset(new connection(io_service_, connection_manager_, request_handler_, timeout_, context_));
 }
 
 void ssl_server::reinit_connection()
 {
-	new_connection_.reset(new connection(io_service_, connection_manager_, request_handler_, timeout_, context_));
-
 	struct stat st;
 
 	if ((!settings_.certificate_chain_file_path.empty() &&
@@ -304,13 +298,14 @@ void ssl_server::reinit_connection()
 		std::ifstream ifs(settings_.tmp_dh_file_path.c_str());
 		std::string content((std::istreambuf_iterator<char>(ifs)),
 				(std::istreambuf_iterator<char>()));
-		if (content.find("BEGIN DH PARAMETERS") != std::string::npos) {
+		if (content.find("DH PARAMETERS") != std::string::npos) {
 			_log.Log(LOG_STATUS, "[web:%s] Reloading SSL DH parameters", settings_.listening_port.c_str());
 			context_.use_tmp_dh_file(settings_.tmp_dh_file_path);
 		} else {
 			_log.Log(LOG_ERROR, "[web:%s] missing SSL DH parameters from file %s", settings_.listening_port.c_str(), settings_.tmp_dh_file_path.c_str());
 		}
 	}
+	new_connection_.reset(new connection(io_service_, connection_manager_, request_handler_, timeout_, context_));
 }
 
 /**

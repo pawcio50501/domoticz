@@ -8,7 +8,6 @@
 #include "../notifications/NotificationHelper.h"
 #include "../main/WebServer.h"
 #include "../main/mainworker.h"
-#include "../main/localtime_r.h"
 #include "../main/EventSystem.h"
 #include "../webserver/cWebem.h"
 
@@ -589,7 +588,7 @@ void CHEOS::OnDisconnect()
 
 void CHEOS::OnData(const unsigned char *pData, size_t length)
 {
-	ParseData(pData, length);
+	ParseData(pData, (int)length);
 }
 
 void CHEOS::OnError(const boost::system::error_code& error)
@@ -697,7 +696,7 @@ void CHEOS::AddNode(const std::string &Name, const std::string &PlayerID)
 		return;
 	}
 
-	m_sql.InsertDevice(m_HwdID, PlayerID.c_str(), 1, pTypeLighting2, sTypeAC, STYPE_Media, 0, "Unavailable", Name, 12, 255, 1);
+	m_sql.InsertDevice(m_HwdID, 0, PlayerID.c_str(), 1, pTypeLighting2, sTypeAC, STYPE_Media, 0, "Unavailable", Name, 12, 255, 1);
 
 	ReloadNodes();
 }

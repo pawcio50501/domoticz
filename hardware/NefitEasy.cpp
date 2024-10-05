@@ -4,7 +4,6 @@
 #include "../main/Logger.h"
 #include "../httpclient/UrlEncode.h"
 #include "hardwaretypes.h"
-#include "../main/localtime_r.h"
 #include "../httpclient/HTTPClient.h"
 #include "../main/json_helper.h"
 #include "../main/RFXtrx.h"
@@ -404,7 +403,7 @@ bool CNefitEasy::GetStatusDetails()
 		if (tmpstr != "null")
 		{
 			float temp = static_cast<float>(atof(tmpstr.c_str()));
-			SendSetPointSensor(1, 1, 1, temp, "Setpoint");
+			SendSetPointSensor(0, 1, 1, 1, 1, temp, "Setpoint");
 		}
 	}
 	if (!root2["IHT"].empty())

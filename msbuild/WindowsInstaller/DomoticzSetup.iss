@@ -50,8 +50,8 @@ Name: RunAsService; Description: "Run as service"; Flags: exclusive unchecked
 Source: "..\Release\domoticz.exe"; DestDir: "{app}"; Flags: ignoreversion
 ;Source: "..\Release\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\www\*"; DestDir: "{app}\www"; Flags: recursesubdirs createallsubdirs ignoreversion
-Source: "..\..\Config\*"; DestDir: "{app}\Config"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\..\scripts\*"; DestDir: "{app}\scripts"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\..\Config\*"; DestDir: "{app}\Config"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\..\dzVents\*"; DestDir: "{app}\dzVents"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\Windows Libraries\openzwave\OpenZWave.dll"; DestDir: {app}; Flags: ignoreversion;
 Source: "..\..\History.txt"; DestDir: "{app}"; Flags: ignoreversion

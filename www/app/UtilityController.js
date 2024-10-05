@@ -1,5 +1,5 @@
 define(['app', 'livesocket'], function (app) {
-	app.controller('UtilityController', function ($scope, $rootScope, $location, $http, $interval, $route, $routeParams, deviceApi, permissions, livesocket) {
+	app.controller('UtilityController', function ($scope, $rootScope, $location, $http, $interval, $route, $routeParams, deviceApi, domoticzApi, permissions, livesocket) {
 		var $element = $('#main-view #utilitycontent').last();
 		
 		$.strPad = function (i, l, s) {
@@ -28,7 +28,7 @@ define(['app', 'livesocket'], function (app) {
 			
 			//Get Custom icons
 			$.ajax({
-				url: "json.htm?type=custom_light_icons",
+				url: "json.htm?type=command&param=custom_light_icons",
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -203,15 +203,17 @@ define(['app', 'livesocket'], function (app) {
 			$("#dialog-editenergydevice").dialog("open");
 		}
 
-		EditSetPoint = function (idx, name, description, setpoint, isprotected, customimage) {
+		EditSetPoint = function (idx, name, description, unit, step, min, max, isprotected, customimage) {
 			HandleProtection(isprotected, function () {
 				$.devIdx = idx;
 				$("#dialog-editsetpointdevice #deviceidx").text(idx);
 				$("#dialog-editsetpointdevice #devicename").val(unescape(name));
 				$("#dialog-editsetpointdevice #devicedescription").val(unescape(description));
 				$('#dialog-editsetpointdevice #protected').prop('checked', (isprotected == true));
-				$("#dialog-editsetpointdevice #setpoint").val(setpoint);
-				$("#dialog-editsetpointdevice #tempunit").html($scope.config.TempSign);
+				$("#dialog-editsetpointdevice #unit").val(unescape(unit));
+				$("#dialog-editsetpointdevice #step").val(step);
+				$("#dialog-editsetpointdevice #min").val(min);
+				$("#dialog-editsetpointdevice #max").val(max);
 				$('#dialog-editsetpointdevice #combosensoricon').ddslick({
 					data: $.ddData,
 					width: 260,
@@ -430,9 +432,10 @@ define(['app', 'livesocket'], function (app) {
 					status = "";
 					bigtext = item.Data;
 				}
-				else if ((item.Type == "Thermostat") && (item.SubType == "SetPoint")) {
+				else if ((item.Type == "Setpoint") && (item.SubType == "SetPoint")) {
 					status = "";
-					bigtext = item.Data + '\u00B0 ' + $scope.config.TempSign;
+					bigtext = item.Data + ' ' + item.vunit;
+					$(id + " #img").attr('onclick', 'ShowSetpointPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + item.Data + ',false, ' + item.step + ', ' + item.min + ', ' + item.max + ')');
 				}
 				else if (item.Type == "Radiator 1") {
 					status = item.Data + '\u00B0 ' + $scope.config.TempSign;
@@ -466,11 +469,11 @@ define(['app', 'livesocket'], function (app) {
 						status += '<br>' + $.t("Return") + ': ' + $.t("Today") + ': ' + item.CounterDelivToday + ', ' + item.CounterDeliv;
 						if (item.UsageDeliv.charAt(0) != 0) {
 							if (parseInt(item.Usage) != 0) {
-								bigtext += ', -' + item.UsageDeliv;
+								bigtext += ', ';
+							} else {
+								bigtext='';
 							}
-							else {
-								bigtext = '-' + item.UsageDeliv;
-							}
+							bigtext += '-' + item.UsageDeliv;
 						}
 					}
 				}
@@ -493,17 +496,23 @@ define(['app', 'livesocket'], function (app) {
 						$(id + " #img").html(img);
 					}
 				}
-				if ($scope.config.ShowUpdatedEffect == true) {
-					$(id + " #name").effect("highlight", { color: '#EEFFEE' }, 1000);
+				
+				var searchText = GenerateLiveSearchTextU(item, bigtext);
+				$(id).find('#name').attr('data-search', searchText);
+				
+				if (!document.hidden) {
+					if ($scope.config.ShowUpdatedEffect == true) {
+						$(id + " #name").effect("highlight", { color: '#EEFFEE' }, 1000);
+					}
 				}
+				RefreshLiveSearch();
 			}
 		};
 
 		//We only call this once. After this the widgets are being updated automatically by used of the 'jsonupdate' broadcast event.
 		RefreshUtilities = function () {
-			var id = "";
-
-			livesocket.getJson("json.htm?type=devices&filter=utility&used=true&order=[Order]&lastupdate=" + $.LastUpdateTime + "&plan=" + window.myglobals.LastPlanSelected, function (data) {
+			var roomPlanId = $routeParams.room || window.myglobals.LastPlanSelected;
+			livesocket.getJson("json.htm?type=command&param=getdevices&filter=utility&used=true&order=[Order]&lastupdate=" + $.LastUpdateTime + "&plan=" + roomPlanId, function (data) {
 				if (typeof data.ServerTime != 'undefined') {
 					$rootScope.SetTimeAndSun(data.Sunrise, data.Sunset, data.ServerTime);
 				}
@@ -527,63 +536,14 @@ define(['app', 'livesocket'], function (app) {
 			$('#modal').show();
 
 			var htmlcontent = '';
-			var bShowRoomplan = false;
-			$.RoomPlans = [];
-			$.ajax({
-				url: "json.htm?type=plans",
-				async: false,
-				dataType: 'json',
-				success: function (data) {
-					if (typeof data.result != 'undefined') {
-						var totalItems = data.result.length;
-						if (totalItems > 0) {
-							bShowRoomplan = true;
-							//				if (window.myglobals.ismobile==true) {
-							//				bShowRoomplan=false;
-							//		}
-							if (bShowRoomplan == true) {
-								$.each(data.result, function (i, item) {
-									$.RoomPlans.push({
-										idx: item.idx,
-										name: item.Name
-									});
-								});
-							}
-						}
-					}
-				}
-			});
-
-			var bHaveAddedDevider = false;
+			var bHaveAddedDivider = false;
 
 			var tophtm = "";
-			if ($.RoomPlans.length == 0) {
-				tophtm +=
-					'\t<table border="0" cellpadding="0" cellspacing="0" width="100%">\n' +
-					'\t<tr>\n' +
-					'\t  <td align="left" valign="top" id="timesun"></td>\n' +
-					'\t</tr>\n' +
-					'\t</table>\n';
-			}
-			else {
-				tophtm +=
-					'\t<table border="0" cellpadding="0" cellspacing="0" width="100%">\n' +
-					'\t<tr>\n' +
-					'\t  <td align="left" valign="top" id="timesun"></td>\n' +
-					'<td align="right" valign="top">' +
-					'<span data-i18n="Room">Room</span>:&nbsp;<select id="comboroom" style="width:160px" class="combobox ui-corner-all">' +
-					'<option value="0" data-i18n="All">All</option>' +
-					'</select>' +
-					'</td>' +
-					'\t</tr>\n' +
-					'\t</table>\n';
-			}
-
 			var i = 0;
 			var roomPlanId = $routeParams.room || window.myglobals.LastPlanSelected;
 
 			$.ajax({
-				url: "json.htm?type=devices&filter=utility&used=true&order=[Order]&plan=" + roomPlanId,
+				url: "json.htm?type=command&param=getdevices&filter=utility&used=true&order=[Order]&plan=" + roomPlanId,
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -593,91 +553,98 @@ define(['app', 'livesocket'], function (app) {
 						}
 						$.each(data.result, function (i, item) {
 							if (i % 3 == 0) {
-								//add devider
-								if (bHaveAddedDevider == true) {
-									//close previous devider
+								//add divider
+								if (bHaveAddedDivider == true) {
+									//close previous divider
 									htmlcontent += '</div>\n';
 								}
 								htmlcontent += '<div class="row divider">\n';
-								bHaveAddedDevider = true;
+								bHaveAddedDivider = true;
 							}
 							var backgroundClass = $rootScope.GetItemBackgroundStatus(item);
 							var graphLogLink = '#/Devices/' + item.idx + '/Log';
 
 							var xhtm =
-								'\t<div class="item span4 ' + backgroundClass + '" id="' + item.idx + '">\n' +
+								'\t<div class="item span4 itemBlock ' + backgroundClass + '" id="' + item.idx + '">\n' +
 								'\t  <section>\n' +
 								'\t    <table id="itemtable" border="0" cellpadding="0" cellspacing="0">\n' +
 								'\t    <tr>\n';
 
-							xhtm += '\t      <td id="name">' + item.Name + '</td>\n';
-							xhtm += '\t      <td id="bigtext">';
+							var bigtext='';
+
 							if ((typeof item.Usage != 'undefined') && (typeof item.UsageDeliv == 'undefined')) {
-								xhtm += item.Usage;
+								bigtext += item.Usage;
 							}
 							else if ((typeof item.Usage != 'undefined') && (typeof item.UsageDeliv != 'undefined')) {
 								if ((item.UsageDeliv.charAt(0) == 0) || (parseInt(item.Usage) != 0)) {
-									xhtm += item.Usage;
+									bigtext += item.Usage;
 								}
 								if (item.UsageDeliv.charAt(0) != 0) {
-									xhtm += '-' + item.UsageDeliv;
+									if (parseInt(item.Usage) > 0) {
+										bigtext += ', ';
+									}
+									bigtext += '-' + item.UsageDeliv;
 								}
 							}
 							else if ((item.SubType == "Gas") || (item.SubType == "RFXMeter counter") || (item.SubType == "Counter Incremental")) {
-								xhtm += item.CounterToday;
+								bigtext += item.CounterToday;
 							}
 							else if (item.SubType == "Managed Counter") {
-								xhtm += item.Counter;
+								bigtext += item.Counter;
 							}
 							else if (item.Type == "Air Quality") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.SubType == "Custom Sensor") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.Type == "Current") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.SubType == "Percentage") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.SubType == "Fan") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.SubType == "Soil Moisture") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.SubType == "Leaf Wetness") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if ((item.SubType == "Voltage") || (item.SubType == "Current") || (item.SubType == "Distance") || (item.SubType == "A/D") || (item.SubType == "Pressure") || (item.SubType == "Sound Level")) {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.Type == "Lux") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.Type == "Weight") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.Type == "Usage") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
-							else if (item.Type == "Thermostat") {
-								xhtm += item.Data + '\u00B0 ' + $scope.config.TempSign;
+							else if (item.Type == "Setpoint") {
+								bigtext += item.Data + ' ' + item.vunit;
 							}
 							else if (item.SubType == "Waterflow") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.SubType == "Thermostat Mode") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.SubType == "Thermostat Operating State") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							else if (item.SubType == "Thermostat Fan Mode") {
-								xhtm += item.Data;
+								bigtext += item.Data;
 							}
 							
+							var searchText = GenerateLiveSearchTextL(item, bigtext);
+							
+							xhtm += '\t      <td id="name" class="item-name" data-idx="'+item.idx+'" data-desc="'+item.Description.replace('"',"'")+'" data-search="'+searchText+'">' + item.Name + '</td>\n';
+							xhtm += '\t      <td id="bigtext">'+bigtext;							
 							xhtm += '</td>\n';
 							xhtm += '\t      <td id="img">';
 							var status = "";
@@ -809,9 +776,9 @@ define(['app', 'livesocket'], function (app) {
 								xhtm += '<img src="images/' + item.Image + '" height="48" width="48"></td>\n';
 								status = "";
 							}
-							else if (((item.Type == "Thermostat") && (item.SubType == "SetPoint")) || (item.Type == "Radiator 1")) {
+							else if (((item.Type == "Setpoint") && (item.SubType == "SetPoint")) || (item.Type == "Radiator 1")) {
 								item.Image = (item.CustomImage == 0)  ? 'override.png' : item.Image + '48_On.png';
-								xhtm += '<img src="images/' + item.Image + '" class="lcursor" onclick="ShowSetpointPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + item.Data + ');" height="48" width="48" ></td>\n';
+								xhtm += '<img src="images/' + item.Image + '" class="lcursor" onclick="ShowSetpointPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + item.Data + ',false, ' + item.step + ', ' + item.min + ', ' + item.max + ');" height="48" width="48" ></td>\n';
 								status = "";
 							}
 							else if (item.SubType == "Thermostat Clock") {
@@ -836,7 +803,8 @@ define(['app', 'livesocket'], function (app) {
 								status = "";
 							}
 							else if (item.SubType == "Waterflow") {
-								xhtm += '<img src="images/moisture48.png" height="48" width="48"></td>\n';
+								item.Image = (item.CustomImage == 0)  ? 'moisture48.png' : item.Image + '48_On.png';
+								xhtm += '<img src="images/' + item.Image + '" height="48" width="48"></td>\n';
 								status = "";
 							}
 							if (typeof item.CounterDeliv != 'undefined') {
@@ -937,13 +905,13 @@ define(['app', 'livesocket'], function (app) {
 									xhtm += '<a class="btnsmall" onclick="EditUtilityDevice(' + item.idx + ',\'' + escape(item.Name) + '\',\'' + escape(item.Description) + '\', ' + item.CustomImage + ');" data-i18n="Edit">Edit</a> ';
 								}
 							}
-							else if ((item.Type == "Thermostat") && (item.SubType == "SetPoint")) {
+							else if ((item.Type == "Setpoint") && (item.SubType == "SetPoint")) {
 								if (permissions.hasPermission("Admin")) {
 									var timerLink = '#/Devices/'+item.idx+'/Timers';
 									var logLink = '#/Devices/'+item.idx+'/Log';
 
 									xhtm += '<a class="btnsmall" href="' + logLink +'" data-i18n="Log">Log</a> ';
-									xhtm += '<a class="btnsmall" onclick="EditSetPoint(' + item.idx + ',\'' + escape(item.Name) + '\',\'' + escape(item.Description) + '\', ' + item.SetPoint + ',' + item.Protected + ', ' + item.CustomImage + ');" data-i18n="Edit">Edit</a> ';
+									xhtm += '<a class="btnsmall" onclick="EditSetPoint(' + item.idx + ',\'' + escape(item.Name) + '\',\'' + escape(item.Description) + '\', \'' + escape(item.vunit) + '\',' + item.step + ',' + item.min + ',' + item.max + ',' + item.Protected + ', ' + item.CustomImage + ');" data-i18n="Edit">Edit</a> ';
 									if (item.Timers == "true") {
 										xhtm += '<a class="btnsmall-sel" href="' + timerLink + '" data-i18n="Timers">Timers</a> ';
 									}
@@ -958,7 +926,7 @@ define(['app', 'livesocket'], function (app) {
 									var logLink = '#/Devices/'+item.idx+'/Log';
 
 									xhtm += '<a class="btnsmall" href="' + logLink +'" data-i18n="Log">Log</a> ';
-									xhtm += '<a class="btnsmall" onclick="EditSetPoint(' + item.idx + ',\'' + escape(item.Name) + '\',\'' + escape(item.Description) + '\', ' + item.SetPoint + ',' + item.Protected + ', ' + item.CustomImage + ');" data-i18n="Edit">Edit</a> ';
+									xhtm += '<a class="btnsmall" onclick="EditSetPoint(' + item.idx + ',\'' + escape(item.Name) + '\',\'' + escape(item.Description) + '\', \'' + escape(item.vunit) + '\',' + item.step + ',' + item.min + ',' + item.max + ',' + item.Protected + ', ' + item.CustomImage + ');" data-i18n="Edit">Edit</a> ';
 									if (item.Timers == "true") {
 										xhtm += '<a class="btnsmall-sel" href="' + timerLink + '" data-i18n="Timers">Timers</a> ';
 									}
@@ -1060,8 +1028,8 @@ define(['app', 'livesocket'], function (app) {
 					}
 				}
 			});
-			if (bHaveAddedDevider == true) {
-				//close previous devider
+			if (bHaveAddedDivider == true) {
+				//close previous divider
 				htmlcontent += '</div>\n';
 			}
 			if (htmlcontent == '') {
@@ -1070,29 +1038,10 @@ define(['app', 'livesocket'], function (app) {
 			$('#modal').hide();
 			$element.html(tophtm + htmlcontent);
 			$element.i18n();
+			WatchDescriptions();
 
-			if (bShowRoomplan == true) {
-				$.each($.RoomPlans, function (i, item) {
-					var option = $('<option />');
-					option.attr('value', item.idx).text(item.name);
-					$element.find("#comboroom").append(option);
-				});
-				if (typeof roomPlanId != 'undefined') {
-					$element.find("#comboroom").val(roomPlanId);
-				}
-				$element.find("#comboroom").change(function () {
-					var idx = $element.find("#comboroom option:selected").val();
-					window.myglobals.LastPlanSelected = idx;
-					
-					$route.updateParams({
-						room: idx > 0 ? idx : undefined
-					});
-					$location.replace();
-					$scope.$apply();
-				});
-			}
 			if ($scope.config.AllowWidgetOrdering == true) {
-				if (permissions.hasPermission("Admin")) {
+				if (permissions.hasPermission("User")) {
 					if (window.myglobals.ismobileint == false) {
 						$element.find(".span4").draggable({
 							drag: function () {
@@ -1104,7 +1053,8 @@ define(['app', 'livesocket'], function (app) {
 						$element.find(".span4").droppable({
 							drop: function () {
 								var myid = $(this).attr("id");
-								var roomid = $element.find("#comboroom option:selected").val();
+								
+								var roomid = window.myglobals.LastPlanSelected;
 								if (typeof roomid == 'undefined') {
 									roomid = 0;
 								}
@@ -1125,6 +1075,22 @@ define(['app', 'livesocket'], function (app) {
 			RefreshUtilities();
 			return false;
 		}
+
+		function populatemetertypes() {
+            domoticzApi.sendCommand('getmetertypes', {})
+                .then(function (data) {
+                    if ( data.status === 'OK' ) {
+						$("#dialog-editmeterdevice #combometertype").html("");
+						$.each(data.result, function (stcode, stdesc) {
+							if (stdesc != null) {
+								var option = $('<option />');
+								option.attr('value', stcode).text(stdesc);
+								$("#dialog-editmeterdevice #combometertype").append(option);
+							}
+						});
+                    }
+                });
+        }
 
 		init();
 
@@ -1156,6 +1122,8 @@ define(['app', 'livesocket'], function (app) {
 				$.myglobals.WeekdayStr.push($(this).text());
 			});
 
+			populatemetertypes();
+
 			$scope.$on('device_update', function (event, deviceData) {
 				RefreshItem(deviceData);
 			});
@@ -1170,7 +1138,7 @@ define(['app', 'livesocket'], function (app) {
 					var CustomImage = $.ddData[cval].value;
 					$(this).dialog("close");
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editutilitydevice #devicename").val()) +
 						'&customimage=' + CustomImage +
 						'&description=' + encodeURIComponent($("#dialog-editutilitydevice #devicedescription").val()) +
@@ -1189,7 +1157,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-editutilitydevice #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-editutilitydevice #devicedescription").val()) +
 							'&used=false',
@@ -1239,7 +1207,7 @@ define(['app', 'livesocket'], function (app) {
 				var CustomImage = $.ddData[cval].value;
 
 				$.ajax({
-					url: "json.htm?type=setused&idx=" + $.devIdx +
+					url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 					'&name=' + encodeURIComponent($("#dialog-editcustomsensordevice #devicename").val()) +
 					'&description=' + encodeURIComponent($("#dialog-editcustomsensordevice #devicedescription").val()) +
 					'&switchtype=0' +
@@ -1258,7 +1226,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-editcustomsensordevice #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-editcustomsensordevice #devicedescription").val()) +
 							'&used=false',
@@ -1302,7 +1270,7 @@ define(['app', 'livesocket'], function (app) {
 					
 					$(this).dialog("close");
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editdistancedevice #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editdistancedevice #devicedescription").val()) +
 						'&switchtype=' + $("#dialog-editdistancedevice #combometertype").val() +
@@ -1322,7 +1290,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-editdistancedevice #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-editdistancedevice #devicedescription").val()) +
 							'&used=false',
@@ -1375,7 +1343,7 @@ define(['app', 'livesocket'], function (app) {
 					}
 					$(this).dialog("close");
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editmeterdevice #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editmeterdevice #devicedescription").val()) +
 						'&switchtype=' + meterType +
@@ -1398,7 +1366,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-editmeterdevice #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-editmeterdevice #devicedescription").val()) +
 							'&used=false',
@@ -1441,7 +1409,7 @@ define(['app', 'livesocket'], function (app) {
 					var CustomImage = $.ddData[cval].value;
 					$(this).dialog("close");
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editenergydevice #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editenergydevice #devicedescription").val()) +
 						'&switchtype=' + $("#dialog-editenergydevice #combometertype").val() + '&EnergyMeterMode=' + $("#dialog-editenergydevice input:radio[name=EnergyMeterMode]:checked").val() +
@@ -1461,7 +1429,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-editenergydevice #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-editenergydevice #devicedescription").val()) +
 							'&used=false',
@@ -1505,11 +1473,27 @@ define(['app', 'livesocket'], function (app) {
 					var cval = $('#dialog-editsetpointdevice #combosensoricon').data('ddslick').selectedIndex;
 					var CustomImage = $.ddData[cval].value;
 					$(this).dialog("close");
+					
+					var devOptions = [];
+					var devOptionsParam = [];
+					devOptions.push("ValueStep:");
+					devOptions.push($("#dialog-editsetpointdevice #step").val());
+					devOptions.push(";");
+					devOptions.push("ValueMin:");
+					devOptions.push($("#dialog-editsetpointdevice #min").val());
+					devOptions.push(";");
+					devOptions.push("ValueMax:");
+					devOptions.push($("#dialog-editsetpointdevice #max").val());
+					devOptions.push(";");
+					devOptions.push("ValueUnit:");
+					devOptions.push($("#dialog-editsetpointdevice #unit").val());
+					devOptions.push(";");
+					devOptionsParam.push(devOptions.join(''));
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editsetpointdevice #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editsetpointdevice #devicedescription").val()) +
-						'&setpoint=' + $("#dialog-editsetpointdevice #setpoint").val() +
+						'&options=' + b64EncodeUnicode(devOptions.join('')) +
 						'&protected=' + $('#dialog-editsetpointdevice #protected').is(":checked") +
 						'&customimage=' + CustomImage +
 						'&used=true',
@@ -1527,7 +1511,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-editsetpointdevice #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-editsetpointdevice #devicedescription").val()) +
 							'&used=false',
@@ -1573,7 +1557,7 @@ define(['app', 'livesocket'], function (app) {
 					bootbox.alert($.t('Setting the Clock is not finished yet!'));
 					var daytimestr = $("#dialog-editthermostatclockdevice #comboclockday").val() + ";" + $("#dialog-editthermostatclockdevice #clockhour").val() + ";" + $("#dialog-editthermostatclockdevice #clockminute").val();
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editthermostatclockdevice #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editthermostatclockdevice #devicedescription").val()) +
 						'&clock=' + encodeURIComponent(daytimestr) +
@@ -1593,7 +1577,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-editthermostatclockdevice #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-editthermostatclockdevice #devicedescription").val()) +
 							'&used=false',
@@ -1638,7 +1622,7 @@ define(['app', 'livesocket'], function (app) {
 						modestr = "&fmode=" + $("#dialog-editthermostatmode #combomode").val();
 					}
 					$.ajax({
-						url: "json.htm?type=setused&idx=" + $.devIdx +
+						url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editthermostatmode #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editthermostatmode #devicedescription").val()) +
 						modestr +
@@ -1657,7 +1641,7 @@ define(['app', 'livesocket'], function (app) {
 				bootbox.confirm($.t("Are you sure to remove this Device?"), function (result) {
 					if (result == true) {
 						$.ajax({
-							url: "json.htm?type=setused&idx=" + $.devIdx +
+							url: "json.htm?type=command&param=setused&idx=" + $.devIdx +
 							'&name=' + encodeURIComponent($("#dialog-editthermostatmode #devicename").val()) +
 							'&description=' + encodeURIComponent($("#dialog-editthermostatmode #devicedescription").val()) +
 							'&used=false',
@@ -1687,8 +1671,30 @@ define(['app', 'livesocket'], function (app) {
 				}
 			});
 
+
+			//handles RoomPlans
+			var ctrl={};
+			ctrl.RoomPlans=$rootScope.GetRoomPlans();	
+			var roomPlanId = $routeParams.room || window.myglobals.LastPlanSelected;
+			
+			if (typeof roomPlanId != 'undefined') {
+				ctrl.roomSelected = roomPlanId;
+				window.myglobals.LastPlanSelected = roomPlanId;
+			}
+			ctrl.changeRoom = function () {
+				var idx = ctrl.roomSelected;
+				window.myglobals.LastPlanSelected = idx;
+	
+				$route.updateParams({
+						room: idx >= 0 ? idx : undefined
+					});
+					$location.replace();
+			};
+			$scope.ctrl=ctrl;
+
 			LoadCustomIcons();
 			ShowUtilities();
+			//WatchLiveSearch();
 
 			$("#dialog-editutilitydevice").keydown(function (event) {
 				if (event.keyCode == 13) {

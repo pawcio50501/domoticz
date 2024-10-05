@@ -33,6 +33,7 @@ namespace Plugins {
 		Py_XDECREF(self->Base);
 		Py_XDECREF(self->Name);
 		Py_XDECREF(self->Description);
+		Py_XDECREF(self->Filename);
 
 		PyNewRef	pType = PyObject_Type((PyObject*)self);
 		freefunc pFree = (freefunc)PyType_GetSlot(pType, Py_tp_free);
@@ -171,14 +172,15 @@ namespace Plugins {
 					//	Call code to do insert here
 					//
 					std::string ErrorMessage;
-					if (!m_sql.InsertCustomIconFromZipFile(sFilename, ErrorMessage))
+					const uint64_t retidx = m_sql.InsertCustomIconFromZipFile(sFilename, ErrorMessage);
+					if (retidx == 0)
 					{
 						_log.Log(LOG_ERROR, "(%s) Insert Custom Icon From Zip failed on file '%s' with error '%s'.", self->pPlugin->m_Name.c_str(), sFilename.c_str(), ErrorMessage.c_str());
 					}
 					else
 					{
 						// load associated custom images to make them available to python
-						std::vector<std::vector<std::string> > result = m_sql.safe_query("SELECT max(ID), Base, Name, Description FROM CustomImages");
+						std::vector<std::vector<std::string> > result = m_sql.safe_query("SELECT ID, Base, Name, Description FROM CustomImages WHERE (ID == %d)", static_cast<int>(retidx));
 						if (!result.empty())
 						{
 							// Add image objects into the image dictionary with ID as the key
@@ -190,6 +192,7 @@ namespace Plugins {
 								PyObject*	pKey = PyUnicode_FromString(sd[1].c_str());
 								if (PyDict_SetItem((PyObject*)self->pPlugin->m_ImageDict, pKey, (PyObject*)pImage) == -1)
 								{
+									Py_DECREF(pKey);
 									_log.Log(LOG_ERROR, "(%s) failed to add ID '%s' to image dictionary.", self->pPlugin->m_PluginKey.c_str(), sd[0].c_str());
 									break;
 								}
@@ -198,6 +201,7 @@ namespace Plugins {
 								pImage->Name = PyUnicode_FromString(sd[2].c_str());
 								pImage->Description = PyUnicode_FromString(sd[3].c_str());
 								Py_DECREF(pImage);
+								Py_DECREF(pKey);
 							}
 						}
 					}
@@ -374,6 +378,7 @@ namespace Plugins {
 
 		if (sTypeName == "Pressure")					SubType = sTypePressure;
 		else if (sTypeName == "Percentage")				SubType = sTypePercentage;
+		else if (sTypeName == "Fan")					SubType = sTypeFan;
 		else if (sTypeName == "Gas")
 		{
 			Type = pTypeP1Gas;
@@ -458,7 +463,7 @@ namespace Plugins {
 		else if (sTypeName == "Air Quality")
 		{
 			Type = pTypeAirQuality;
-			SubType = sTypeVoltcraft;
+			SubType = sTypeVoc;
 		}
 		else if (sTypeName == "Usage")
 		{
@@ -489,6 +494,12 @@ namespace Plugins {
 			Type = pTypeGeneralSwitch;
 			SubType = sSwitchTypeSelector;
 			SwitchType = STYPE_Selector;
+		}
+		else if (sTypeName == "On/Off")
+		{
+			Type = pTypeGeneralSwitch;
+			SubType = sSwitchGeneralSwitch;
+			SwitchType = STYPE_OnOff;
 		}
 		else if (sTypeName == "Push On")
 		{
@@ -533,10 +544,92 @@ namespace Plugins {
 			Type = pTypeSecurity1;
 			SubType = sTypeDomoticzSecurity;
 		}
-		else if (sTypeName == "Set Point")
+		else if (sTypeName == "Set Point" || sTypeName == "Setpoint" || sTypeName == "Thermostat")
 		{
-			Type = pTypeThermostat;
-			SubType = sTypeThermSetpoint;
+			Type = pTypeSetpoint;
+			SubType = sTypeSetpoint;
+		}
+
+		// Venetian and Blinds
+		else if (sTypeName == "Blinds")
+		{
+			Type = pTypeGeneralSwitch;
+			SubType = sSwitchGeneralSwitch;
+			SwitchType = STYPE_Blinds;
+		}
+		else if (sTypeName == "BlindsPercentage")
+		{
+			Type = pTypeGeneralSwitch;
+			SubType = sSwitchGeneralSwitch;
+			SwitchType = STYPE_BlindsPercentage;
+		}
+		else if (sTypeName == "VenetianBlindsUS")
+		{
+			Type = pTypeGeneralSwitch;
+			SubType = sSwitchGeneralSwitch;
+			SwitchType = STYPE_VenetianBlindsUS;
+		}
+		else if (sTypeName == "VenetianBlindsEU")
+		{
+			Type = pTypeGeneralSwitch;
+			SubType = sSwitchGeneralSwitch;
+			SwitchType = STYPE_VenetianBlindsEU;
+		}
+		else if (sTypeName == "BlindsPercentageWithStop")
+		{
+			Type = pTypeGeneralSwitch;
+			SubType = sSwitchGeneralSwitch;
+			SwitchType = STYPE_BlindsPercentageWithStop;
+		}
+
+		// Color Switch
+		else if (sTypeName == "WW")
+		{
+			Type = pTypeColorSwitch;
+			SubType = sTypeColor_RGB_W; // RGB + white, either RGB or white can be lit
+			SwitchType = 7;
+		}
+		else if (sTypeName == "RGB")
+		{
+			Type = pTypeColorSwitch;
+			SubType = sTypeColor_RGB; // RGB
+			SwitchType = 7;
+		}
+		else if (sTypeName == "White")
+		{
+			Type = pTypeColorSwitch;
+			SubType = sTypeColor_White; // Monochrome white
+			SwitchType = 7;
+		}
+		else if (sTypeName == "RGB_CW_WW")
+		{
+			Type = pTypeColorSwitch;
+			SubType = sTypeColor_RGB_CW_WW; // RGB + cold white + warm white, either RGB or white can be lit
+			SwitchType = 7;
+		}
+		else if (sTypeName == "LivCol")
+		{
+			Type = pTypeColorSwitch;
+			SubType = sTypeColor_LivCol;
+			SwitchType = 7;
+		}
+		else if (sTypeName == "RGB_W_Z")
+		{
+			Type = pTypeColorSwitch;
+			SubType = sTypeColor_RGB_W_Z; // Like RGBW, but allows combining RGB and white
+			SwitchType = 7;
+		}
+		else if (sTypeName == "RGB_CW_WW_Z")
+		{
+			Type = pTypeColorSwitch;
+			SubType = sTypeColor_RGB_CW_WW_Z; // Like RGBWW, but allows combining RGB and white
+			SwitchType = 7;
+		}
+		else if (sTypeName == "CW_WW")
+		{
+			Type = pTypeColorSwitch;
+			SubType = sTypeColor_CW_WW; // Cold white + Warm white
+			SwitchType = 7;
 		}
 	}
 
@@ -674,7 +767,9 @@ namespace Plugins {
 		{
 			// load associated devices to make them available to python
 			std::vector<std::vector<std::string> > result;
+			Py_BEGIN_ALLOW_THREADS
 			result = m_sql.safe_query("SELECT Unit, ID, Name, nValue, sValue, DeviceID, Type, SubType, SwitchType, LastLevel, CustomImage, SignalLevel, BatteryLevel, LastUpdate, Options, Description, Color, Used FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d) ORDER BY Unit ASC", self->HwdID, self->Unit);
+			Py_END_ALLOW_THREADS
 			if (!result.empty())
 			{
 				for (const auto &sd : result)
@@ -775,16 +870,16 @@ namespace Plugins {
 								sOptionValue = PyUnicode_AsUTF8(pValueDict);
 
 							m_sql.safe_query(
-								"INSERT INTO DeviceStatus (HardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, SignalLevel, BatteryLevel, Name, nValue, sValue, CustomImage, Description, Color, Options) "
-								"VALUES (%d, '%q', %d, %d, %d, %d, %d, 12, 255, '%q', 0, '%q', %d, '%q', '%q', '%q')",
-								self->HwdID, sDeviceID.c_str(), self->Unit, self->Type, self->SubType, self->SwitchType, self->Used, sLongName.c_str(), sValue.c_str(), self->Image, sDescription.c_str(), sColor.c_str(), sOptionValue.c_str());
+								"INSERT INTO DeviceStatus (HardwareID, OrgHardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, SignalLevel, BatteryLevel, Name, nValue, sValue, CustomImage, Description, Color, Options) "
+								"VALUES (%d, %d, '%q', %d, %d, %d, %d, %d, 12, 255, '%q', 0, '%q', %d, '%q', '%q', '%q')",
+								self->HwdID, 0, sDeviceID.c_str(), self->Unit, self->Type, self->SubType, self->SwitchType, self->Used, sLongName.c_str(), sValue.c_str(), self->Image, sDescription.c_str(), sColor.c_str(), sOptionValue.c_str());
 						}
 						else
 						{
 							m_sql.safe_query(
-								"INSERT INTO DeviceStatus (HardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, SignalLevel, BatteryLevel, Name, nValue, sValue, CustomImage, Description, Color) "
-								"VALUES (%d, '%q', %d, %d, %d, %d, %d, 12, 255, '%q', 0, '%q', %d, '%q', '%q')",
-								self->HwdID, sDeviceID.c_str(), self->Unit, self->Type, self->SubType, self->SwitchType, self->Used, sLongName.c_str(), sValue.c_str(), self->Image, sDescription.c_str(), sColor.c_str());
+								"INSERT INTO DeviceStatus (HardwareID, OrgHardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, SignalLevel, BatteryLevel, Name, nValue, sValue, CustomImage, Description, Color) "
+								"VALUES (%d, %d, '%q', %d, %d, %d, %d, %d, 12, 255, '%q', 0, '%q', %d, '%q', '%q')",
+								self->HwdID, 0, sDeviceID.c_str(), self->Unit, self->Type, self->SubType, self->SwitchType, self->Used, sLongName.c_str(), sValue.c_str(), self->Image, sDescription.c_str(), sColor.c_str());
 						}
 
 						result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", self->HwdID, self->Unit);
@@ -1029,7 +1124,7 @@ namespace Plugins {
 					_log.Log(LOG_NORM, "(%s) Updating device from %d:'%s' to have values %d:'%s'.", sName.c_str(), self->nValue, PyUnicode_AsUTF8(self->sValue), nValue, sValue);
 				}
 				Py_BEGIN_ALLOW_THREADS
-				DevRowIdx = m_sql.UpdateValue(self->HwdID, sDeviceID.c_str(), (const unsigned char)self->Unit, (const unsigned char)iType, (const unsigned char)iSubType, iSignalLevel, iBatteryLevel, nValue, sValue, sName, true);
+				DevRowIdx = m_sql.UpdateValue(self->HwdID, 0, sDeviceID.c_str(), (const unsigned char)self->Unit, (const unsigned char)iType, (const unsigned char)iSubType, iSignalLevel, iBatteryLevel, nValue, sValue, sName, true);
 				Py_END_ALLOW_THREADS
 				// if this is an internal Security Panel then there are some extra updates required if state has changed
 				if ((self->Type == pTypeSecurity1) && (self->SubType == sTypeDomoticzSecurity) && (self->nValue != nValue))
@@ -1134,8 +1229,7 @@ namespace Plugins {
 		{
 			self->pPlugin->SetHeartbeatReceived();
 			std::string sID = std::to_string(self->ID);
-			m_sql.safe_query("UPDATE DeviceStatus SET LastUpdate='%q' WHERE (ID == %s )",
-					 TimeToString(nullptr, TF_DateTime).c_str(), sID.c_str());
+			m_sql.UpdateLastUpdate(sID);
 		}
 		else
 		{
@@ -1163,6 +1257,7 @@ namespace Plugins {
 			pPlugin->Log(LOG_NORM, "Deallocating connection object '%s' (%s:%s).", PyUnicode_AsUTF8(self->Name), PyUnicode_AsUTF8(self->Address), PyUnicode_AsUTF8(self->Port));
 		}
 
+		Py_XDECREF(self->Name);
 		Py_XDECREF(self->Target);
 		Py_XDECREF(self->Address);
 		Py_XDECREF(self->Port);
@@ -1492,7 +1587,8 @@ namespace Plugins {
 	{
 		if (self->pTransport)
 		{
-			return PyLong_FromLong(self->pTransport->TotalBytes());
+			//GizMoCuz: change to PyLong_FromSize_t?
+			return PyLong_FromLong(static_cast<long>(self->pTransport->TotalBytes()));
 		}
 
 		return PyBool_FromLong(0);

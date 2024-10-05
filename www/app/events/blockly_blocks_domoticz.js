@@ -29,7 +29,7 @@ define(['blockly', 'blockly-blocks', 'blockly-msg-en', 'app/events/blockly_messa
     var zwavealarms = [];
 
     $.ajax({
-        url: "json.htm?type=devices&filter=light&used=true&order=Name&displayhidden=1",
+        url: "json.htm?type=command&param=getdevices&filter=light&used=true&order=Name&displayhidden=1",
         async: false,
         dataType: 'json',
         success: function (data) {
@@ -59,7 +59,7 @@ define(['blockly', 'blockly-blocks', 'blockly-msg-en', 'app/events/blockly_messa
     if (switchesSZ.length === 0) { switchesSZ.push(["No devices found", '0']); }
 
     $.ajax({
-        url: "json.htm?type=devices&filter=temp&used=true&order=Name&displayhidden=1",
+        url: "json.htm?type=command&param=getdevices&filter=temp&used=true&order=Name&displayhidden=1",
         async: false,
         dataType: 'json',
         success: function (data) {
@@ -86,7 +86,7 @@ define(['blockly', 'blockly-blocks', 'blockly-msg-en', 'app/events/blockly_messa
     });
 
     $.ajax({
-        url: "json.htm?type=devices&filter=weather&used=true&order=Name&displayhidden=1",
+        url: "json.htm?type=command&param=getdevices&filter=weather&used=true&order=Name&displayhidden=1",
         async: false,
         dataType: 'json',
         success: function (data) {
@@ -99,7 +99,7 @@ define(['blockly', 'blockly-blocks', 'blockly-msg-en', 'app/events/blockly_messa
     });
 
     $.ajax({
-        url: "json.htm?type=devices&filter=utility&used=true&order=Name&displayhidden=1",
+        url: "json.htm?type=command&param=getdevices&filter=utility&used=true&order=Name&displayhidden=1",
         async: false,
         dataType: 'json',
         success: function (data) {
@@ -138,9 +138,8 @@ define(['blockly', 'blockly-blocks', 'blockly-msg-en', 'app/events/blockly_messa
     if (utilitiesSZ.length === 0) { utilitiesSZ.push(["No utilities found", '0']); }
     if (texts.length === 0) { texts.push(["No text devices found", '0']); }
 
-
     $.ajax({
-        url: "json.htm?type=devices&filter=zwavealarms&used=true&order=Name&displayhidden=1",
+        url: "json.htm?type=command&param=getdevices&filter=zwavealarms&used=true&order=Name&displayhidden=1",
         async: false,
         dataType: 'json',
         success: function (data) {
@@ -154,7 +153,7 @@ define(['blockly', 'blockly-blocks', 'blockly-msg-en', 'app/events/blockly_messa
     if (zwavealarms.length === 0) { zwavealarms.push(["No ZWave Alarms found", '0']); }
 
     $.ajax({
-        url: "json.htm?type=scenes&order=Name&displayhidden=1",
+        url: "json.htm?type=command&param=getscenes&order=Name&displayhidden=1",
         async: false,
         dataType: 'json',
         success: function (data) {
@@ -172,7 +171,7 @@ define(['blockly', 'blockly-blocks', 'blockly-msg-en', 'app/events/blockly_messa
     });
 
     $.ajax({
-        url: "json.htm?type=cameras&order=Name&displayhidden=1",
+        url: "json.htm?type=command&param=getcameras&order=Name&displayhidden=1",
         async: false,
         dataType: 'json',
         success: function (data) {
@@ -850,7 +849,7 @@ define(['blockly', 'blockly-blocks', 'blockly-msg-en', 'app/events/blockly_messa
     Blockly.Blocks['logic_setlevel'].percentageValidator = function (text) {
         var n = parseFloat(text || 0);
         if (!isNaN(n)) {
-            if (n > 100) { n = 100 }
+            if (n > 200) { n = 200 }
             if (n < 0) { n = 0 }
         }
 
@@ -1191,6 +1190,7 @@ define(['blockly', 'blockly-blocks', 'blockly-msg-en', 'app/events/blockly_messa
             ["Group On", 'Group On'],
             ["Group Off", 'Group Off'],
             ["Open", 'Open'],
+            ["Close", 'Close'],
             ["Closed", 'Closed'],
             ["Locked", 'Locked'],
             ["Unlocked", 'Unlocked'],

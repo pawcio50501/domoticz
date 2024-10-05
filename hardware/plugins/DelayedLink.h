@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef ENABLE_PYTHON
 #ifdef WIN32
 #	define MS_NO_COREDLL 1
 #else
@@ -70,6 +70,7 @@ namespace Plugins {
 		DECLARE_PYTHON_SYMBOL(PyObject*, PyObject_GetAttrString, PyObject* pObj COMMA const char*);
 		DECLARE_PYTHON_SYMBOL(int, PyObject_HasAttrString, PyObject* COMMA const char *);
 		DECLARE_PYTHON_SYMBOL(const char*, PyBytes_AsString, PyObject*);
+		DECLARE_PYTHON_SYMBOL(PyObject*, PyBytes_FromStringAndSize, const char* COMMA Py_ssize_t);
 		DECLARE_PYTHON_SYMBOL(Py_ssize_t, PyBytes_Size, PyObject*);
 		DECLARE_PYTHON_SYMBOL(PyObject*, PyUnicode_AsASCIIString, PyObject*);
 		DECLARE_PYTHON_SYMBOL(PyObject*, PyUnicode_FromString, const char*);
@@ -155,6 +156,8 @@ namespace Plugins {
 			shared_lib_ = nullptr;
 			if (!shared_lib_) {
 #ifdef WIN32
+				if (!shared_lib_) shared_lib_ = LoadLibrary("python312.dll");
+				if (!shared_lib_) shared_lib_ = LoadLibrary("python311.dll");
 				if (!shared_lib_) shared_lib_ = LoadLibrary("python310.dll");
 				if (!shared_lib_) shared_lib_ = LoadLibrary("python39.dll");
 				if (!shared_lib_) shared_lib_ = LoadLibrary("python38.dll");
@@ -163,6 +166,8 @@ namespace Plugins {
 				if (!shared_lib_) shared_lib_ = LoadLibrary("python35.dll");
 				if (!shared_lib_) shared_lib_ = LoadLibrary("python34.dll");
 #else
+				if (!shared_lib_) FindLibrary("python3.12", true);
+				if (!shared_lib_) FindLibrary("python3.11", true);
 				if (!shared_lib_) FindLibrary("python3.10", true);
 				if (!shared_lib_) FindLibrary("python3.9", true);
 				if (!shared_lib_) FindLibrary("python3.8", true);
@@ -171,6 +176,11 @@ namespace Plugins {
 				if (!shared_lib_) FindLibrary("python3.5", true);
 				if (!shared_lib_) FindLibrary("python3.4", true);
 #ifdef __FreeBSD__
+				if (!shared_lib_) FindLibrary("python3.12m", true);
+				if (!shared_lib_) FindLibrary("python3.11m", true);
+				if (!shared_lib_) FindLibrary("python3.10m", true);
+				if (!shared_lib_) FindLibrary("python3.9m", true);
+				if (!shared_lib_) FindLibrary("python3.8m", true);
 				if (!shared_lib_) FindLibrary("python3.7m", true);
 				if (!shared_lib_) FindLibrary("python3.6m", true);
 				if (!shared_lib_) FindLibrary("python3.5m", true);
@@ -199,6 +209,7 @@ namespace Plugins {
 					RESOLVE_PYTHON_SYMBOL(PyObject_GetAttrString);
 					RESOLVE_PYTHON_SYMBOL(PyObject_HasAttrString);
 					RESOLVE_PYTHON_SYMBOL(PyBytes_AsString);
+					RESOLVE_PYTHON_SYMBOL(PyBytes_FromStringAndSize);
 					RESOLVE_PYTHON_SYMBOL(PyBytes_Size);
 					RESOLVE_PYTHON_SYMBOL(PyUnicode_AsASCIIString);
 					RESOLVE_PYTHON_SYMBOL(PyUnicode_FromString);
@@ -420,6 +431,7 @@ extern	SharedLibraryProxy* pythonLib;
 #define	PyObject_GetAttrString	pythonLib->PyObject_GetAttrString
 #define	PyObject_HasAttrString	pythonLib->PyObject_HasAttrString
 #define	PyBytes_AsString		pythonLib->PyBytes_AsString
+#define	PyBytes_FromStringAndSize	pythonLib->PyBytes_FromStringAndSize
 #define	PyBytes_Size			pythonLib->PyBytes_Size
 #define PyUnicode_AsASCIIString pythonLib->PyUnicode_AsASCIIString
 #define PyUnicode_FromString	pythonLib->PyUnicode_FromString
@@ -499,22 +511,17 @@ extern	SharedLibraryProxy* pythonLib;
 #define	Py_CompileString		pythonLib->Py_CompileString
 #define	PyEval_EvalCode			pythonLib->PyEval_EvalCode
 #define	PyType_GetFlags			pythonLib->PyType_GetFlags
-#ifdef WIN32  
-#	define	_Py_Dealloc				pythonLib->_Py_Dealloc		// Builds against a low Python version
-#elif PY_VERSION_HEX < 0x03090000
-#	define	_Py_Dealloc				pythonLib->_Py_Dealloc
-#else
+#define	_Py_Dealloc			pythonLib->_Py_Dealloc
+#if PY_VERSION_HEX >= 0x03090000
 #	ifndef _Py_DEC_REFTOTAL
 	/* _Py_DEC_REFTOTAL macro has been removed from Python 3.9 by: https://github.com/python/cpython/commit/49932fec62c616ec88da52642339d83ae719e924 */
 #		ifdef Py_REF_DEBUG
 #			define _Py_DEC_REFTOTAL _Py_RefTotal--
 #		else
 #			define _Py_DEC_REFTOTAL
-#			define _Py_Dealloc
 #		endif
 #	endif
 #endif
-
 #if PY_VERSION_HEX >= 0x030800f0
 static inline void py3__Py_INCREF(PyObject* op)
 {
@@ -574,3 +581,4 @@ static inline void py3__Py_XDECREF(PyObject* op)
 #endif
 #pragma pop_macro("_DEBUG")
 } // namespace Plugins
+#endif //#ifdef ENABLE_PYTHON

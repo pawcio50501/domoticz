@@ -30,7 +30,6 @@
 #include "SQLHelper.h"
 #include "../notifications/NotificationHelper.h"
 #include "appversion.h"
-#include "localtime_r.h"
 #include "SignalHandler.h"
 
 #if defined WIN32
@@ -53,13 +52,14 @@ namespace
 		"\t-version display version number\n"
 		"\t-www port (for example -www 8080, or -www 0 to disable http)\n"
 		"\t-wwwbind address (for example -wwwbind 0.0.0.0 or -wwwbind 192.168.0.20)\n"
+		"\t-vhostname virtualhostname (for example -vhostname internal.mydomain.name or -vhostname localhost)\n"
 #ifdef WWW_ENABLE_SSL
 		"\t-sslwww port (for example -sslwww 443, or -sslwww 0 to disable https)\n"
 		"\t-sslcert file_path (for example /opt/domoticz/server_cert.pem)\n"
 		"\t-sslkey file_path (if different from certificate file)\n"
 		"\t-sslpass passphrase (to access to server private key in certificate)\n"
-		"\t-sslmethod method (supported methods: tlsv1, tlsv1_server, sslv23, sslv23_server, tlsv11, tlsv11_server, tlsv12, tlsv12_server)\n"
-		"\t-ssloptions options (for SSL options, default is 'default_workarounds,no_sslv2,no_sslv3,no_tlsv1,no_tlsv1_1,single_dh_use')\n"
+		"\t-sslmethod method (supported methods: tls [default], tls_server, tlsv1, tlsv1_server, sslv23, sslv23_server, tlsv11, tlsv11_server, tlsv12, tlsv12_server, tlsv13, tlsv13_server)\n"
+		"\t-ssloptions options (for SSL options, default is 'single_dh_use')\n"
 		"\t-ssldhparam file_path (for SSL DH parameters)\n"
 #endif
 #if defined WIN32
@@ -74,6 +74,7 @@ namespace
 		"\t-approot file_path (for example /opt/domoticz)\n"
 #endif
 		"\t-webroot additional web root, useful with proxy servers (for example domoticz)\n"
+		"\t-nocache ask browser not to cache pages\n"
 		"\t-startupdelay seconds (default=0)\n"
 		"\t-nowwwpwd (in case you forgot the web server username/password)\n"
 		"\t-wwwcompress mode (on = always compress [default], off = always decompress, static = no processing but try precompressed first)\n"
@@ -90,7 +91,7 @@ namespace
 		"\t-weblog file_path (for example /var/log/domoticz_access.log)\n"
 #endif
 		"\t-loglevel (combination of: all,normal,status,error,debug)\n"
-		"\t-debuglevel (combination of: all,normal,hardware,received,webserver,eventsystem,python,thread_id,sql)\n"
+		"\t-debuglevel (combination of: all,normal,hardware,received,webserver,eventsystem,python,thread_id,sql,auth)\n"
 		"\t-notimestamps (do not prepend timestamps to logs; useful with syslog, etc.)\n"
 		"\t-php_cgi_path (for example /usr/bin/php-cgi)\n"
 #ifndef WIN32
@@ -125,27 +126,8 @@ std::string szUserDataFolder;
 std::string szWWWFolder;
 std::string szWebRoot;
 std::string dbasefile;
-
-/*
-#define VCGENCMDTEMPCOMMAND "vcgencmd measure_temp"
-#define VCGENCMDARMSPEEDCOMMAND "vcgencmd measure_clock arm"
-#define VCGENCMDV3DSPEEDCOMMAND "vcgencmd measure_clock v3d"
-#define VCGENCMDCORESPEEDCOMMAND "vcgencmd measure_clock core"
-
-bool bHasInternalTemperature=false;
-std::string szInternalTemperatureCommand = "";
-
-bool bHasInternalClockSpeeds=false;
-std::string szInternalARMSpeedCommand = "";
-std::string szInternalV3DSpeedCommand = "";
-std::string szInternalCoreSpeedCommand = "";
-
-bool bHasInternalVoltage=false;
-std::string szInternalVoltageCommand = "";
-
-bool bHasInternalCurrent=false;
-std::string szInternalCurrentCommand = "";
-*/
+std::string szCertFile = "./server_cert.pem";
+bool bDoCachePages = true;
 
 std::string szAppVersion="???";
 int iAppRevision=0;
@@ -173,6 +155,8 @@ http::server::server_settings webserver_settings;
 #ifdef WWW_ENABLE_SSL
 http::server::ssl_server_settings secure_webserver_settings;
 #endif
+iamserver::iam_settings iamserver_settings;
+
 bool bStartWebBrowser = true;
 bool g_bUseWatchdog = true;
 
@@ -601,6 +585,12 @@ bool ParseConfigFile(const std::string &szConfigFile)
 			secure_webserver_settings.php_cgi_path = sLine;
 #endif
 		}
+		else if (szFlag == "vhostname") {
+			webserver_settings.vhostname = sLine;
+#ifdef WWW_ENABLE_SSL
+			secure_webserver_settings.vhostname = sLine;
+#endif
+		}
 		else if (szFlag == "app_path") {
 			szStartupFolder = sLine;
 			FixFolderEnding(szStartupFolder);
@@ -653,6 +643,10 @@ int main(int argc, char**argv)
 #endif //WIN32
 
 	CCmdLine cmdLine;
+
+	RBUF tsen;
+	memset(&tsen, 0, sizeof(RBUF));
+	int packetlength = sizeof(tsen.LIGHTNING) - 1;
 
 	// parse argc,argv 
 #if defined WIN32
@@ -834,6 +828,15 @@ int main(int argc, char**argv)
 			}
 			webserver_settings.listening_port = wwwport;
 		}
+		if (cmdLine.HasSwitch("-vhostname"))
+		{
+			if (cmdLine.GetArgumentCount("-vhostname") != 1)
+			{
+				_log.Log(LOG_ERROR, "Please specify a (FQDN) Virtual Hostname");
+				return 1;
+			}
+			webserver_settings.vhostname = cmdLine.GetSafeArgument("-vhostname", 0, "");
+		}
 		if (cmdLine.HasSwitch("-php_cgi_path"))
 		{
 			if (cmdLine.GetArgumentCount("-php_cgi_path") != 1)
@@ -879,6 +882,14 @@ int main(int argc, char**argv)
 			// Secure listening address has to be equal
 			secure_webserver_settings.listening_address = webserver_settings.listening_address;
 		}
+		if (!webserver_settings.vhostname.empty()) {
+			// vhostname has to be equal
+			secure_webserver_settings.vhostname = webserver_settings.vhostname;
+		}
+		if (!webserver_settings.php_cgi_path.empty()) {
+			// php_cgi_path has to be equal
+			secure_webserver_settings.php_cgi_path = webserver_settings.php_cgi_path;
+		}
 		if (cmdLine.HasSwitch("-sslcert"))
 		{
 			if (cmdLine.GetArgumentCount("-sslcert") != 1)
@@ -886,8 +897,9 @@ int main(int argc, char**argv)
 				_log.Log(LOG_ERROR, "Please specify a file path for your server certificate file");
 				return 1;
 			}
-			secure_webserver_settings.cert_file_path = cmdLine.GetSafeArgument("-sslcert", 0, "");
-			secure_webserver_settings.private_key_file_path = secure_webserver_settings.cert_file_path;
+			szCertFile = cmdLine.GetSafeArgument("-sslcert", 0, "");
+			secure_webserver_settings.cert_file_path = szCertFile;
+			secure_webserver_settings.private_key_file_path = szCertFile;
 		}
 		if (cmdLine.HasSwitch("-sslkey"))
 		{
@@ -933,15 +945,6 @@ int main(int argc, char**argv)
 				return 1;
 			}
 			secure_webserver_settings.tmp_dh_file_path = cmdLine.GetSafeArgument("-ssldhparam", 0, "");
-		}
-		if (cmdLine.HasSwitch("-php_cgi_path"))
-		{
-			if (cmdLine.GetArgumentCount("-php_cgi_path") != 1)
-			{
-				_log.Log(LOG_ERROR, "Please specify the path to the php-cgi command");
-				return 1;
-			}
-			secure_webserver_settings.php_cgi_path = cmdLine.GetSafeArgument("-php_cgi_path", 0, "");
 		}
 	}
 	secure_webserver_settings.www_root = szWWWFolder;
@@ -1034,6 +1037,11 @@ int main(int argc, char**argv)
 		}
 	}
 
+	if (cmdLine.HasSwitch("-nocache"))
+	{
+		bDoCachePages = false;
+	}
+
 #if defined WIN32
 	if (!bUseConfigFile) {
 		if (cmdLine.HasSwitch("-nobrowser"))
@@ -1117,11 +1125,13 @@ int main(int argc, char**argv)
 		/* Deamonize */
 		daemonize(szStartupFolder.c_str(), pidfile.c_str());
 	}
-	if ((g_bRunAsDaemon) || (g_bUseSyslog))
+	if ((g_bRunAsDaemon) && (g_bUseSyslog))
 	{
 		syslog(LOG_INFO, "Domoticz running...");
 	}
 #endif
+
+	m_mainworker.SetIamserverSettings(iamserver_settings);
 
 	if (!g_bRunAsDaemon)
 	{
@@ -1147,15 +1157,16 @@ int main(int argc, char**argv)
 #endif
 	}
 
+	if (!m_mainworker.Start())
+	{
+		return 1;
+	}
+
 	// start Watchdog thread after daemonization
 	m_LastHeartbeat = mytime(nullptr);
 	std::thread thread_watchdog(Do_Watchdog_Work);
 	SetThreadName(thread_watchdog.native_handle(), "Watchdog");
 
-	if (!m_mainworker.Start())
-	{
-		return 1;
-	}
 	m_StartTime = time(nullptr);
 
 	/* now, lets get into an infinite loop of doing nothing. */
@@ -1201,8 +1212,9 @@ int main(int argc, char**argv)
 #ifndef WIN32
 	if (g_bRunAsDaemon)
 	{
-		syslog(LOG_INFO, "Domoticz stopped...");
 		daemonShutdown();
+		if (g_bUseSyslog)
+			syslog(LOG_INFO, "Domoticz stopped...");
 
 		// Delete PID file
 		remove(pidfile.c_str());

@@ -7,7 +7,6 @@
 #include "../main/Logger.h"
 #include "hardwaretypes.h"
 #include "../main/RFXtrx.h"
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 #include <usb.h>
 #include <stdint.h>
@@ -19,8 +18,6 @@
 
 #define USB_VENDOR_CO2_STICK 0x03eb
 #define USB_PRODUCT_CO2_STICK 0x2013
-
-#define round(a) (int)(a + .5)
 
 // code taken and modified form https://github.com/bwildenhain/air-quality-sensor/blob/master/src/air01.c
 // at this moment it does not work under windows... no idea why... help appreciated!

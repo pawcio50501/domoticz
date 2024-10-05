@@ -1,4 +1,4 @@
-define(['app', 'timers/factories', 'timers/components'], function (app) {
+define(['app', 'timers/factories', 'timers/components','timers/planning'], function (app) {
 
     app.controller('DeviceTimersController', function ($scope, $routeParams, deviceApi, deviceLightApi, deviceRegularTimersApi, deviceSetpointTimersApi, deviceTimerOptions, deviceTimerConfigUtils, utils) {
         var vm = this;
@@ -17,10 +17,16 @@ define(['app', 'timers/factories', 'timers/components'], function (app) {
         function init() {
             vm.deviceIdx = $routeParams.id;
             vm.selectedTimerIdx = null;
+//          $.myglobals.ismobile = true;
+            vm.ismobile = ($.myglobals.ismobile == true);
+			
+            vm.typeOptions = deviceTimerOptions.timerTypes;
+			vm.timerSettings = deviceTimerConfigUtils.getTimerDefaultConfig();
 
             deviceApi.getDeviceInfo(vm.deviceIdx).then(function (device) {
                 vm.isLoaded = true;
                 vm.itemName = device.Name;
+                vm.device   = device     ;
                 vm.colorSettingsType = device.SubType;
                 vm.dimmerType = device.DimmerType;
 
@@ -28,7 +34,14 @@ define(['app', 'timers/factories', 'timers/components'], function (app) {
                 vm.isSelector = device.isSelector();
                 vm.isLED = device.isLED();
                 vm.isCommandSelectionDisabled = vm.isSelector && device.LevelOffHidden;
-                vm.isSetpointTimers = (device.Type === 'Thermostat' && device.SubType == 'SetPoint') || (device.Type === 'Radiator 1');
+				
+				var type = device.TypeImg.toLowerCase();
+				if ((device.CustomImage !== 0) && (typeof device.Image !== 'undefined')) {
+					type = device.Image.toLowerCase();
+				}
+                vm.isSetpointTimers = (device.Type === 'Setpoint' && device.SubType == 'SetPoint') || (device.Type === 'Radiator 1');
+				vm.isBlind = (type == 'blinds');
+				//vm.isBlind = [3, 13, 14, 15, 21].includes(device.SwitchTypeVal);
 
                 vm.levelOptions = [];
 
@@ -36,7 +49,7 @@ define(['app', 'timers/factories', 'timers/components'], function (app) {
                     ? deviceSetpointTimersApi
                     : deviceRegularTimersApi;
 
-                if (vm.isSelector) {
+                 if (vm.isSelector) {
                     vm.levelOptions = device.getSelectorLevelOptions();
                 }
 
@@ -54,19 +67,29 @@ define(['app', 'timers/factories', 'timers/components'], function (app) {
                     vm.timerSettings.level = vm.levelOptions[0].value;
                 }
 
+
+                if (!vm.isLED) 
+                    $(document).trigger("timersInitialized", [vm, refreshTimers]);//<===Update for Planning
+                else
+                    $('#GridTable').hide()
+
+				if (typeof device.vunit !== 'undefined') {
+					vm.timerSettings.vunit=device.vunit;
+				}
+
                 refreshTimers();
             });
-
-            vm.typeOptions = deviceTimerOptions.timerTypes;
-            vm.timerSettings = deviceTimerConfigUtils.getTimerDefaultConfig();
         }
 
         function refreshTimers() {
             vm.selectedTimerIdx = null;
 
             deviceTimers.getTimers(vm.deviceIdx).then(function (items) {
+                $( document ).trigger( "timersLoaded", [items] );//<===Update for Planning
                 vm.timers = items;
             });
+
+
         }
 
         function setDeviceColor() {
@@ -106,7 +129,8 @@ define(['app', 'timers/factories', 'timers/components'], function (app) {
                 color: vm.isLED ? config.color : undefined,
                 tvalue: vm.isSetpointTimers ? config.tvalue : undefined,
                 command: vm.isSetpointTimers ? undefined : config.command,
-                randomness: vm.isSetpointTimers ? undefined : config.randomness
+                randomness: vm.isSetpointTimers ? undefined : config.randomness,
+                persistent: config.persistent
             });
 
             var error = deviceTimerConfigUtils.getTimerConfigErrors(config);

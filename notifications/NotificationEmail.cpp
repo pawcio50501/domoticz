@@ -3,7 +3,6 @@
 #include "../smtpclient/SMTPClient.h"
 #include "../main/Helper.h"
 #include "../main/Logger.h"
-#include "../main/localtime_r.h"
 
 const static char *szHTMLMail =
 "<html>\n"
@@ -98,7 +97,7 @@ bool CNotificationEmail::SendMessageImplementation(
 	}
 	else
 	{
-		HtmlBody = std::string("<html>\n<body>\n<b>") + MessageText + std::string("</body>\n</html>\n");
+		HtmlBody = std::string("<html>\n<body>\n<b>") + MessageText + std::string("</b></body>\n</html>\n");
 	}
 
 	sclient.SetFrom(_EmailFrom);

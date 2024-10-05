@@ -5,6 +5,8 @@ define(['app'], function (app) {
             return 'lux'
         } else if (device.Type === 'Usage') {
             return 'u'
+        } else if (device.Type === 'Rain') {
+            return 'mm'
         } else {
             return 'v';
         }
@@ -29,6 +31,9 @@ define(['app'], function (app) {
     function sensorNameForDevice(device) {
         if (device.Type === 'Usage') {
             return $.t('Usage');
+		}
+        else if (device.Type === 'Rain') {
+            return $.t('Rain');
         } else {
             return $.t(device.SubType)
         }
@@ -57,7 +62,7 @@ define(['app'], function (app) {
                 if (!permissions.hasPermission('Admin')) {
                     HideNotify();
                     ShowNotify($.t('You do not have permission to do that!'), 2500, true);
-                    reject();
+                    return;
                 }
                 if (timezone !== undefined) {
                     Highcharts.setOptions({
@@ -82,9 +87,8 @@ define(['app'], function (app) {
 
                 bootbox.confirm(message, function (result) {
                     if (result !== true) {
-                        reject();
+                        return;
                     }
-
                     domoticzApi
                         .sendCommand('deletedatapoint', {
                             idx: deviceIdx,

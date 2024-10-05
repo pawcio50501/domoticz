@@ -29,11 +29,12 @@
 	#define Wire1_Base_Dir "/sys/bus/w1/devices"
 #endif //_DEBUG
 
-C1WireByKernel::C1WireByKernel()
+C1WireByKernel::C1WireByKernel(C1Wire *C1WireBase)
 {
+	m_p1WireBase = C1WireBase;
 	m_thread = std::make_shared<std::thread>([this] { ThreadFunction(); });
 	SetThreadName(m_thread->native_handle(), "1WireByKernel");
-	_log.Log(LOG_STATUS, "Using 1-Wire support (kernel W1 module)...");
+	m_p1WireBase->Log(LOG_STATUS, "Using 1-Wire support (kernel W1 module)...");
 }
 
 C1WireByKernel::~C1WireByKernel()
@@ -93,13 +94,13 @@ void C1WireByKernel::ReadStates()
 {
 	for (auto & it : m_Devices)
 	{
+		// Priority to changes asked by Domoticz
+		ThreadProcessPendingChanges();
+
+		DeviceState* device = it.second;
 		// Next read one device state
 		try
 		{
-			// Priority to changes asked by Domoticz
-			ThreadProcessPendingChanges();
-
-			DeviceState* device = it.second;
 
 			switch (device->GetDevice().family)
 			{
@@ -145,7 +146,10 @@ void C1WireByKernel::ReadStates()
 		}
 		catch (const OneWireReadErrorException& e)
 		{
-			_log.Log(LOG_ERROR, "%s", e.what());
+			m_p1WireBase->Log(LOG_ERROR, "%s", e.what());
+			if ( device->GetDevice().family == Temperature_memory ){
+			    device->m_Temperature = -1000.0F; //invalid temperature
+			}
 		}
 	}
 
@@ -181,12 +185,12 @@ void C1WireByKernel::ThreadProcessPendingChanges()
 			}
 			catch (const OneWireReadErrorException& e)
 			{
-				_log.Log(LOG_ERROR, "%s", e.what());
+				m_p1WireBase->Log(LOG_ERROR, "%s", e.what());
 				continue;
 			}
 			catch (const OneWireWriteErrorException& e)
 			{
-				_log.Log(LOG_ERROR, "%s", e.what());
+				m_p1WireBase->Log(LOG_ERROR, "%s", e.what());
 				continue;
 			}
 			success = true;
@@ -218,7 +222,7 @@ void C1WireByKernel::ThreadBuildDevicesList()
 				std::string sLine;
 
 				catfile+="/"+directoryName+"/w1_master_slaves";
-				
+
 				infile.open(catfile.c_str());
 				if (!infile.is_open())
 					return;
@@ -227,7 +231,7 @@ void C1WireByKernel::ThreadBuildDevicesList()
 				while (!infile.eof())
 				{
 					getline(infile, sLine);
-					if (!sLine.empty())
+					if (!sLine.empty() && sLine.find("not found.") == std::string::npos)
 					{
 						// Get the device from it's name
 						_t1WireDevice device;
@@ -241,10 +245,10 @@ void C1WireByKernel::ThreadBuildDevicesList()
 						case programmable_resolution_digital_thermometer:
 						case Temperature_memory:
 							m_Devices[device.devid] = new DeviceState(device);
-							_log.Log(LOG_STATUS, "1Wire: Added Device: %s", sLine.c_str());
+							m_p1WireBase->Log(LOG_STATUS, "1Wire: Added Device: %s", sLine.c_str());
 							break;
 						default: // Device not supported in kernel mode (maybe later...), use OWFS solution.
-							_log.Log(LOG_ERROR, "1Wire: Device not yet supported in Kernel mode (Please report!) ID:%s, family: %02X", sLine.c_str(), device.family);
+							m_p1WireBase->Log(LOG_ERROR, "1Wire: Device not yet supported in Kernel mode (Please report!) ID:%s, family: %02X", sLine.c_str(), device.family);
 							break;
 						}
 					}

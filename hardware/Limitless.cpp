@@ -4,12 +4,9 @@
 #include "../main/Logger.h"
 #include "../main/SQLHelper.h"
 #include "hardwaretypes.h"
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 #include "../main/WebServer.h"
 #include "../webserver/cWebem.h"
-
-#define round(a) (int)(a + .5)
 
 // This hardware goes under a few different names, i was told the original name was AppLamp
 
@@ -181,7 +178,7 @@ bool CLimitLess::AddSwitchIfNotExits(const unsigned char Unit, const std::string
 		result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d) AND (Type==%d) AND (SubType==%d)", m_HwdID, int(Unit), pTypeColorSwitch, int(m_LEDType));
 		if (result.empty())
 		{
-			m_sql.InsertDevice(m_HwdID, "1", Unit, pTypeColorSwitch, m_LEDType, STYPE_Dimmer, 0, " ", devname);
+			m_sql.InsertDevice(m_HwdID, 0, "1", Unit, pTypeColorSwitch, m_LEDType, STYPE_Dimmer, 0, " ", devname);
 			return false;
 		}
 	}
@@ -191,7 +188,7 @@ bool CLimitLess::AddSwitchIfNotExits(const unsigned char Unit, const std::string
 					  sTypeColor_RGB_CW_WW);
 		if (result.empty())
 		{
-			m_sql.InsertDevice(m_HwdID, "1", Unit, pTypeColorSwitch, sTypeColor_RGB_CW_WW, STYPE_Dimmer, 0, " ", devname);
+			m_sql.InsertDevice(m_HwdID, 0, "1", Unit, pTypeColorSwitch, sTypeColor_RGB_CW_WW, STYPE_Dimmer, 0, " ", devname);
 			return false;
 		}
 	}
@@ -283,7 +280,7 @@ bool CLimitLess::IsDataAvailable(const SOCKET /*sock*/)
 	tv.tv_usec = 0;
 
 	// Wait until timeout or data received.
-	n = select(m_RemoteSocket + 1, &fds, nullptr, nullptr, &tv);
+	n = select(static_cast<int>(m_RemoteSocket + 1), &fds, nullptr, nullptr, &tv);
 	return (n > 0);
 }
 
@@ -1057,7 +1054,7 @@ bool CLimitLess::WriteToHardware(const char *pdata, const unsigned char /*length
 				// Send brightness, sleep 100ms
 				// convert brightness (0-100) to (0-50) to 0-59
 				double dval = (59.0 / 100.0) * float(pLed->value / 2);
-				int ival = round(dval);
+				int ival = ground(dval);
 				if (ival < 2)
 					ival = 2;
 				if (ival > 27)
@@ -1246,7 +1243,7 @@ bool CLimitLess::WriteToHardware(const char *pdata, const unsigned char /*length
 				Send_V4V5_RGBW_On(pLed->dunit, 100);
 				// convert brightness (0-100) to (0-50) to 0-59
 				double dval = (59.0 / 100.0) * float(pLed->value / 2);
-				int ival = round(dval);
+				int ival = ground(dval);
 				if (ival < 2)
 					ival = 2;
 				if (ival > 27)

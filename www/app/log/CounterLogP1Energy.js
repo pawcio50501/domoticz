@@ -14,7 +14,20 @@ define(['app', 'log/Chart', 'log/CounterLogParams', 'log/CounterLogEnergySeriesS
                     }
                 }
             },
-            chartParamsWeekTemplate: {
+            chartParamsHourTemplate: {
+                highchartTemplate: {
+                    plotOptions: {
+                    },
+                    tooltip: {
+						headerFormat: '{point.x:%A, %B %d, %Y %H:00}<br/>',
+                        outside: true,
+						crosshairs: true,
+						shared: true,
+						//useHTML: true
+                    }
+                }
+            },
+            chartParamsMonthYearTemplate: {
                 highchartTemplate: {
                     plotOptions: {
                         column: {
@@ -25,15 +38,12 @@ define(['app', 'log/Chart', 'log/CounterLogParams', 'log/CounterLogEnergySeriesS
                         }
                     },
                     tooltip: {
-                        pointFormat: '{series.name}: <b>{point.y:,.f}</b> ( {point.percentage:.0f}% )<br>',
-                        footerFormat: 'Total: {point.total:,.f} {series.tooltipOptions.valueSuffix}'
-                    }
-                }
-            },
-            chartParamsMonthYearTemplate: {
-                highchartTemplate: {
-                    tooltip: {
-                        shared: false
+						headerFormat: '{point.x:%A, %B %d}<br/>',
+						//pointFormat: '<span style="color: {point.color}">●</span> {series.name}: <b>{abs3 point.y} {point.series.tooltipOptions.valueSuffix}</b><br>',
+                        outside: true,
+						crosshairs: true,
+                        shared: true,
+						//useHTML: true
                     }
                 }
             },
@@ -70,7 +80,6 @@ define(['app', 'log/Chart', 'log/CounterLogParams', 'log/CounterLogEnergySeriesS
                         title: {
                             text: $.t('Energy') + ' (' + chart.valueUnits.energy(chart.valueMultipliers.m1) + ')'
                         },
-                        min: 0
                     },
                     {
                         title: {
@@ -81,24 +90,43 @@ define(['app', 'log/Chart', 'log/CounterLogParams', 'log/CounterLogEnergySeriesS
                     }
                 ];
             },
-            yAxesWeek: function (deviceType) {
+            yAxesHour: function (deviceType) {
                 return [
                     {
-                        maxPadding: 0.2,
                         title: {
-                            text: $.t('Energy') + ' (' + chart.valueUnits.energy(chart.valueMultipliers.m1000) + ')'
+                            text: $.t('Energy') + ' (' + chart.valueUnits.energy(chart.valueMultipliers.m1) + ')'
                         },
-                        min: 0
+						min: 0
+                    },
+                    {
+                        title: {
+                            text: $.t('Price') + ' (' + $.myglobals.currencysign + ')'
+                        },
+						visible: true,
+						showEmpty: false,
+						opposite: true
                     }
                 ];
             },
             yAxesMonthYear: function (deviceType) {
                 return [
                     {
+						labels: {
+							formatter: function () {
+								return Math.abs(Highcharts.numberFormat(this.value, 0));
+							}
+						},
                         title: {
                             text: $.t('Energy') + ' (' + chart.valueUnits.energy(chart.valueMultipliers.m1000) + ')'
                         },
-                        min: 0
+                    },
+                    {
+                        title: {
+                            text: $.t('Price') + ' (' + $.myglobals.currencysign + ')'
+                        },
+						visible: true,
+						showEmpty: false,
+						opposite: true
                     }
                 ];
             },
@@ -111,20 +139,26 @@ define(['app', 'log/Chart', 'log/CounterLogParams', 'log/CounterLogEnergySeriesS
                     }
                 ];
             },
-            daySeriesSuppliers: function (deviceType) {
+            daySeriesSuppliers: function (deviceType, divider) {
                 return []
                     .concat(counterLogEnergySeriesSuppliers.p1DaySeriesSuppliers(deviceType))
                     .concat(counterLogEnergySeriesSuppliers.powerReturnedDaySeriesSuppliers(deviceType));
             },
-            weekSeriesSuppliers: function (deviceType) {
+            hourSeriesSuppliers: function (deviceType) {
                 return []
-                    .concat(counterLogEnergySeriesSuppliers.p1WeekSeriesSuppliers(deviceType))
-                    .concat(counterLogEnergySeriesSuppliers.powerReturnedWeekSeriesSuppliers(deviceType));
+                    .concat(counterLogEnergySeriesSuppliers.p1HourSeriesSuppliers(deviceType))
+                    .concat(counterLogEnergySeriesSuppliers.powerReturnedHourSeriesSuppliers(deviceType))
+                    .concat(counterLogEnergySeriesSuppliers.p1PriceSeriesSuppliers(deviceType));
             },
             monthYearSeriesSuppliers: function (deviceType) {
                 return []
-                    .concat(counterLogEnergySeriesSuppliers.counterMonthYearSeriesSuppliers(deviceType))
-                    .concat(counterLogEnergySeriesSuppliers.powerReturnedMonthYearSeriesSuppliers(deviceType));
+                    .concat(counterLogEnergySeriesSuppliers.p1MonthYearSeriesSuppliers(deviceType))
+                    .concat(counterLogEnergySeriesSuppliers.p1TrendlineMonthYearSeriesSuppliers(deviceType))
+					.concat(counterLogEnergySeriesSuppliers.powerReturnedMonthYearSeriesSuppliers(deviceType))
+					.concat(counterLogEnergySeriesSuppliers.powerTrendlineReturnedMonthYearSeriesSuppliers(deviceType))
+					.concat(counterLogEnergySeriesSuppliers.p1PastMonthYearSeriesSuppliers(deviceType))
+					.concat(counterLogEnergySeriesSuppliers.powerPastReturnedMonthYearSeriesSuppliers(deviceType))
+                    .concat(counterLogEnergySeriesSuppliers.p1PriceSeriesSuppliers(deviceType));
             },
             preprocessCompareData: function (data) {
                 this.dataContainsDelivery = data.delivered ? true : false;

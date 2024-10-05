@@ -63,6 +63,17 @@ define(['app', 'livesocket'], function (app) {
 				}, 200);
 			}, 600);
 		}
+		
+		AddManualCode = function() {
+			$('#dialog-addmanualactivationdevice #comboswitch').html("");
+			$.each($.LightsAndSwitches, function (i, item) {
+				var option = $('<option />');
+				option.attr('value', item.idx).text(item.name);
+				$('#dialog-addmanualactivationdevice #comboswitch').append(option);
+			});
+			
+			$("#dialog-addmanualactivationdevice").dialog("open");		
+		}
 
 		ClearCodes = function () {
 			var bValid = false;
@@ -88,7 +99,7 @@ define(['app', 'livesocket'], function (app) {
 			bootbox.confirm($.t("Are you sure to remove this Scene?"), function (result) {
 				if (result == true) {
 					$.ajax({
-						url: "json.htm?type=deletescene&idx=" + SceneIdx,
+						url: "json.htm?type=command&param=deletescene&idx=" + SceneIdx,
 						async: false,
 						dataType: 'json',
 						success: function (data) {
@@ -145,7 +156,7 @@ define(['app', 'livesocket'], function (app) {
 				var SceneType = $element.find("#combotype").val();
 				var bIsProtected = $element.find('#protected').is(":checked");
 				$.ajax({
-					url: "json.htm?type=updatescene&idx=" + SceneIdx +
+					url: "json.htm?type=command&param=updatescene&idx=" + SceneIdx +
 					"&scenetype=" + SceneType +
 					"&name=" + encodeURIComponent($element.find("#devicename").val()) +
 					"&description=" + encodeURIComponent($element.find("#devicedescription").val()) +
@@ -799,10 +810,6 @@ define(['app', 'livesocket'], function (app) {
 					if ($(id + " #bigtext").html() != bigtext) {
 						$(id + " #bigtext").html(bigtext);
 					}
-
-					if ($(id + " #status").html() != TranslateStatus(item.Status)) {
-						$(id + " #status").html(TranslateStatus(item.Status));
-					}
 				}
 
 				if ($(id + " #img1").html() != img1) {
@@ -812,15 +819,22 @@ define(['app', 'livesocket'], function (app) {
 				if ($(id + " #lastupdate").html() != item.LastUpdate) {
 					$(id + " #lastupdate").html(item.LastUpdate);
 				}
-				if ($scope.config.ShowUpdatedEffect == true) {
-					$(id + " #name").effect("highlight", { color: '#EEFFEE' }, 1000);
+				
+				var searchText = GenerateLiveSearchTextSG(item, bigtext);
+				$(id).find('#name').attr('data-search', searchText);
+				
+				if (!document.hidden) {
+					if ($scope.config.ShowUpdatedEffect == true) {
+						$(id + " #name").effect("highlight", { color: '#EEFFEE' }, 1000);
+					}
 				}
+				RefreshLiveSearch();
 			}
 		}
 
 		//We only call this once. After this the widgets are being updated automatically by used of the websocket broadcast event.
 		RefreshScenes = function () {
-			livesocket.getJson("json.htm?type=scenes&lastupdate=" + $.LastUpdateTime, function (data) {
+			livesocket.getJson("json.htm?type=command&param=getscenes&lastupdate=" + $.LastUpdateTime, function (data) {
 				if (typeof data.ServerTime != 'undefined') {
 					$rootScope.SetTimeAndSun(data.Sunrise, data.Sunset, data.ServerTime);
 				}
@@ -843,34 +857,16 @@ define(['app', 'livesocket'], function (app) {
 			RefreshLightSwitchesComboArray();
 
 			var htmlcontent = '';
-			var bHaveAddedDevider = false;
+			var bHaveAddedDivider = false;
 			var bAllowWidgetReorder = true;
 
 			var tophtm = "";
-
-			tophtm +=
-				'\t<table border="0" cellpadding="0" cellspacing="0" width="100%">\n' +
-				'\t<tr>\n' +
-				'\t  <td align="left" valign="top" id="timesun"></td>\n' +
-				'\t</tr>\n' +
-				'\t</table>\n';
-
-			if (permissions.hasPermission("Admin")) {
-				tophtm +=
-					'\t<table id="bannav" class="bannav" border="0" cellpadding="0" cellspacing="0" width="100%">' +
-					'\t<tr>' +
-					'\t  <td align="left">' +
-					'\t    <a class="btnstyle addscenebtn" onclick="AddScene();" data-i18n="Add Scene">Add Scene</a>' +
-					'\t  </td>' +
-					'\t</tr>' +
-					'\t</table>\n';
-			}
 
 			var i = 0;
 			var j = 0;
 
 			$.ajax({
-				url: "json.htm?type=scenes",
+				url: "json.htm?type=command&param=getscenes",
 				async: false,
 				dataType: 'json',
 				success: function (data) {
@@ -883,18 +879,18 @@ define(['app', 'livesocket'], function (app) {
 						$.each(data.result, function (i, item) {
 							if (j % 3 == 0) {
 								//add divider
-								if (bHaveAddedDevider == true) {
-									//close previous devider
+								if (bHaveAddedDivider == true) {
+									//close previous divider
 									htmlcontent += '</div>\n';
 								}
 								htmlcontent += '<div class="row divider">\n';
-								bHaveAddedDevider = true;
+								bHaveAddedDivider = true;
 							}
 
 							var backgroundClass = $rootScope.GetItemBackgroundStatus(item);
 							var bAddTimer = true;
 							var xhtm =
-								'\t<div class="item span4 ' + backgroundClass + '" id="' + item.idx + '">\n' +
+								'\t<div class="item span4 itemBlock ' + backgroundClass + '" id="' + item.idx + '">\n' +
 								'\t  <section>\n';
 							if (item.Type == "Scene") {
 								xhtm += '\t    <table id="itemtablenostatus" border="0" cellpadding="0" cellspacing="0">\n';
@@ -902,11 +898,14 @@ define(['app', 'livesocket'], function (app) {
 							else {
 								xhtm += '\t    <table id="itemtabledoubleicon" border="0" cellpadding="0" cellspacing="0">\n';
 							}
+							var bigtext = TranslateStatusShort(item.Status);
+							
+							var searchText = GenerateLiveSearchTextSG(item, bigtext);
+							
 							xhtm +=
 								'\t    <tr>\n' +
-								'\t      <td id="name">' + item.Name + '</td>\n' +
+								'\t      <td id="name" class="item-name" data-idx="'+item.idx+'" data-desc="'+item.Description.replace('"',"'")+'" data-search="'+searchText+'">' + item.Name +'</td>\n' +
 								'\t      <td id="bigtext">';
-							var bigtext = TranslateStatusShort(item.Status);
 							if (item.UsedByCamera == true) {
 								var streamimg = '<img src="images/webcam.png" title="' + $.t('Stream Video') + '" height="16" width="16">';
 								streamurl = "<a href=\"javascript:ShowCameraLiveStream('" + escape(item.Name) + "'," + item.CameraIdx + "," + item.CameraAspect + ")\">" + streamimg + "</a>";
@@ -916,7 +915,7 @@ define(['app', 'livesocket'], function (app) {
 
 							if (item.Type == "Scene") {
 								xhtm += '<td id="img1" class="img img1"><img src="images/Push48_On.png" title="' + $.t('Activate scene') + '" onclick="SwitchScene(' + item.idx + ',\'On\', ' + item.Protected + ');" class="lcursor" height="48" width="48"></td>\n';
-								xhtm += '\t      <td id="status" class="status"><span>&nbsp;</span></td>\n';
+								xhtm += '\t      <td id="status"><span>&nbsp;</span></td>\n';
 							}
 							else {
 								var onclass = "";
@@ -932,7 +931,7 @@ define(['app', 'livesocket'], function (app) {
 
 								xhtm += '<td id="img1" class="img img1"><img class="lcursor ' + onclass + '" src="images/Push48_On.png" title="' + $.t('Turn On') + '" onclick="SwitchScene(' + item.idx + ',\'On\', ' + item.Protected + ');" height="48" width="48"></td>\n';
 								xhtm += '<td id="img2" class="img img2"><img class="lcursor ' + offclass + '"src="images/Push48_Off.png" title="' + $.t('Turn Off') + '" onclick="SwitchScene(' + item.idx + ',\'Off\', ' + item.Protected + ');" height="48" width="48"></td>\n';
-								xhtm += '\t      <td id="status" class="status">&nbsp;</td>\n';
+								xhtm += '\t      <td id="status">&nbsp;</td>\n';
 							}
 							xhtm +=
 								'\t      <td id="lastupdate" class="lastupdate">' + item.LastUpdate + '</td>\n' +
@@ -971,8 +970,9 @@ define(['app', 'livesocket'], function (app) {
 					}
 				}
 			});
-			if (bHaveAddedDevider == true) {
-				//close previous devider
+
+			if (bHaveAddedDivider == true) {
+				//close previous divider
 				htmlcontent += '</div>\n';
 			}
 			if (htmlcontent == '') {
@@ -1040,7 +1040,7 @@ define(['app', 'livesocket'], function (app) {
 							var SceneName = encodeURIComponent($("#dialog-addscene #scenename").val());
 							var SceneType = $("#dialog-addscene #combotype").val();
 							$.ajax({
-								url: "json.htm?type=addscene&name=" + SceneName + "&scenetype=" + SceneType,
+								url: "json.htm?type=command&param=addscene&name=" + SceneName + "&scenetype=" + SceneType,
 								async: false,
 								dataType: 'json',
 								success: function (data) {
@@ -1068,7 +1068,61 @@ define(['app', 'livesocket'], function (app) {
 					$(this).dialog("close");
 				}
 			}).i18n();
+
+			$("#dialog-addmanualactivationdevice").dialog({
+				autoOpen: false,
+				width: 380,
+				height: 200,
+				modal: true,
+				resizable: false,
+				title: $.t("Add Manual Light/Switch Device"),
+				buttons: [{
+					text: $.t("Add Device"),
+					click: function () {
+						var deviceidx = $('#dialog-addmanualactivationdevice #comboswitch').val();
+						if (typeof deviceidx == 'undefined') {
+							bootbox.alert($.t('No Device Selected!'));
+							return;
+						}
+						var Cmd = $('#dialog-addmanualactivationdevice #combocode').val();
+						$.pDialog = $(this);
+						$.ajax({
+							url: "json.htm?type=command&param=addscenecode&sceneidx=" + SceneIdx + "&idx=" + deviceidx + "&cmnd=" + Cmd,
+							async: false,
+							dataType: 'json',
+							success: function (data) {
+								$.pDialog.dialog("close");
+								RefreshActivators();
+							}
+						});
+					}
+				}, {
+					text: $.t("Cancel"),
+					click: function () {
+						$(this).dialog("close");
+					}
+				}],
+				close: function () {
+					$(this).dialog("close");
+				}
+			}).i18n();
+
+
+			//handles TopBar Links
+			$scope.tblinks=[];
+			if (permissions.hasPermission("Admin")) {
+				$scope.tblinks = [
+					{
+						onclick:"AddScene", 
+						text:"Add Scene", 
+						i18n: "Add Scene", 
+						icon: "plus-circle"
+					}
+				];
+			}
+
 			ShowScenes();
+			WatchLiveSearch();
 		};
 
 	});

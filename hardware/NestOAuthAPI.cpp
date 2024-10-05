@@ -8,15 +8,12 @@
 #include "../main/Helper.h"
 #include "../main/Logger.h"
 #include "hardwaretypes.h"
-#include "../main/localtime_r.h"
 #include "../main/RFXtrx.h"
 #include "../main/SQLHelper.h"
 #include "../httpclient/HTTPClient.h"
 #include "../main/mainworker.h"
 #include "../main/json_helper.h"
 #include "../webserver/Base64.h"
-
-#define round(a) (int)(a + .5)
 
 // Base URL of API including trailing slash
 const std::string NEST_OAUTHAPI_BASE = "https://developer-api.nest.com/";
@@ -91,20 +88,6 @@ void CNestOAuthAPI::Do_Work()
 	}
 	Logout();
 	Log(LOG_STATUS, "Worker stopped...");
-}
-
-void CNestOAuthAPI::SendSetPointSensor(const unsigned char Idx, const float Temp, const std::string &defaultname)
-{
-	_tThermostat thermos;
-	thermos.subtype = sTypeThermSetpoint;
-	thermos.id1 = 0;
-	thermos.id2 = 0;
-	thermos.id3 = 0;
-	thermos.id4 = Idx;
-	thermos.dunit = 0;
-	thermos.temp = Temp;
-
-	sDecodeRXMessage(this, (const unsigned char *)&thermos, defaultname.c_str(), 255, nullptr);
 }
 
 // Creates and updates switch used to log Heating and/or Cooling.
@@ -505,8 +488,8 @@ void CNestOAuthAPI::GetMeterDetails()
 		return;
 	}
 
-	size_t iThermostat = 0;
-	size_t iStructure = 0;
+	int iThermostat = 0;
+	int iStructure = 0;
 	for (auto nstructure : structureRoot)
 	{
 		// Get general structure information
@@ -568,7 +551,7 @@ void CNestOAuthAPI::GetMeterDetails()
 			if (!ndevice["target_temperature_" + temperatureScale].empty())
 			{
 				float currentSetpoint = ndevice["target_temperature_" + temperatureScale].asFloat();
-				SendSetPointSensor((const unsigned char)(iThermostat * 3) + 1, currentSetpoint, Name + " Setpoint");
+				SendSetPointSensor(0, 0, 0, (const unsigned char)(iThermostat * 3) + 1, 0, currentSetpoint, Name + " Setpoint");
 			}
 			// Room Temperature/Humidity
 			if (!ndevice["ambient_temperature_" + temperatureScale].empty())
@@ -617,8 +600,8 @@ void CNestOAuthAPI::SetSetpoint(const int idx, const float temp)
 			return;
 	}
 
-	size_t iThermostat = (idx - 1) / 3;
-	if (iThermostat > m_thermostats.size())
+	int iThermostat = (idx - 1) / 3;
+	if (iThermostat > (int)m_thermostats.size())
 		return;
 
 	if (m_thermostats[iThermostat].Serial.empty())
@@ -657,10 +640,10 @@ void CNestOAuthAPI::SetSetpoint(const int idx, const float temp)
 bool CNestOAuthAPI::SetManualEcoMode(const unsigned char node_id, const bool bIsOn)
 {
 	// Determine the index for the thermostat.
-	size_t iThermostat = (node_id - 4) / 3;
+	int iThermostat = (node_id - 4) / 3;
 
 	// Check if we even got that many thermostats.
-	if (iThermostat > m_thermostats.size())
+	if (iThermostat > (int)m_thermostats.size())
 		return false;
 
 	// Grab a reference to that thermostat.
@@ -737,8 +720,8 @@ bool CNestOAuthAPI::PushToNestApi(const std::string & /*sMethod*/, const std::st
 
 bool CNestOAuthAPI::SetAway(const unsigned char Idx, const bool bIsAway)
 {
-	size_t iStructure = (Idx - 3) / 3;
-	if (iStructure > m_structures.size())
+	int iStructure = (Idx - 3) / 3;
+	if (iStructure > (int)m_structures.size())
 		return false;
 
 	if (m_structures[iStructure].StructureId.empty())

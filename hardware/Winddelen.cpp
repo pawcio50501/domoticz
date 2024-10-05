@@ -5,7 +5,6 @@
 #include "../httpclient/HTTPClient.h"
 #include "../httpclient/UrlEncode.h"
 #include "hardwaretypes.h"
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 #include "../main/json_helper.h"
 
@@ -262,7 +261,7 @@ void CWinddelen::GetMeterDetails()
 		return;
 	}
 
-	int fpos;
+	size_t fpos;
 	std::string pusage = stdstring_trim(results[7]);
 	fpos = pusage.find_first_of(' ');
 	if (fpos != std::string::npos)

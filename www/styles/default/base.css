@@ -250,9 +250,17 @@ textarea:focus {
 	display: block;
 }
 
-	#influxmain > table > tbody > tr > td > table {
-		margin-bottom: 20px
-	}
+#influxmain > table > tbody > tr > td > table {
+	margin-bottom: 20px
+}
+
+#mqttmain > table > tbody > tr > td {
+	display: block;
+}
+
+#mqttmain > table > tbody > tr > td > table {
+	margin-bottom: 20px
+}
 
 #googlepubsubmain > table > tbody > tr > td {
 	display: block;
@@ -357,6 +365,7 @@ textarea:focus {
 #userparamstable, #activeparamstable, #lightcontent paramstable,
 #scenecontent #paramstable,
 #notificationparamstable, #hardwareparamstable,
+#profiletable, #passwdtable,
 #eventparamstable {
 	background-color: #11213d;
 	border-top: 10px solid #11213d;

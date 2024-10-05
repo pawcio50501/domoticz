@@ -4,7 +4,6 @@
 #include "../main/Helper.h"
 #include "../main/SQLHelper.h"
 #include <iostream>
-#include "../main/localtime_r.h"
 #include "../main/mainworker.h"
 #include "../hardware/hardwaretypes.h"
 #include <json/json.h>
@@ -185,7 +184,7 @@ bool OnkyoAVTCP::StopHardware()
 
 void OnkyoAVTCP::OnConnect()
 {
-	Log(LOG_STATUS, "connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	m_bIsStarted = true;
 
 	SendPacket("NRIQSTN");
@@ -194,7 +193,7 @@ void OnkyoAVTCP::OnConnect()
 
 void OnkyoAVTCP::OnDisconnect()
 {
-	Log(LOG_STATUS, "disconnected");
+	Log(LOG_STATUS, "Disconnected");
 }
 
 void OnkyoAVTCP::Do_Work()
@@ -212,12 +211,12 @@ void OnkyoAVTCP::Do_Work()
 	}
 	terminate();
 
-	Log(LOG_STATUS, "TCP/IP Worker stopped...");
+	Log(LOG_STATUS, "Worker stopped...");
 }
 
 void OnkyoAVTCP::OnData(const unsigned char *pData, size_t length)
 {
-	ParseData(pData, length);
+	ParseData(pData, static_cast<int>(length));
 }
 
 void OnkyoAVTCP::OnError(const boost::system::error_code &error)
@@ -318,7 +317,7 @@ bool OnkyoAVTCP::SendPacket(const char *pdata)
 
 	pPkt->magic = htonl(0x49534350); // "ISCP"
 	pPkt->hdr_size = htonl(16);
-	pPkt->data_size = htonl(length + 3);
+	pPkt->data_size = static_cast<uint32_t>(htonl((unsigned long)length + 3));
 	pPkt->version = 1;
 	memset(pPkt->reserved, 0, sizeof(pPkt->reserved));
 	pPkt->start = '!';
@@ -443,9 +442,9 @@ void OnkyoAVTCP::EnsureSwitchDevice(int ID, const char *options)
 			options = options_str.c_str();
 			Log(LOG_ERROR, "Options from '%s': '%s'\n", switch_types[ID].options, options);
 		}
-		m_sql.safe_query("INSERT INTO DeviceStatus (HardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, SignalLevel, BatteryLevel, Name, nValue, sValue, CustomImage, Options) "
-				 "VALUES (%d, '%08X', %d, %d, %d, %d, %d, 12, 255, '%q', 0, '%q', %d, '%q')",
-				 m_HwdID, ID, 0, pTypeGeneralSwitch, switch_types[ID].subtype, switch_types[ID].switchType, 1, switch_types[ID].name, "", switch_types[ID].customImage,
+		m_sql.safe_query("INSERT INTO DeviceStatus (HardwareID, OrgHardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, SignalLevel, BatteryLevel, Name, nValue, sValue, CustomImage, Options) "
+				 "VALUES (%d, %d, '%08X', %d, %d, %d, %d, %d, 12, 255, '%q', 0, '%q', %d, '%q')",
+				 m_HwdID, 0, ID, 0, pTypeGeneralSwitch, switch_types[ID].subtype, switch_types[ID].switchType, 1, switch_types[ID].name, "", switch_types[ID].customImage,
 				 options ? options : "");
 	}
 }
@@ -501,7 +500,7 @@ bool OnkyoAVTCP::ReceiveXML(const char *pData, int Len)
 				continue;
 
 			char *escaped_name = strdup(name);
-			int nlen = strlen(name);
+			size_t nlen = strlen(name);
 			while (nlen)
 			{
 				if (escaped_name[nlen - 1] == ' ' && escaped_name[nlen] == 0)

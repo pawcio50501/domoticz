@@ -142,7 +142,10 @@ namespace Plugins {
 		// Populate the unit dictionary if there are any
 		std::string DeviceID = PyBorrowedRef(self->DeviceID);
 		std::vector<std::vector<std::string>> result;
+		
+		Py_BEGIN_ALLOW_THREADS
 		result = m_sql.safe_query("SELECT Name, Unit FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%s')", pModState->pPlugin->m_HwdID, DeviceID.c_str());
+		Py_END_ALLOW_THREADS
 		if (!result.empty())
 		{
 
@@ -481,9 +484,12 @@ namespace Plugins {
 			std::string sDevice = PyBorrowedRef(pDevice->DeviceID);
 			// load associated devices to make them available to python
 			std::vector<std::vector<std::string>> result;
+			
+			Py_BEGIN_ALLOW_THREADS
 			result = m_sql.safe_query("SELECT Unit, ID, Name, nValue, sValue, Type, SubType, SwitchType, LastLevel, CustomImage, SignalLevel, BatteryLevel, LastUpdate, Options, "
 						  "Description, Color, Used, AddjValue, AddjMulti FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%s') AND (Unit==%d) ORDER BY Unit ASC",
 						  pModState->pPlugin->m_HwdID, sDevice.c_str(), self->Unit);
+			Py_END_ALLOW_THREADS
 			if (!result.empty())
 			{
 				for (const auto &sd : result)
@@ -514,8 +520,10 @@ namespace Plugins {
 						else
 						{
 							std::map<std::string, std::string> mpOptions;
-							Py_BEGIN_ALLOW_THREADS mpOptions = m_sql.BuildDeviceOptions(sd[13], true);
-							Py_END_ALLOW_THREADS for (const auto &opt : mpOptions)
+							Py_BEGIN_ALLOW_THREADS 
+							mpOptions = m_sql.BuildDeviceOptions(sd[13], true);
+							Py_END_ALLOW_THREADS
+							for (const auto &opt : mpOptions)
 							{
 								PyNewRef pKeyDict = PyUnicode_FromString(opt.first.c_str());
 								PyNewRef pValueDict = PyUnicode_FromString(opt.second.c_str());
@@ -621,58 +629,31 @@ namespace Plugins {
 							}
 						}
 
-
-						std::string sSQL = "INSERT INTO DeviceStatus "
-								   "(HardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, SignalLevel, BatteryLevel, Name, nValue, sValue, CustomImage, Description, Color, Options, LastUpdate) "
-								   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
-
-						std::vector<std::string> vValues;
-						// Keys
-						vValues.push_back(std::to_string(pModState->pPlugin->m_HwdID));
-						vValues.push_back(sDeviceID);
-						vValues.push_back(std::to_string(self->Unit));
-						// Values
-						vValues.push_back(std::to_string(self->Type));
-						vValues.push_back(std::to_string(self->SubType));
-						vValues.push_back(std::to_string(self->SwitchType));
-						vValues.push_back(std::to_string(self->Used));
-						vValues.push_back(std::to_string(self->SignalLevel));
-						vValues.push_back(std::to_string(self->BatteryLevel));
-						vValues.push_back(sName);
-						vValues.push_back(std::to_string(self->nValue));
-						vValues.push_back(sValue);
-						vValues.push_back(std::to_string(self->Image));
-						vValues.push_back(sDescription);
-						vValues.push_back(sColor);
-						vValues.push_back(sOptionValue);
-						vValues.push_back(TimeToString(nullptr, TF_DateTime));
-
-						// Handle any data we get back (this method allows for any special characters in the strings such as ' and ")
-						if (!m_sql.execute_sql(sSQL, &vValues, true))
-						{
-							pModState->pPlugin->Log(LOG_ERROR, "Creation of 'UnitEx' failed to insert a DeviceStatus record for key %d/%s/%d", 
-										pModState->pPlugin->m_HwdID, sDeviceID.c_str(), self->Unit);
-						}
-
-						result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%s') AND (Unit==%d)", pModState->pPlugin->m_HwdID, sDeviceID.c_str(), self->Unit);
+						m_sql.safe_query("INSERT INTO DeviceStatus "
+							"(HardwareID, OrgHardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, SignalLevel, BatteryLevel, Name, nValue, sValue, CustomImage, Description, Color, Options, LastUpdate) "
+							"VALUES (%d, %d,'%q',%d,%d,%d,%d,%d,%d,%d,'%q',%d,'%q',%d,'%q','%q','%q','%q')",
+							pModState->pPlugin->m_HwdID,
+							0,
+							sDeviceID.c_str(),
+							self->Unit,
+							self->Type,
+							self->SubType,
+							self->SwitchType,
+							self->Used,
+							self->SignalLevel,
+							self->BatteryLevel,
+							sName.c_str(),
+							self->nValue,
+							sValue.c_str(),
+							self->Image,
+							sDescription.c_str(),
+							sColor.c_str(),
+							sOptionValue.c_str(),
+							TimeToString(nullptr, TF_DateTime).c_str());
+						result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (HardwareID==%d) AND (OrgHardwareID==0) AND (DeviceID=='%s') AND (Unit==%d)", pModState->pPlugin->m_HwdID, sDeviceID.c_str(), self->Unit);
 						if (!result.empty())
 						{
 							self->ID = atoi(result[0][0].c_str());
-
-							// DeviceStatus successfully created, now set the options when supplied
-							if ((self->SubType != sTypeCustom) && (PyDict_Size(self->Options) > 0))
-							{
-								PyBorrowedRef	pKeyDict, pValueDict;
-								Py_ssize_t pos = 0;
-								std::map<std::string, std::string> mpOptions;
-								while (PyDict_Next(self->Options, &pos, &pKeyDict, &pValueDict))
-								{
-									std::string sOptionName = pKeyDict;
-									std::string sOptionValue = pValueDict;
-									mpOptions.insert(std::pair<std::string, std::string>(sOptionName, sOptionValue));
-								}
-								m_sql.SetDeviceOptions(self->ID, mpOptions);
-							}
 
 							// Check the parent device is in the plugin dictionary (can happen if this Unit has just been created)
 							if (!PyDict_Contains((PyObject *)pModState->pPlugin->m_DeviceDict, pDevice->DeviceID))
@@ -726,7 +707,7 @@ namespace Plugins {
 		}
 		else
 		{
-			pModState->pPlugin->Log(LOG_ERROR, "Unit creation failed, Device object is not associated with a plugin.");
+			_log.Log(LOG_ERROR, "Unit creation failed, Device object is not associated with a plugin.");
 		}
 
 		Py_RETURN_NONE;
@@ -743,17 +724,18 @@ namespace Plugins {
 
 		if (pModState->pPlugin)
 		{
-			pModState->pPlugin->SetHeartbeatReceived();
-
 			char *TypeName = nullptr;
 			int bWriteLog = false;
+			int bUpdateProperties = false;
+			int bUpdateOptions = false;
+			int bSuppressTriggers = false;
 
-			static char *kwlist[] = { "Log", "TypeName", nullptr };
+			static char *kwlist[] = { "Log", "TypeName", "UpdateProperties", "UpdateOptions", "SuppressTriggers", nullptr };
 
 			// Try to extract parameters needed to update device settings
-			if (!PyArg_ParseTupleAndKeywords(args, kwds, "|ps", kwlist, &bWriteLog, &TypeName))
+			if (!PyArg_ParseTupleAndKeywords(args, kwds, "|psppp", kwlist, &bWriteLog, &TypeName, &bUpdateProperties, &bUpdateOptions, &bSuppressTriggers))
 			{
-				pModState->pPlugin->Log(LOG_ERROR, "(%s) Failed to parse parameters: 'Log' and/or 'TypeName' expected.", __func__);
+				pModState->pPlugin->Log(LOG_ERROR, "(%s) Failed to parse parameters: 'Log' and/or 'TypeName' and/or 'UpdateProperties' and/or 'UpdateOptions' and/or 'SuppressTriggers' expected.", __func__);
 				pModState->pPlugin->LogPythonException(__func__);
 				Py_RETURN_NONE;
 			}
@@ -769,6 +751,10 @@ namespace Plugins {
 			std::string sColor = PyBorrowedRef(self->Color);
 			sColor = _tColor(sColor).toJSONString();
 			int nValue = self->nValue;
+			int iImage = self->Image;
+			int iBatteryLevel = self->BatteryLevel;
+			int iSignalLevel = self->SignalLevel;
+			int iUsed = self->Used;
 			int iType = self->Type;
 			int iSubType = self->SubType;
 			int iSwitchType = self->SwitchType;
@@ -785,168 +771,198 @@ namespace Plugins {
 				sValue = stdsValue;
 			}
 
-			// Options provided, assume change
-			std::string sOptionValue;
-			if (pOptionsDict && pOptionsDict.IsDict())
-			{
-				if (self->SubType != sTypeCustom)
-				{
-					PyBorrowedRef	pKeyDict, pValueDict;
-					Py_ssize_t pos = 0;
-					std::map<std::string, std::string> mpOptions;
-					while (PyDict_Next(self->Options, &pos, &pKeyDict, &pValueDict))
-					{
-						std::string sOptionName = pKeyDict;
-						std::string sOptionValue = pValueDict;
-						mpOptions.insert(std::pair<std::string, std::string>(sOptionName, sOptionValue));
-					}
-					sOptionValue = m_sql.FormatDeviceOptions(mpOptions);
-				}
-				else
-				{
-					PyBorrowedRef pValue = PyDict_GetItemString(pOptionsDict, "Custom");
-					if (pValue)
-					{
-						sOptionValue = (std::string)pValue;
-					}
-				}
-			}
+			if (bUpdateProperties) {
+				// Grab state in db
+				CUnitEx_refresh(self);
 
-			// Need to look up current nValue and sValue and only do triggers if one has changed
-			std::vector<std::vector<std::string>> result;
-
-			result = m_sql.safe_query("SELECT ID, StrParam1, StrParam2 FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%s') AND (Unit==%d)", pModState->pPlugin->m_HwdID, sDeviceID.c_str(), self->Unit);
-			if (result.empty())
-			{
-				pModState->pPlugin->Log(LOG_ERROR, "Update to 'UnitEx' failed, row not found in database for key %d/%s/%d", pModState->pPlugin->m_HwdID, sDeviceID.c_str(), self->Unit);
-				Py_RETURN_NONE;
-			}
-
-			uint64_t	DevRowIdx = std::stoull(result[0][0]);
-			std::string	sOnAction = result[0][1];
-			std::string	sOffAction = result[0][2];
-			int	iRows = 0;
-
-			// Do an atomic update (do not change this to individual field updates!!!!!!!)
-			Py_BEGIN_ALLOW_THREADS
-			std::string sSQL = "UPDATE DeviceStatus "
-							   "SET Name=?, Description=?, Used=?, Type=?, SubType=?, SwitchType=?, nValue=?, sValue=?, LastLevel=?, CustomImage=?, Color=?, SignalLevel=?, BatteryLevel=?, Options=?, LastUpdate=? "
-							   "WHERE (HardwareID==?) AND (DeviceID==?) AND (Unit==?);";
-			std::vector<std::string> vValues;
-			vValues.push_back(sName);
-			vValues.push_back(sDescription);
-			vValues.push_back(std::to_string(self->Used));
-			vValues.push_back(std::to_string(iType));
-			vValues.push_back(std::to_string(iSubType));
-			vValues.push_back(std::to_string(iSwitchType));
-			vValues.push_back(std::to_string(nValue));
-			vValues.push_back(sValue);
-			vValues.push_back(std::to_string(self->LastLevel));
-			vValues.push_back(std::to_string(self->Image));
-			vValues.push_back(sColor);
-			vValues.push_back(std::to_string(self->SignalLevel));
-			vValues.push_back(std::to_string(self->BatteryLevel));
-			vValues.push_back(sOptionValue);
-			vValues.push_back(TimeToString(nullptr, TF_DateTime));
-			// Keys
-			vValues.push_back(std::to_string(pModState->pPlugin->m_HwdID));
-			vValues.push_back(sDeviceID);
-			vValues.push_back(std::to_string(self->Unit));
-
-			// Handle any data we get back (this method allows for any special characters in the strings such as ' and ")
-			iRows = m_sql.execute_sql(sSQL, &vValues, true);
-			Py_END_ALLOW_THREADS
-
-			if (!iRows)
-			{
-				pModState->pPlugin->Log(LOG_ERROR, "Update to 'UnitEx' failed to update any DeviceStatus records for key %d/%s/%d", pModState->pPlugin->m_HwdID, sDeviceID.c_str(), self->Unit);
-				Py_RETURN_NONE;
-			}
-
-			// Only trigger notifications if a used value is changed
-			if (self->Used)
-			{
-				// if this is an internal Security Panel then there are some extra updates required if state has changed
-				if ((self->Type == pTypeSecurity1) && (self->SubType == sTypeDomoticzSecurity) && (self->nValue != nValue))
+				// Then compare to object saved states and change only if different
+				// Name change
+				if (sName.compare(PyBorrowedRef(self->Name)) != 0)
 				{
 					Py_BEGIN_ALLOW_THREADS
-					switch (nValue)
-					{
-						case sStatusArmHome:
-						case sStatusArmHomeDelayed:
-							m_sql.UpdatePreferencesVar("SecStatus", SECSTATUS_ARMEDHOME);
-							m_mainworker.UpdateDomoticzSecurityStatus(SECSTATUS_ARMEDHOME, "Python");
-							break;
-						case sStatusArmAway:
-						case sStatusArmAwayDelayed:
-							m_sql.UpdatePreferencesVar("SecStatus", SECSTATUS_ARMEDAWAY);
-							m_mainworker.UpdateDomoticzSecurityStatus(SECSTATUS_ARMEDAWAY, "Python");
-							break;
-						case sStatusDisarm:
-						case sStatusNormal:
-						case sStatusNormalDelayed:
-						case sStatusNormalTamper:
-						case sStatusNormalDelayedTamper:
-							m_sql.UpdatePreferencesVar("SecStatus", SECSTATUS_DISARMED);
-							m_mainworker.UpdateDomoticzSecurityStatus(SECSTATUS_DISARMED, "Python");
-							break;
-					}
+					m_sql.UpdateDeviceValue("Name", sName, sID);
 					Py_END_ALLOW_THREADS
 				}
 
-				// Notify Event system, MQTT and various push mechanisms and notifications
-				Py_BEGIN_ALLOW_THREADS
-				m_mainworker.m_eventsystem.ProcessDevice(pModState->pPlugin->m_HwdID, DevRowIdx, self->Unit, iType, iSubType, self->SignalLevel, self->BatteryLevel, nValue, sValue.c_str());
-
-				// Standard on/off action handling  If a device has these then make sure they are handled.
-				if (self->SwitchType == STYPE_Selector)
+				// Description change
+				if (sDescription.compare(PyBorrowedRef(self->Description)) != 0)
 				{
-					sOnAction = GetSelectorSwitchLevelAction(m_sql.BuildDeviceOptions(sOptionValue, true), atoi(sValue.c_str()));
-					sOffAction = GetSelectorSwitchLevelAction(m_sql.BuildDeviceOptions(sOptionValue, true), 0);
+					Py_BEGIN_ALLOW_THREADS
+					m_sql.UpdateDeviceValue("Description", sDescription, sID);
+					Py_END_ALLOW_THREADS
 				}
-				if (sOnAction.length() || sOffAction.length())
+
+				// Image change
+				if (iImage != self->Image)
 				{
-					// Handle On & Off actions if they are defined (HandleOnOffAction just returns if they are blank)
-					m_sql.HandleOnOffAction(nValue, sOnAction, sOffAction);
+					Py_BEGIN_ALLOW_THREADS
+					m_sql.UpdateDeviceValue("CustomImage", iImage, sID);
+					Py_END_ALLOW_THREADS
+				}
+
+				// BatteryLevel change
+				if (iBatteryLevel != self->BatteryLevel)
+				{
+					Py_BEGIN_ALLOW_THREADS
+					m_sql.UpdateDeviceValue("BatteryLevel", iBatteryLevel, sID);
+					Py_END_ALLOW_THREADS
+				}
+
+				// SignalLevel change
+				if (iSignalLevel != self->SignalLevel)
+				{
+					Py_BEGIN_ALLOW_THREADS
+					m_sql.UpdateDeviceValue("SignalLevel", iSignalLevel, sID);
+					Py_END_ALLOW_THREADS
+				}
+
+				// Used change
+				if (iUsed != self->Used)
+				{
+					Py_BEGIN_ALLOW_THREADS
+					m_sql.UpdateDeviceValue("Used", iUsed, sID);
+					Py_END_ALLOW_THREADS
+				}
+
+				// Color change
+				if (sColor.compare(PyBorrowedRef(self->Color)) != 0)
+				{
+					Py_BEGIN_ALLOW_THREADS
+					m_sql.UpdateDeviceValue("Color", sColor, sID);
+					Py_END_ALLOW_THREADS
+				}
+			}
+
+			// Type change
+			if (iType != self->Type)
+			{
+				Py_BEGIN_ALLOW_THREADS
+				m_sql.UpdateDeviceValue("Type", iType, sID);
+				Py_END_ALLOW_THREADS
+			}
+
+			// SubType change
+			if (iSubType != self->SubType)
+			{
+				Py_BEGIN_ALLOW_THREADS
+				m_sql.UpdateDeviceValue("SubType", iSubType, sID);
+				Py_END_ALLOW_THREADS
+			}
+
+			// SwitchType change
+			if (iSwitchType != self->SwitchType)
+			{
+				Py_BEGIN_ALLOW_THREADS
+				m_sql.UpdateDeviceValue("SwitchType", iSwitchType, sID);
+				Py_END_ALLOW_THREADS
+			}
+
+			if (bUpdateOptions) {
+				// Options provided, assume change
+				if (pOptionsDict && PyBorrowedRef(pOptionsDict).IsDict())
+				{
+					if (self->SubType != sTypeCustom)
+					{
+						PyBorrowedRef	pKeyDict, pValueDict;
+						Py_ssize_t pos = 0;
+						std::map<std::string, std::string> mpOptions;
+						while (PyDict_Next(pOptionsDict, &pos, &pKeyDict, &pValueDict))
+						{
+							std::string sOptionName = pKeyDict;
+							std::string sOptionValue = pValueDict;
+							mpOptions.insert(std::pair<std::string, std::string>(sOptionName, sOptionValue));
+						}
+						Py_BEGIN_ALLOW_THREADS
+						m_sql.SetDeviceOptions(self->ID, mpOptions);
+						Py_END_ALLOW_THREADS
+					}
+					else
+					{
+						std::string sOptionValue;
+						PyBorrowedRef	pValue = PyDict_GetItemString(pOptionsDict, "Custom");
+						if (pValue)
+						{
+							sOptionValue = PyUnicode_AsUTF8(pValue);
+						}
+
+						std::string sLastUpdate = TimeToString(nullptr, TF_DateTime);
+						Py_BEGIN_ALLOW_THREADS
+						m_sql.UpdateDeviceValue("Options", iUsed, sID);
+						m_sql.safe_query("UPDATE DeviceStatus SET Options='%q', LastUpdate='%q' WHERE (HardwareID==%d) and (Unit==%d)",
+							sOptionValue.c_str(), sLastUpdate.c_str(), pModState->pPlugin->m_HwdID, self->Unit);
+						Py_END_ALLOW_THREADS
+					}
+				}
+			}
+
+			if (!bSuppressTriggers) {
+				uint64_t DevRowIdx = -1;
+
+				Py_BEGIN_ALLOW_THREADS
+				std::string devname = sName.c_str();
+
+				DevRowIdx = m_sql.UpdateValue(
+					pModState->pPlugin->m_HwdID,
+					0,
+					sDeviceID.c_str(),
+					self->Unit,
+					iType,
+					iSubType,
+					iSignalLevel,
+					iBatteryLevel,
+					nValue,
+					sValue.c_str(),
+					devname,
+					true,
+					pModState->pPlugin->m_Name.c_str()
+				);
+				Py_END_ALLOW_THREADS
+
+				if (DevRowIdx == (uint64_t)-1)
+				{
+					pModState->pPlugin->Log(LOG_ERROR, "Update to 'UnitEx' failed to update any DeviceStatus records for key %d/%s/%d", pModState->pPlugin->m_HwdID, sDeviceID.c_str(), self->Unit);
+					Py_RETURN_NONE;
 				}
 
 				m_mainworker.sOnDeviceReceived(pModState->pPlugin->m_HwdID, self->ID, pModState->pPlugin->m_Name, NULL);
 
-				// Notifications
-				if (!IsLightOrSwitch(iType, iSubType))
+				// Only trigger notifications if a used value is changed
+				if (self->Used)
 				{
-					m_notifications.CheckAndHandleNotification(DevRowIdx, pModState->pPlugin->m_HwdID, sDeviceID, sName, self->Unit, iType, iSubType, nValue, sValue);
-				}
-				else
-				{
-					std::string lstatus;
-					int llevel;
-					bool bHaveDimmer;
-					int maxDimLevel;
-					bool bHaveGroupCmd;
-					GetLightStatus(iType, iSubType, (_eSwitchType)iSwitchType, nValue, sValue, lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
-					if (self->SwitchType == STYPE_Selector)
-						m_notifications.CheckAndHandleSwitchNotification(DevRowIdx, sName, (IsLightSwitchOn(lstatus)) ? NTYPE_SWITCH_ON : NTYPE_SWITCH_OFF, llevel);
-					else
-						m_notifications.CheckAndHandleSwitchNotification(DevRowIdx, sName, (IsLightSwitchOn(lstatus)) ? NTYPE_SWITCH_ON : NTYPE_SWITCH_OFF);
-				}
-				m_mainworker.CheckSceneCode(DevRowIdx, (const unsigned char)self->Type, (const unsigned char)self->SubType, nValue, sValue.c_str(), "Python");
-
-				// Write a log entry if requested
-				if (bWriteLog)
-				{
-					std::string sSQL = "INSERT INTO LightingLog (DeviceRowID, nValue, sValue, Date) VALUES (?,?,?,?)";
-					std::vector<std::string> vValues;
-					vValues.push_back(result[0][0]);
-					vValues.push_back(std::to_string(nValue));
-					vValues.push_back(sValue);
-					vValues.push_back(TimeToString(nullptr, TF_DateTime));
-					if (!m_sql.execute_sql(sSQL, &vValues, true))
+					// if this is an internal Security Panel then there are some extra updates required if state has changed
+					if ((self->Type == pTypeSecurity1) && (self->SubType == sTypeDomoticzSecurity) && (self->nValue != nValue))
 					{
-						pModState->pPlugin->Log(LOG_ERROR, "%s: Insert into 'LightingLog' failed ", __func__);
+						Py_BEGIN_ALLOW_THREADS
+							switch (nValue)
+							{
+							case sStatusArmHome:
+							case sStatusArmHomeDelayed:
+								m_sql.UpdatePreferencesVar("SecStatus", SECSTATUS_ARMEDHOME);
+								m_mainworker.UpdateDomoticzSecurityStatus(SECSTATUS_ARMEDHOME, "Python");
+								break;
+							case sStatusArmAway:
+							case sStatusArmAwayDelayed:
+								m_sql.UpdatePreferencesVar("SecStatus", SECSTATUS_ARMEDAWAY);
+								m_mainworker.UpdateDomoticzSecurityStatus(SECSTATUS_ARMEDAWAY, "Python");
+								break;
+							case sStatusDisarm:
+							case sStatusNormal:
+							case sStatusNormalDelayed:
+							case sStatusNormalTamper:
+							case sStatusNormalDelayedTamper:
+								m_sql.UpdatePreferencesVar("SecStatus", SECSTATUS_DISARMED);
+								m_mainworker.UpdateDomoticzSecurityStatus(SECSTATUS_DISARMED, "Python");
+								break;
+							}
+						Py_END_ALLOW_THREADS
+					}
+
+					// Notifications
+					if (!IsLightOrSwitch(iType, iSubType))
+					{
+						m_notifications.CheckAndHandleNotification(DevRowIdx, pModState->pPlugin->m_HwdID, sDeviceID, sName, self->Unit, iType, iSubType, nValue, sValue);
 					}
 				}
-				Py_END_ALLOW_THREADS
 			}
 
 			PyNewRef	pRetVal = CUnitEx_refresh(self);
@@ -968,7 +984,7 @@ namespace Plugins {
 			Py_RETURN_NONE;
 		}
 
-		if (!pModState->pPlugin)
+		if (pModState->pPlugin)
 		{
 			std::string sName = PyBorrowedRef(self->Name);
 			if (self->ID != -1)
@@ -1023,7 +1039,7 @@ namespace Plugins {
 		{
 			pModState->pPlugin->SetHeartbeatReceived();
 			std::string sID = std::to_string(self->ID);
-			m_sql.safe_query("UPDATE DeviceStatus SET LastUpdate='%s' WHERE (ID == %s )", TimeToString(nullptr, TF_DateTime).c_str(), sID.c_str());
+			m_sql.UpdateLastUpdate(sID);
 		}
 		else
 		{

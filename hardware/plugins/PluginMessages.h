@@ -531,12 +531,13 @@ static std::string get_utf8_from_ansi(const std::string &utf8, int codepage)
 	protected:
 	  void ProcessLocked(CPlugin* pPlugin) override
 	  {
-		  PyNewRef pParams = nullptr;
+		  PyNewRef pParams;
 
 		  // Data is stored in a single vector of bytes
 		  if (!m_Buffer.empty())
 		  {
-			  pParams = Py_BuildValue("Oy#", m_pConnection, &m_Buffer[0], m_Buffer.size());
+			  PyNewRef	Bytes(m_Buffer);
+			  pParams = Py_BuildValue("OO", m_pConnection, (PyObject*)Bytes);
 			  Callback(pPlugin, pParams);
 		  }
 
@@ -596,6 +597,7 @@ static std::string get_utf8_from_ansi(const std::string &utf8, int codepage)
 	  void ProcessLocked(CPlugin* pPlugin) override
 	  {
 		  Callback(pPlugin, nullptr);
+		  m_Target = Py_None; // Make sure object does not hold any Python memory
 		  pPlugin->Stop();
 	  };
 	};
@@ -728,7 +730,7 @@ static std::string get_utf8_from_ansi(const std::string &utf8, int codepage)
 	class ReadEvent : public CEventBase, public CHasConnection
 	{
 	public:
-		ReadEvent(CConnection* Connection, const int ByteCount, const unsigned char* Data, const int ElapsedMs = -1) : CEventBase(), CHasConnection(Connection)
+		ReadEvent(CConnection* Connection, const size_t ByteCount, const unsigned char* Data, const int ElapsedMs = -1) : CEventBase(), CHasConnection(Connection)
 		{
 			m_Name = __func__;
 			m_ElapsedMs = ElapsedMs;

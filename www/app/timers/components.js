@@ -4,6 +4,7 @@ define(['app', 'components/rgbw-picker/RgbwPicker', 'timers/factories'], functio
         bindings: {
             timerSettings: '=',
             levelOptions: '<',
+			isBlind: '<',
             colorSettingsType: '<',
             isCommandSelectionDisabled: '<',
             isSetpointTimers: '<'
@@ -24,6 +25,7 @@ define(['app', 'components/rgbw-picker/RgbwPicker', 'timers/factories'], functio
             function init() {
                 vm.typeOptions = deviceTimerOptions.timerTypes;
                 vm.commandOptions = deviceTimerOptions.command;
+                vm.blindOptions = deviceTimerOptions.blind_commands;
                 vm.monthOptions = deviceTimerOptions.month;
                 vm.dayOptions = deviceTimerOptions.monthday;
                 vm.weekdayOptions = deviceTimerOptions.weekday;
@@ -167,6 +169,7 @@ define(['app', 'components/rgbw-picker/RgbwPicker', 'timers/factories'], functio
             selectedTimerIdx: '=',
             timers: '<',
             levelOptions: '<',
+			isBlind: '<',
             isSetpointTimers: '<'
         },
         controller: function ($scope, $element, deviceTimerOptions, dataTableDefaultSettings) {
@@ -191,9 +194,10 @@ define(['app', 'components/rgbw-picker/RgbwPicker', 'timers/factories'], functio
                 var columns = [
                     {title: $.t('Active'), data: 'Active', render: activeRenderer},
                     {title: $.t('Type'), data: 'Type', render: timerTypeRenderer},
-                    {title: $.t('Date'), data: 'Date', type: 'date-us'},
+                    {title: $.t('Date'), data: 'Date', type: 'date-us', width: 100 },
                     {title: $.t('Time'), data: 'Time'},
                     {title: $.t('Randomness'), data: 'Randomness', render: activeRenderer},
+                    {title: $.t('Persistent'), data: 'Persistent', render: activeRenderer},
                     {title: $.t('Command'), data: 'idx', render: commandRenderer},
                     {title: $.t('Days'), data: 'idx', render: daysRenderer},
                 ];
@@ -210,6 +214,7 @@ define(['app', 'components/rgbw-picker/RgbwPicker', 'timers/factories'], functio
                     vm.selectedTimerIdx = timer.idx;
                     vm.timerSettings.active = timer.Active === 'true';
                     vm.timerSettings.randomness = timer.Randomness === 'true';
+                    vm.timerSettings.persistent = timer.Persistent === 'true';
                     vm.timerSettings.timertype = timer.Type;
                     vm.timerSettings.hour = parseInt(timer.Time.substring(0, 2));
                     vm.timerSettings.min = parseInt(timer.Time.substring(3, 5));
@@ -250,11 +255,13 @@ define(['app', 'components/rgbw-picker/RgbwPicker', 'timers/factories'], functio
 
             function commandRenderer(value) {
                 var timer = getTimerByIdx(value);
-                var command = timer.Cmd === 1 ? 'Off' : 'On';
+				var txtOn = (vm.isBlind) ? 'Open' : 'On';
+				var txtOff = (vm.isBlind) ? 'Close' : 'Off';
+                var command = timer.Cmd === 1 ? txtOff : txtOn;
 
                 if (vm.isSetpointTimers) {
-                    return $.t('Temperature') + ', ' + timer.Temperature;
-                } else if (command === 'On' && vm.levelOptions.length > 0) {
+                    return $.t('Set point') + ', ' + timer.Temperature;
+                } else if (command === txtOn && vm.levelOptions.length > 0) {
                     var levelName = deviceTimerOptions.getLabelForValue(vm.levelOptions, timer.Level);
                     return $.t(command) + " (" + levelName + ")";
                 } else if (timer.Color) {

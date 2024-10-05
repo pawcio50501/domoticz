@@ -36,7 +36,8 @@ lowercase(){
 
 OS=`lowercase \`uname -s\``
 MACH=`uname -m`
-if [ ${MACH} = "armv6l" ]
+ARCH=`dpkg --print-architecture`
+if [ ${MACH} = "armv6l" ] || [ ${ARCH} = "armhf" ]
 then
  MACH="armv7l"
 fi
@@ -92,7 +93,7 @@ if [ -x "$(command -v apt-get)" ]; then
 	# grep -c will return 1 retVal on 0 matches, block this throwing the set -e with an OR TRUE
 	PKG_COUNT="${PKG_MANAGER} -s -o Debug::NoLocking=true upgrade | grep -c ^Inst || true"
 	INSTALLER_DEPS=( apt-utils whiptail git)
-	domoticz_DEPS=( curl unzip wget sudo cron libudev-dev)
+	domoticz_DEPS=( curl unzip wget sudo cron libudev-dev libssl1.1 )
 
         DEBIAN_ID=$(grep -oP '(?<=^ID=).+' /etc/*-release | tr -d '"')
         DEBIAN_VERSION=$(grep -oP '(?<=^VERSION_ID=).+' /etc/*-release | tr -d '"')
@@ -174,7 +175,9 @@ displayFinalMessage() {
 	whiptail --msgbox --backtitle "Ready..." --title "Installation Complete!" "Point your browser to either:
 
 HTTP:	${IPv4_address%/*}:${HTTP_port%/*}
-HTPS:	${IPv4_address%/*}:${HTTPS_port}
+HTTPS:	${IPv4_address%/*}:${HTTPS_port}
+User/Password:   admin/domoticz 
+Modify password asap in menu Setup - MyProfile
 
 Wiki:  https://www.domoticz.com/wiki
 Forum: https://www.domoticz.com/forum

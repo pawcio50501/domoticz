@@ -37,8 +37,7 @@ define(['app', 'components/rgbw-picker/RgbwPicker'], function (app) {
 
             vm.$onInit = function () {
                 // TODO: Add caching mechanism for this request
-                domoticzApi.sendRequest({
-                    type: 'custom_light_icons'
+                domoticzApi.sendCommand('custom_light_icons', {
                 }).then(function (data) {
                     switch_icons = (data.result || [])
                         .filter(function (item) {
@@ -484,7 +483,7 @@ define(['app', 'components/rgbw-picker/RgbwPicker'], function (app) {
         }
     });
 
-    app.controller('DeviceLightEditController', function ($timeout, $routeParams, $window, domoticzApi, deviceApi) {
+    app.controller('DeviceLightEditController', function ($timeout, $routeParams, $window, domoticzApi, deviceApi, dzApiHelper) {
         var vm = this;
         var $element = $('.js-view:last');
 
@@ -501,13 +500,66 @@ define(['app', 'components/rgbw-picker/RgbwPicker'], function (app) {
         vm.isOffActionAvailable = isOffActionAvailable;
         vm.isColorSettingsAvailable = isColorSettingsAvailable;
         vm.isWhiteSettingsAvailable = isWhiteSettingsAvailable;
+		vm.isBlind = isBlind;
+		vm.onActionLabel = onActionLabel;
+		vm.offActionLabel = offActionLabel;
+		vm.addDeviceToPlan = addDeviceToPlan;
+		vm.removeDeviceFromPlan = removeDeviceFromPlan;
 
         init();
+
+        function populatedevicetypes() {
+            domoticzApi.sendCommand('getswitchtypes', {})
+                .then(function (data) {
+                    if ( data.status === 'OK' ) {
+						$("#switch-types-template").html("");
+						$.each(data.result, function (stcode, stdesc) {
+							if (stdesc != null) {
+								var option = $('<option />');
+								option.attr('value', stcode).text(stdesc);
+								$("#switch-types-template").append(option);
+							}
+						});
+                    }
+                    $element.find('#switch-types-template > option').each(function () {
+                        vm.switchTypeOptions.push({
+                            label: $(this).text(),
+                            value: parseInt($(this).val())
+                        });
+                    });
+                });
+        }
+
+		function populatedeviceroomplans() {
+            domoticzApi.sendCommand('getplans', {})
+                .then(function (data) {
+                    if ( data.status === 'OK' ) {
+						$("#device-roomplan-template").html("");
+						$.each(data.result, function (stcode, stdesc) {
+							if (stdesc != null) {
+								var option = $('<option />');
+								option.attr('value', stdesc.idx).text(stdesc.Name);
+								$("#device-roomplan-template").append(option);
+							}
+						});
+                    }
+                    $element.find('#device-roomplan-template > option').each(function () {
+                        vm.planIDsOptions.push({
+                            label: $(this).text(),
+                            value: $(this).val()
+                        });
+                    });
+                });
+        }
 
         function init() {
             vm.deviceIdx = $routeParams.id;
             vm.switchTypeOptions = [];
-
+			vm.planIDsOptions = [];
+			
+            populatedevicetypes();
+			populatedeviceroomplans();
+			
             deviceApi.getDeviceInfo(vm.deviceIdx).then(function (device) {
                 vm.device = device;
                 vm.device.StrParam1 = b64DecodeUnicode(vm.device.StrParam1);
@@ -527,12 +579,6 @@ define(['app', 'components/rgbw-picker/RgbwPicker'], function (app) {
                 });
             });
 
-            $element.find('#switch-types-template > option').each(function () {
-                vm.switchTypeOptions.push({
-                    label: $(this).text(),
-                    value: parseInt($(this).val())
-                });
-            });
         }
 
         function updateDevice() {
@@ -551,8 +597,16 @@ define(['app', 'components/rgbw-picker/RgbwPicker'], function (app) {
                 options.push('SelectorStyle:' + vm.device.SelectorStyle);
                 options.push('LevelOffHidden:' + vm.device.LevelOffHidden);
             }
+			if (vm.isBlind())
+			{
+                options.push('ReverseState:' + vm.device.ReverseState);
+                options.push('ReversePosition:' + vm.device.ReversePosition);
+			}
+			//console.log("options: ");
+			//console.log(options);
             var params = {
-                type: 'setused',
+                type: 'command',
+                param: 'setused',
                 name: vm.device.Name,
                 description: vm.device.Description,
                 strparam1: b64EncodeUnicode(vm.device.StrParam1),
@@ -625,5 +679,62 @@ define(['app', 'components/rgbw-picker/RgbwPicker'], function (app) {
         function isWhiteSettingsAvailable() {
             return vm.device.SubType === 'White';
         }
+		
+		function isBlind() {
+			return [3, 13, 14, 15, 21].includes(vm.device.SwitchTypeVal);
+		}
+		
+		function onActionLabel() {
+			if (isBlind() == true) {
+				return $.t('Open Action');
+			}
+			else {
+				return $.t('On Action');
+			}
+		}
+
+		function offActionLabel() {
+			if (isBlind() == true) {
+				return $.t('Close Action');
+			}
+			else {
+				return $.t('Off Action');
+			}
+		}
+		function getPlanDevices(planId) {
+			return domoticzApi.sendCommand('getplandevices',{
+				idx: planId
+			})
+				.then(domoticzApi.errorHandler)
+				.then(function(response) {
+					return response.result || []
+				})
+		}
+		function removeDeviceFromPlan(deviceIdx, planId) {
+			return getPlanDevices(planId).then(function(devices) {
+				Object.keys(devices).forEach(function(key) {
+					if(devices[key]['devidx'] == deviceIdx) {
+						return dzApiHelper.checkAdminPermissions().then(function () {
+							return domoticzApi.sendCommand('deleteplandevice', {
+								idx: parseInt(devices[key]['idx']),
+							}).then(function () {
+								$window.location.reload();
+							});
+						});
+					}
+				});
+			});
+		}
+		function addDeviceToPlan() {
+			return dzApiHelper.checkAdminPermissions().then(function () {
+				return domoticzApi.sendCommand('addplanactivedevice', {
+					idx: vm.device.PlanID,
+					activeidx: vm.deviceIdx,
+					activetype: 0
+				}).then(function () {
+                    $window.location.reload();
+                });
+			});
+		}
     });
 });

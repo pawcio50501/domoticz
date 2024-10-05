@@ -26,7 +26,7 @@ return {
 			258, -- id
 		},
 
-		-- timer riggers
+		-- timer triggers
 		timer = {
 			-- timer triggers.. if one matches with the current time then the script is executed
 			'at 13:45',
@@ -92,7 +92,7 @@ return {
 
 	-- custom logging level for this script
 	logging = {
-        level = domoticz.LOG_INFO,
+        level = domoticz.LOG_DEBUG,
         marker = "template"
     },
 

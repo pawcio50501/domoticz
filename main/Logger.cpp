@@ -4,7 +4,6 @@
 #include <stdarg.h>
 #include <time.h>
 #include <algorithm>
-#include "localtime_r.h"
 #include "Helper.h"
 #include "mainworker.h"
 
@@ -23,9 +22,12 @@
 extern bool g_bRunAsDaemon;
 extern bool g_bUseSyslog;
 
+static uint64_t m_line_counter = 1;
+
 CLogger::_tLogLineStruct::_tLogLineStruct(const _eLogLevel nlevel, const std::string &nlogmessage)
 {
 	logtime = mytime(nullptr);
+	line_counter = m_line_counter ++;
 	level = nlevel;
 	logmessage = nlogmessage;
 }
@@ -63,8 +65,8 @@ bool CLogger::SetLogFlags(const std::string &sFlags)
 		if (is_number(wflag))
 		{
 			// Flags are set provided (bitwise)
-			SetLogFlags(strtoul(wflag.c_str(), nullptr, 10));
-			return true;
+			iFlags = strtoul(wflag.c_str(), nullptr, 10);
+			break;
 		}
 		if (wflag == "all")
 			iFlags |= LOG_ALL;
@@ -77,8 +79,10 @@ bool CLogger::SetLogFlags(const std::string &sFlags)
 		else if (wflag == "debug")
 			iFlags |= LOG_DEBUG_INT;
 		else
-			return false; // invalid flag
+			continue; // invalid flag, skip but continue processing the other flags
 	}
+	if (iFlags == 0)
+		iFlags = LOG_STATUS + LOG_ERROR;
 	SetLogFlags(iFlags);
 	return true;
 }
@@ -88,7 +92,7 @@ void CLogger::SetLogFlags(const uint32_t iFlags)
 	m_log_flags = iFlags;
 }
 
-// Supported flags: all,normal,hardware,received,webserver,eventsystem,python,thread_id,sql
+// Supported flags: all,normal,hardware,received,webserver,eventsystem,python,thread_id,sql,auth
 bool CLogger::SetDebugFlags(const std::string &sFlags)
 {
 	std::vector<std::string> flags;
@@ -104,8 +108,8 @@ bool CLogger::SetDebugFlags(const std::string &sFlags)
 		if (is_number(wflag))
 		{
 			// Flags are set provided (bitwise)
-			SetDebugFlags(strtoul(wflag.c_str(), nullptr, 10));
-			return true;
+			iFlags = strtoul(wflag.c_str(), nullptr, 10);
+			break;
 		}
 		if (wflag == "all")
 			iFlags |= DEBUG_ALL;
@@ -125,10 +129,17 @@ bool CLogger::SetDebugFlags(const std::string &sFlags)
 			iFlags |= DEBUG_THREADIDS;
 		else if (wflag == "sql")
 			iFlags |= DEBUG_SQL;
+		else if (wflag == "auth")
+			iFlags |= DEBUG_AUTH;
 		else
-			return false; // invalid flag
+			continue; // invalid flag, skip but continue processing the other flags
 	}
 	SetDebugFlags(iFlags);
+	if (iFlags && !IsLogLevelEnabled(LOG_DEBUG_INT))
+	{
+		m_log_flags |= LOG_DEBUG_INT;
+		Log(LOG_STATUS, "Enabling Debug logging!");
+	}
 	if(IsDebugLevelEnabled(DEBUG_WEBSERVER))
 		SetACLFlogFlags(LOG_ACLF_ENABLED);
 	return true;
@@ -290,6 +301,8 @@ void CLogger::Log(const _eLogLevel level, const char *logline, ...)
 
 	std::string szIntLog = sstr.str();
 
+	sOnLogMessage(level, szIntLog);
+
 	{
 		// Locked region to allow multiple threads to print at the same time
 		std::unique_lock<std::mutex> lock(m_mutex);
@@ -415,7 +428,7 @@ void CLogger::LogSequenceEnd(const _eLogLevel level)
 	std::string message = m_sequencestring.str();
 	if (strhasEnding(message, "\n"))
 	{
-		message = message.substr(0, message.size() - 1);
+		message.resize(message.size() - 1);
 	}
 
 	Log(level, message);
@@ -451,9 +464,13 @@ bool CLogger::IsLogTimestampsEnabled()
 	return (m_bEnableLogTimestamps && !g_bUseSyslog);
 }
 
-bool compareLogByTime(const CLogger::_tLogLineStruct &a, CLogger::_tLogLineStruct &b)
+bool compareLogByTime(const CLogger::_tLogLineStruct &a, const CLogger::_tLogLineStruct &b)
 {
-	return a.logtime < b.logtime;
+	if (a.logtime < b.logtime)
+		return true;
+	if (a.logtime > b.logtime)
+		return false;
+	return (a.line_counter < b.line_counter);
 }
 
 std::list<CLogger::_tLogLineStruct> CLogger::GetLog(const _eLogLevel level, const time_t lastlogtime)
@@ -466,13 +483,15 @@ std::list<CLogger::_tLogLineStruct> CLogger::GetLog(const _eLogLevel level, cons
 		if (m_lastlog.find(level) == m_lastlog.end())
 			return mlist;
 
-		std::copy_if(std::begin(m_lastlog[level]), std::end(m_lastlog[level]), std::back_inserter(mlist), [lastlogtime](const _tLogLineStruct &l) { return l.logtime > lastlogtime; });
+		std::copy_if(std::begin(m_lastlog[level]), std::end(m_lastlog[level]), std::back_inserter(mlist), [lastlogtime](const _tLogLineStruct& l) { return l.logtime > lastlogtime; });
 	}
 	else
-		for (const auto &l : m_lastlog)
-			std::copy_if(l.second.begin(), l.second.end(), std::back_inserter(mlist), [lastlogtime](const _tLogLineStruct &l2) { return l2.logtime > lastlogtime; });
+		for (const auto& l : m_lastlog)
+			std::copy_if(l.second.begin(), l.second.end(), std::back_inserter(mlist), [lastlogtime](const _tLogLineStruct& l2)
+				{
+					return l2.logtime > lastlogtime;
+				});
 
-	// Sort by time
 	mlist.sort(compareLogByTime);
 	return mlist;
 }

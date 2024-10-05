@@ -25,7 +25,12 @@
 	#include <iowin32.h>
 #endif
 
+
+#include "../main/Helper.h"
 #include "../main/Logger.h"
+
+extern std::string szAppVersion;
+extern bool bDoCachePages;
 
 #define ZIPREADBUFFERSIZE (8192)
 
@@ -183,7 +188,13 @@ bool request_handler::not_modified(const std::string &full_path, const request &
 	}
 	mInfo.mtime_support = true;
 	// propagate timestamp to browser
-	reply::add_header(&rep, "Last-Modified", convert_to_http_date(mInfo.last_written));
+	reply::add_header(&rep, "Date", make_web_time(mytime(nullptr)), true);
+	if (bDoCachePages)
+	{
+		reply::add_header(&rep, "ETag", szAppVersion, true);
+		reply::add_header(&rep, "Last-Modified", make_web_time(mInfo.last_written));
+	}
+
 	const char *if_modified = request::get_req_header(&req, "If-Modified-Since");
 	if (nullptr == if_modified)
 	{
@@ -295,6 +306,19 @@ void request_handler::handle_request(const request &req, reply &rep, modify_info
 	// So we have what seems a valid request and established the extension
 	// Let's try to process it
 
+	const char* if_none_match = request::get_req_header(&req, "If-None-Match");
+	if (if_none_match != nullptr)
+	{
+		//check if etag matches current tag
+		if (strcmp(if_none_match, szAppVersion.c_str()) == 0)
+		{
+			//nothing changed
+			rep = reply::stock_reply(reply::not_modified);
+			return;
+		}
+	}
+
+
 	// Determine if the Client (Browser) supports a gzip'ped response body
 	bool bClientHasGZipSupport = false;
 	if (myWebem->m_gzipmode != WWW_FORCE_NO_GZIP_SUPPORT)
@@ -370,7 +394,7 @@ void request_handler::handle_request(const request &req, reply &rep, modify_info
 				// We found an already compressed source file, but the client does not seem to support to received it compressed. So we decompress it first.
 				std::string gzcontent((std::istreambuf_iterator<char>(is)), (std::istreambuf_iterator<char>()));
 
-				CGZIP2AT<> decompress((LPGZIP)gzcontent.c_str(), gzcontent.size());
+				CGZIP2AT<> decompress((LPGZIP)gzcontent.c_str(), static_cast<int>(gzcontent.size()));
 				rep.content.append(decompress.psz, decompress.Length);
 				_log.Debug(DEBUG_WEBSERVER, "[web:%s] decompressed content from %s before sending.", request_path.c_str(), full_path.c_str());
 			}
@@ -379,14 +403,6 @@ void request_handler::handle_request(const request &req, reply &rep, modify_info
 				// Load the sourcefile (compressed or not)
 				rep.content.append((std::istreambuf_iterator<char>(is)), (std::istreambuf_iterator<char>()));
 				rep.bIsGZIP = (bClientHasGZipSupport && bHaveLoadedgzip);
-			}
-			if (bIsCompressibleType && (!bHaveLoadedgzip))
-			{
-				// Find and include any special cWebem strings
-				if (myWebem->Include(rep.content))
-				{
-					_log.Debug(DEBUG_WEBSERVER,"[web:%s] Added some include in non-zipped file", request_path.c_str());
-				}
 			}
 			if (bClientHasGZipSupport && bIsCompressibleType && (!bHaveLoadedgzip))
 			{
@@ -460,19 +476,27 @@ void request_handler::handle_request(const request &req, reply &rep, modify_info
 	{
 		reply::add_header(&rep, "Content-Encoding", "gzip");
 	}
-	else if (mime_types::extension_to_type(extension).find("image/") != std::string::npos)
+	if (
+		(req.uri.find("app/") != std::string::npos)
+		|| (req.uri.find("views/") != std::string::npos)
+		|| (req.uri.find("js/domoticz") != std::string::npos)
+		|| (!bDoCachePages)
+		)
 	{
-		//Cache images
-		reply::add_header(&rep, "Expires", convert_to_http_date(mytime(nullptr) + 3600 * 24 * 90)); // 3 months
+		//frequently changed files
+		reply::add_header(&rep, "Cache-Control", "no-cache,must-revalidate");
+	}
+	else
+	{
+		//not frequently changed files, cache for a day
+		reply::add_header(&rep, "Cache-Control", "public,max-age=86400,s-maxage=86400,must-revalidate");
 	}
 
 	reply::add_header_content_type(&rep, mime_types::extension_to_type(extension));
 	reply::add_header(&rep, "Content-Length", std::to_string(rep.content.size()));
 	reply::add_header(&rep, "Access-Control-Allow-Origin", "*");
-	//browser support to prevent XSS
-	reply::add_header(&rep, "X-Content-Type-Options", "nosniff");
-	reply::add_header(&rep, "X-XSS-Protection", "1; mode=block");
-	//reply::add_header(&rep, "X-Frame-Options", "SAMEORIGIN"); //this might brake custom pages that embed third party images (like used by weather channels)
+	if (myWebem->m_settings.is_secure())
+		reply::add_security_headers(&rep);
 }
 
 bool request_handler::url_decode(const std::string& in, std::string& out)

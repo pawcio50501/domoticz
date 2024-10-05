@@ -16,15 +16,19 @@
 #include <fstream>
 #include <math.h>
 #include <algorithm>
-#include "../main/localtime_r.h"
 #include <sstream>
-#include <openssl/md5.h>
+#include <openssl/aes.h>
+#include <openssl/evp.h>
+#include <openssl/sha.h>
+#include <openssl/err.h>
+
 #include <chrono>
 #include <limits.h>
 #include <cstring>
 #include <stdarg.h>
 #include <locale>
 #include <codecvt>
+#include <random>
 
 #if defined WIN32
 #include "../msbuild/WindowsHelper.h"
@@ -56,26 +60,27 @@ namespace
 {
 	constexpr std::array<uint8_t, 256> crc8_tab{
 		0x00, 0x31, 0x62, 0x53, 0xc4, 0xf5, 0xa6, 0x97, 0xb9, 0x88, 0xdb, 0xea, 0x7d,
-	0x4c, 0x1f, 0x2e, 0x43, 0x72, 0x21, 0x10, 0x87, 0xb6, 0xe5, 0xd4, 0xfa, 0xcb,
-	0x98, 0xa9, 0x3e, 0x0f, 0x5c, 0x6d, 0x86, 0xb7, 0xe4, 0xd5, 0x42, 0x73, 0x20,
-	0x11, 0x3f, 0x0e, 0x5d, 0x6c, 0xfb, 0xca, 0x99, 0xa8, 0xc5, 0xf4, 0xa7, 0x96,
-	0x01, 0x30, 0x63, 0x52, 0x7c, 0x4d, 0x1e, 0x2f, 0xb8, 0x89, 0xda, 0xeb, 0x3d,
-	0x0c, 0x5f, 0x6e, 0xf9, 0xc8, 0x9b, 0xaa, 0x84, 0xb5, 0xe6, 0xd7, 0x40, 0x71,
-	0x22, 0x13, 0x7e, 0x4f, 0x1c, 0x2d, 0xba, 0x8b, 0xd8, 0xe9, 0xc7, 0xf6, 0xa5,
-	0x94, 0x03, 0x32, 0x61, 0x50, 0xbb, 0x8a, 0xd9, 0xe8, 0x7f, 0x4e, 0x1d, 0x2c,
-	0x02, 0x33, 0x60, 0x51, 0xc6, 0xf7, 0xa4, 0x95, 0xf8, 0xc9, 0x9a, 0xab, 0x3c,
-	0x0d, 0x5e, 0x6f, 0x41, 0x70, 0x23, 0x12, 0x85, 0xb4, 0xe7, 0xd6, 0x7a, 0x4b,
-	0x18, 0x29, 0xbe, 0x8f, 0xdc, 0xed, 0xc3, 0xf2, 0xa1, 0x90, 0x07, 0x36, 0x65,
-	0x54, 0x39, 0x08, 0x5b, 0x6a, 0xfd, 0xcc, 0x9f, 0xae, 0x80, 0xb1, 0xe2, 0xd3,
-	0x44, 0x75, 0x26, 0x17, 0xfc, 0xcd, 0x9e, 0xaf, 0x38, 0x09, 0x5a, 0x6b, 0x45,
-	0x74, 0x27, 0x16, 0x81, 0xb0, 0xe3, 0xd2, 0xbf, 0x8e, 0xdd, 0xec, 0x7b, 0x4a,
-	0x19, 0x28, 0x06, 0x37, 0x64, 0x55, 0xc2, 0xf3, 0xa0, 0x91, 0x47, 0x76, 0x25,
-	0x14, 0x83, 0xb2, 0xe1, 0xd0, 0xfe, 0xcf, 0x9c, 0xad, 0x3a, 0x0b, 0x58, 0x69,
-	0x04, 0x35, 0x66, 0x57, 0xc0, 0xf1, 0xa2, 0x93, 0xbd, 0x8c, 0xdf, 0xee, 0x79,
-	0x48, 0x1b, 0x2a, 0xc1, 0xf0, 0xa3, 0x92, 0x05, 0x34, 0x67, 0x56, 0x78, 0x49,
-	0x1a, 0x2b, 0xbc, 0x8d, 0xde, 0xef, 0x82, 0xb3, 0xe0, 0xd1, 0x46, 0x77, 0x24,
-	0x15, 0x3b, 0x0a, 0x59, 0x68, 0xff, 0xce, 0x9d, 0xac
+		0x4c, 0x1f, 0x2e, 0x43, 0x72, 0x21, 0x10, 0x87, 0xb6, 0xe5, 0xd4, 0xfa, 0xcb,
+		0x98, 0xa9, 0x3e, 0x0f, 0x5c, 0x6d, 0x86, 0xb7, 0xe4, 0xd5, 0x42, 0x73, 0x20,
+		0x11, 0x3f, 0x0e, 0x5d, 0x6c, 0xfb, 0xca, 0x99, 0xa8, 0xc5, 0xf4, 0xa7, 0x96,
+		0x01, 0x30, 0x63, 0x52, 0x7c, 0x4d, 0x1e, 0x2f, 0xb8, 0x89, 0xda, 0xeb, 0x3d,
+		0x0c, 0x5f, 0x6e, 0xf9, 0xc8, 0x9b, 0xaa, 0x84, 0xb5, 0xe6, 0xd7, 0x40, 0x71,
+		0x22, 0x13, 0x7e, 0x4f, 0x1c, 0x2d, 0xba, 0x8b, 0xd8, 0xe9, 0xc7, 0xf6, 0xa5,
+		0x94, 0x03, 0x32, 0x61, 0x50, 0xbb, 0x8a, 0xd9, 0xe8, 0x7f, 0x4e, 0x1d, 0x2c,
+		0x02, 0x33, 0x60, 0x51, 0xc6, 0xf7, 0xa4, 0x95, 0xf8, 0xc9, 0x9a, 0xab, 0x3c,
+		0x0d, 0x5e, 0x6f, 0x41, 0x70, 0x23, 0x12, 0x85, 0xb4, 0xe7, 0xd6, 0x7a, 0x4b,
+		0x18, 0x29, 0xbe, 0x8f, 0xdc, 0xed, 0xc3, 0xf2, 0xa1, 0x90, 0x07, 0x36, 0x65,
+		0x54, 0x39, 0x08, 0x5b, 0x6a, 0xfd, 0xcc, 0x9f, 0xae, 0x80, 0xb1, 0xe2, 0xd3,
+		0x44, 0x75, 0x26, 0x17, 0xfc, 0xcd, 0x9e, 0xaf, 0x38, 0x09, 0x5a, 0x6b, 0x45,
+		0x74, 0x27, 0x16, 0x81, 0xb0, 0xe3, 0xd2, 0xbf, 0x8e, 0xdd, 0xec, 0x7b, 0x4a,
+		0x19, 0x28, 0x06, 0x37, 0x64, 0x55, 0xc2, 0xf3, 0xa0, 0x91, 0x47, 0x76, 0x25,
+		0x14, 0x83, 0xb2, 0xe1, 0xd0, 0xfe, 0xcf, 0x9c, 0xad, 0x3a, 0x0b, 0x58, 0x69,
+		0x04, 0x35, 0x66, 0x57, 0xc0, 0xf1, 0xa2, 0x93, 0xbd, 0x8c, 0xdf, 0xee, 0x79,
+		0x48, 0x1b, 0x2a, 0xc1, 0xf0, 0xa3, 0x92, 0x05, 0x34, 0x67, 0x56, 0x78, 0x49,
+		0x1a, 0x2b, 0xbc, 0x8d, 0xde, 0xef, 0x82, 0xb3, 0xe0, 0xd1, 0x46, 0x77, 0x24,
+		0x15, 0x3b, 0x0a, 0x59, 0x68, 0xff, 0xce, 0x9d, 0xac
 	};
+
 	constexpr std::array<unsigned int, 256> crc32_tab{
 		0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f, 0xe963a535, 0x9e6495a3, 0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988, 0x09b64c2b, 0x7eb17cbd, 0xe7b82d07,
 		0x90bf1d91, 0x1db71064, 0x6ab020f2, 0xf3b97148, 0x84be41de, 0x1adad47d, 0x6ddde4eb, 0xf4d4b551, 0x83d385c7, 0x136c9856, 0x646ba8c0, 0xfd62f97a, 0x8a65c9ec, 0x14015c4f, 0x63066cd9,
@@ -100,10 +105,31 @@ namespace
 
 uint8_t Crc8(uint8_t crc, const uint8_t* buf, size_t size)
 {
-	if (buf == NULL)
+	if (buf == nullptr)
 		return 0xff;
 	while (size--)
 		crc = crc8_tab[crc ^ *buf++];
+	return crc;
+}
+
+uint16_t crc16ccitt(const uint8_t* buf, size_t size)
+{
+	uint16_t crc = 0xFFFF; // Initial value
+	while (size--)
+	{
+		crc ^= (*buf++ << 8);
+		for (int i = 0; i < 8; ++i)
+		{
+			if (crc & 0x8000)
+			{
+				crc = (crc << 1) ^ 0x1021;
+			}
+			else
+			{
+				crc = crc << 1;
+			}
+		}
+	}
 	return crc;
 }
 
@@ -114,6 +140,16 @@ unsigned int Crc32(unsigned int crc, const uint8_t* buf, size_t size)
 	while (size--)
 		crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
 	return crc ^ ~0U;
+}
+
+uint8_t Crc8_strMQ(uint8_t crc, const uint8_t* buf, size_t size)
+{
+	crc = 0xff;
+	if (buf == NULL)
+		return crc;
+	while (size--)
+		crc += *buf++;
+	return crc;
 }
 
 void StringSplit(std::string str, const std::string &delim, std::vector<std::string> &results)
@@ -184,6 +220,11 @@ void stdreplace(
 		inoutstring.replace(pos, replaceWhat.size(), replaceWithWhat);
 		pos += replaceWithWhat.size();
 	}
+}
+
+bool std_ends_with(const std::string& str, const std::string& suffix)
+{
+	return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
 void stdupper(std::string &inoutstring)
@@ -350,7 +391,7 @@ std::vector<std::string> GetSerialPorts(bool &bUseDirectPath)
 	//scan /dev for /dev/ttyUSB* or /dev/ttyS* or /dev/tty.usbserial* or /dev/ttyAMA* or /dev/ttySAC* or /dev/ttymxc*
 	//also scan /dev/serial/by-id/* on Linux
 
-	bool bHaveTtyAMAfree=false;
+	bool bHaveTtyAMAfree = false;
 	std::string sLine;
 	std::ifstream infile;
 
@@ -360,12 +401,12 @@ std::vector<std::string> GetSerialPorts(bool &bUseDirectPath)
 		if (!infile.eof())
 		{
 			getline(infile, sLine);
-			bHaveTtyAMAfree=(sLine.find("ttyAMA0")==std::string::npos);
+			bHaveTtyAMAfree = (sLine.find("ttyAMA0") == std::string::npos);
 		}
 	}
 
 	DIR *d = nullptr;
-	d=opendir("/dev");
+	d = opendir("/dev");
 	if (d != nullptr)
 	{
 		struct dirent *de = nullptr;
@@ -373,73 +414,73 @@ std::vector<std::string> GetSerialPorts(bool &bUseDirectPath)
 		while ((de = readdir(d)))
 		{
 			// Only consider character devices and symbolic links
-                        if ((de->d_type == DT_CHR) || (de->d_type == DT_LNK))
-                        {
-			std::string fname = de->d_name;
-			if (fname.find("ttyUSB")!=std::string::npos)
+			if ((de->d_type == DT_CHR) || (de->d_type == DT_LNK))
 			{
-				ret.push_back("/dev/" + fname);
-			}
-			else if (fname.find("tty.usbserial")!=std::string::npos)
-			{
-				bUseDirectPath=true;
-				ret.push_back("/dev/" + fname);
-			}
-			else if (fname.find("ttyACM")!=std::string::npos)
-			{
-				bUseDirectPath=true;
-				ret.push_back("/dev/" + fname);
-			}
-			else if (fname.find("ttySAC") != std::string::npos)
-			{
-				bUseDirectPath = true;
-				ret.push_back("/dev/" + fname);
-			}
-			else if (fname.find("ttymxc") != std::string::npos)
-			{
-				bUseDirectPath = true;
-				ret.push_back("/dev/" + fname);
-			}
-#if defined (__FreeBSD__) || defined (__OpenBSD__) || defined (__NetBSD__)
-			else if (fname.find("ttyU")!=std::string::npos)
-			{
-				bUseDirectPath=true;
-				ret.push_back("/dev/" + fname);
-			}
-			else if (fname.find("cuaU")!=std::string::npos)
-			{
-				bUseDirectPath=true;
-				ret.push_back("/dev/" + fname);
-			}
-#endif
-#ifdef __APPLE__
-			else if (fname.find("cu.")!=std::string::npos)
-			{
-				bUseDirectPath=true;
-				ret.push_back("/dev/" + fname);
-			}
-#endif
-			if (bHaveTtyAMAfree)
-			{
-				if (fname.find("ttyAMA0")!=std::string::npos)
+				std::string fname = de->d_name;
+				if (fname.find("ttyUSB") != std::string::npos)
 				{
 					ret.push_back("/dev/" + fname);
-					bUseDirectPath=true;
 				}
-				// By default, this is the "small UART" on Rasberry 3 boards
-                                        if (fname.find("ttyS0")!=std::string::npos)
-                                        {
-                                                ret.push_back("/dev/" + fname);
-                                                bUseDirectPath=true;
-                                        }
-                                        // serial0 and serial1 are new with Rasbian Jessie
-                                        // Avoids confusion between Raspberry 2 and 3 boards
-                                        // More info at http://spellfoundry.com/2016/05/29/configuring-gpio-serial-port-raspbian-jessie-including-pi-3/
-                                        if (fname.find("serial")!=std::string::npos)
-                                        {
-                                                ret.push_back("/dev/" + fname);
-                                                bUseDirectPath=true;
-                                        }
+				else if (fname.find("tty.usbserial") != std::string::npos)
+				{
+					bUseDirectPath = true;
+					ret.push_back("/dev/" + fname);
+				}
+				else if (fname.find("ttyACM") != std::string::npos)
+				{
+					bUseDirectPath = true;
+					ret.push_back("/dev/" + fname);
+				}
+				else if (fname.find("ttySAC") != std::string::npos)
+				{
+					bUseDirectPath = true;
+					ret.push_back("/dev/" + fname);
+				}
+				else if (fname.find("ttymxc") != std::string::npos)
+				{
+					bUseDirectPath = true;
+					ret.push_back("/dev/" + fname);
+				}
+#if defined (__FreeBSD__) || defined (__OpenBSD__) || defined (__NetBSD__)
+				else if (fname.find("ttyU")!=std::string::npos)
+				{
+					bUseDirectPath=true;
+					ret.push_back("/dev/" + fname);
+				}
+				else if (fname.find("cuaU")!=std::string::npos)
+				{
+					bUseDirectPath=true;
+					ret.push_back("/dev/" + fname);
+				}
+#endif
+#ifdef __APPLE__
+				else if (fname.find("cu.")!=std::string::npos)
+				{
+					bUseDirectPath=true;
+					ret.push_back("/dev/" + fname);
+				}
+#endif
+				if (bHaveTtyAMAfree)
+				{
+					if (fname.find("ttyAMA0") != std::string::npos)
+					{
+						ret.push_back("/dev/" + fname);
+						bUseDirectPath = true;
+					}
+					// By default, this is the "small UART" on Rasberry 3 boards
+					if (fname.find("ttyS0") != std::string::npos)
+					{
+						ret.push_back("/dev/" + fname);
+						bUseDirectPath = true;
+					}
+					// serial0 and serial1 are new with Rasbian Jessie
+					// Avoids confusion between Raspberry 2 and 3 boards
+					// More info at http://spellfoundry.com/2016/05/29/configuring-gpio-serial-port-raspbian-jessie-including-pi-3/
+					if (fname.find("serial") != std::string::npos)
+					{
+						ret.push_back("/dev/" + fname);
+						bUseDirectPath = true;
+					}
 				}
 			}
 		}
@@ -464,7 +505,7 @@ std::vector<std::string> GetSerialPorts(bool &bUseDirectPath)
 	}
 
 #if defined(__linux__) || defined(__linux) || defined(linux)
-	d=opendir("/dev/serial/by-id");
+	d = opendir("/dev/serial/by-id");
 	if (d != nullptr)
 	{
 		struct dirent *de = nullptr;
@@ -472,8 +513,8 @@ std::vector<std::string> GetSerialPorts(bool &bUseDirectPath)
 		while ((de = readdir(d)))
 		{
 			// Only consider symbolic links
-                        if (de->d_type == DT_LNK)
-                        {
+			if (de->d_type == DT_LNK)
+			{
 				std::string fname = de->d_name;
 				ret.push_back("/dev/serial/by-id/" + fname);
 			}
@@ -581,42 +622,40 @@ double distanceEarth(double lat1d, double lon1d, double lat2d, double lon2d)
 	return 2.0 * earthRadiusKm * asin(sqrt(u * u + cos(lat1r) * cos(lat2r) * v * v));
 }
 
+// trim only the space character
 std::string &stdstring_ltrim(std::string &s)
 {
-	while (!s.empty())
-	{
-		if (s[0] != ' ')
-			return s;
-		s = s.substr(1);
-	}
-	//	s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
-	return s;
+	return s.erase(0, s.find_first_not_of(' '));
 }
 
 std::string &stdstring_rtrim(std::string &s)
 {
-	while (!s.empty())
-	{
-		if (s[s.size() - 1] != ' ')
-			return s;
-		s = s.substr(0, s.size() - 1);
-	}
-	//s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
-	return s;
+	return s.erase(s.find_last_not_of(' ') + 1);
 }
-
-// trim from both ends
 std::string &stdstring_trim(std::string &s)
 {
 	return stdstring_ltrim(stdstring_rtrim(s));
 }
+// trim all whitespace
+std::string &stdstring_ltrimws(std::string &s)
+{
+	return s.erase(0, s.find_first_not_of(WHITESPACE));
+}
+std::string &stdstring_rtrimws(std::string &s)
+{
+	return s.erase(s.find_last_not_of(WHITESPACE) + 1);
+}
+std::string &stdstring_trimws(std::string &s)
+{
+	return stdstring_ltrimws(stdstring_rtrimws(s));
+}
 
-double CalculateDewPoint(double temp, int humidity)
+double CalculateDewPoint(double temp, double humidity)
 {
 	if (humidity==0)
 		return temp;
-	double dew_numer = 243.04*(log(double(humidity)/100.0)+((17.625*temp)/(temp+243.04)));
-	double dew_denom = 17.625-log(double(humidity)/100.0)-((17.625*temp)/(temp+243.04));
+	double dew_numer = 243.04*(log(humidity/100.0)+((17.625*temp)/(temp+243.04)));
+	double dew_denom = 17.625-log(humidity/100.0)-((17.625*temp)/(temp+243.04));
 	if (dew_numer==0)
 		dew_numer=1;
 	return dew_numer/dew_denom;
@@ -747,8 +786,8 @@ double ConvertToFahrenheit(const double Celsius)
 
 double RoundDouble(const long double invalue, const short numberOfPrecisions)
 {
-	long long p = (long long) pow(10.0L, numberOfPrecisions);
-	double ret= (long long)(invalue * p + 0.5L) / (double)p;
+	int64_t p = (int64_t) pow(10.0L, numberOfPrecisions);
+	double ret= (int64_t)(invalue * p + 0.5L) / (double)p;
 	return ret;
 }
 
@@ -869,13 +908,21 @@ std::string TimeToString(const time_t *ltime, const _eTimeFormat format)
 std::string GenerateMD5Hash(const std::string &InputString, const std::string &Salt)
 {
 	std::string cstring = InputString + Salt;
-	unsigned char digest[MD5_DIGEST_LENGTH + 1];
-	digest[MD5_DIGEST_LENGTH] = 0;
-	MD5((const unsigned char*)cstring.c_str(), cstring.size(), (unsigned char*)&digest);
-	char mdString[(MD5_DIGEST_LENGTH * 2) + 1];
-	mdString[MD5_DIGEST_LENGTH * 2] = 0;
+	unsigned char digest[EVP_MAX_MD_SIZE + 1];
+	digest[EVP_MAX_MD_SIZE] = 0;
+	unsigned int hash_length = 0;
+
+	auto md5ctx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+
+	EVP_DigestInit(md5ctx.get(), EVP_md5());
+	EVP_DigestUpdate(md5ctx.get(), cstring.c_str(), cstring.size());
+	EVP_DigestFinal(md5ctx.get(), digest, &hash_length);
+
+	char mdString[(EVP_MAX_MD_SIZE * 2) + 1];
+	mdString[EVP_MAX_MD_SIZE * 2] = 0;
 	for (int i = 0; i < 16; i++)
 		sprintf(&mdString[i * 2], "%02x", (unsigned int)digest[i]);
+
 	return mdString;
 }
 
@@ -983,10 +1030,10 @@ void padLeft(std::string &str, const size_t num, const char paddingChar)
 		str.insert(0, num - str.size(), paddingChar);
 }
 
-bool IsLightOrSwitch(const int devType, const int subType)
+bool IsLightOrSwitch(const int dType, const int dSubType)
 {
 	bool bIsLightSwitch = false;
-	switch (devType)
+	switch (dType)
 	{
 	case pTypeLighting1:
 	case pTypeLighting2:
@@ -1000,6 +1047,7 @@ bool IsLightOrSwitch(const int devType, const int subType)
 	case pTypeSecurity2:
 	case pTypeCurtain:
 	case pTypeBlinds:
+	case pTypeChime:
 	case pTypeRFY:
 	case pTypeThermostat2:
 	case pTypeThermostat3:
@@ -1009,13 +1057,88 @@ bool IsLightOrSwitch(const int devType, const int subType)
 	case pTypeHomeConfort:
 	case pTypeFS20:
 	case pTypeHunter:
+	case pTypeDDxxxx:
+	case pTypeHoneywell_AL:
 		bIsLightSwitch = true;
 		break;
 	case pTypeRadiator1:
-		bIsLightSwitch = (subType == sTypeSmartwaresSwitchRadiator);
+		bIsLightSwitch = (dSubType == sTypeSmartwaresSwitchRadiator);
 		break;
 	}
 	return bIsLightSwitch;
+}
+
+bool IsTemp(const int dType, const int dSubType)
+{
+	return (
+		(dType == pTypeTEMP_HUM)
+		|| (dType == pTypeTEMP_HUM_BARO)
+		|| (dType == pTypeTEMP)
+		|| (dType == pTypeHUM)
+		|| (dType == pTypeTEMP_BARO)
+		|| (dType == pTypeEvohomeZone)
+		|| (dType == pTypeEvohomeWater)
+		|| ((dType == pTypeWIND) && (dSubType == sTypeWIND4))
+		|| ((dType == pTypeUV) && (dSubType == sTypeUV3))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeSystemTemp))
+		|| (dType == pTypeThermostat1)
+		|| ((dType == pTypeRFXSensor) && (dSubType == sTypeRFXSensorTemp))
+		|| (dType == pTypeRego6XXTemp)
+		);
+}
+
+bool IsWeather(const int dType, const int dSubType)
+{
+	return (
+		(dType == pTypeWIND)
+		|| (dType == pTypeRAIN)
+		|| (dType == pTypeTEMP_HUM_BARO)
+		|| (dType == pTypeTEMP_BARO)
+		|| (dType == pTypeUV)
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeVisibility))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeBaro))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeSolarRadiation))
+		);
+};
+
+bool IsUtility(const int dType, const int dSubType)
+{
+	return (
+		(dType == pTypeP1Power)
+		|| (dType == pTypeP1Gas)
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeKwh))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeVoltage))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeCurrent))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeTextStatus))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypePercentage))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeCounterIncremental))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeManagedCounter))
+		|| ((dType == pTypeRFXSensor) && (dSubType == sTypeRFXSensorVolt))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeWaterflow))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeCustom))
+		|| ((dType == pTypeSetpoint) && (dSubType == sTypeSetpoint))
+		|| ((dType == pTypeRFXSensor) && (dSubType == sTypeRFXSensorAD))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeAlert))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypePressure))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeSoilMoisture))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeLeafWetness))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeSoundLevel))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeFan))
+		|| ((dType == pTypeGeneral) && (dSubType == sTypeDistance))
+		|| (dType == pTypeLux)
+		|| (dType == pTypeCURRENT)
+		|| (dType == pTypeCURRENTENERGY)
+		|| (dType == pTypeENERGY)
+		|| (dType == pTypePOWER)
+		|| (dType == pTypeYouLess)
+		|| (dType == pTypeAirQuality)
+		|| (dType == pTypeUsage)
+		|| (dType == pTypeWEIGHT)
+		|| (dType == pTypeRFXMeter)
+		|| ((dType == pTypeRego6XXValue) && (dSubType == sTypeRego6XXCounter))
+		|| ((dType == pTypeRadiator1) && (dSubType == sTypeSmartwares))
+		|| ((dType == pTypeSetpoint) && (dSubType == sTypeSetpoint))
+		);
 }
 
 int MStoBeaufort(const float ms)
@@ -1121,9 +1244,13 @@ void DirectoryListing(std::vector<std::string>& entries, const std::string &dir,
 
 std::string GenerateUserAgent()
 {
-	int cversion = rand() % 0xFFFF;
-	int mversion = rand() % 3;
-	int sversion = rand() % 3;
+	std::random_device rd;  // a seed source for the random number engine
+	std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
+	std::uniform_int_distribution<> distrib_FFFF(0, 0xFFFF);
+
+	int cversion = distrib_FFFF(gen) % 0xFFFF;
+	int mversion = distrib_FFFF(gen) % 3;
+	int sversion = distrib_FFFF(gen) % 3;
 	std::stringstream sstr;
 	sstr << "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/" << (601 + sversion) << "." << (36+mversion) << " (KHTML, like Gecko) Chrome/" << (53 + mversion) << ".0." << cversion << ".0 Safari/" << (601 + sversion) << "." << (36+sversion);
 	return sstr.str();
@@ -1372,6 +1499,7 @@ int SetThreadName(const std::thread::native_handle_type &thread, const char *nam
 	pthread_set_name_np(thread, name_trunc);
 	return 0;
 #endif
+	return 0;
 }
 #endif
 
@@ -1415,9 +1543,9 @@ bool IsDebuggerPresent()
 }
 #endif
 
-const std::string hexCHARS = "0123456789abcdef";
 std::string GenerateUUID() // DCE/RFC 4122
 {
+	const std::string hexCHARS = "0123456789abcdef";
 	std::string uuid = std::string(36, ' ');
 
 	uuid[8] = '-';
@@ -1427,14 +1555,30 @@ std::string GenerateUUID() // DCE/RFC 4122
 	//uuid[19] = ' '; //N Variant 1 UUIDs (10xx N=8..b, 2 bits)
 	uuid[23] = '-';
 
+	std::random_device rd;  // a seed source for the random number engine
+	std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
+	std::uniform_int_distribution<> distrib_F(0, 0x0F);
+	std::uniform_int_distribution<> distrib_3(0, 0x03);
+
 	for (size_t ii = 0; ii < uuid.size(); ii++)
 	{
 		if (uuid[ii] == ' ')
 		{
-			uuid[ii] = hexCHARS[(ii == 19) ? (8 + (std::rand() & 0x03)) : std::rand() & 0x0F];
+			uuid[ii] = hexCHARS[(ii == 19) ? (8 + (distrib_3(gen) & 0x03)) : distrib_F(gen) & 0x0F];
 		}
 	}
 	return uuid;
+}
+
+bool isHexRepresentation(const std::string &input)
+{
+	const std::string hexCHARS = "0123456789abcdef";
+	if (input.empty())
+		return false;
+	bool bIsHex = true;
+	for (auto itt = input.begin(); itt != input.end(); ++itt)
+		bIsHex &= (hexCHARS.find(*itt) != std::string::npos);
+	return bIsHex;
 }
 
 double round_digits(double dIn, const int totDigits)
@@ -1475,5 +1619,276 @@ std::wstring utf8_to_wstring(const std::string& utf8str)
 	// UTF-8 to wstring
 	std::wstring_convert<std::codecvt_utf8<wchar_t>> wconv;
 	return wconv.from_bytes(utf8str);
+}
+
+std::string sha256hex(const std::string &input)
+{
+	const std::string hexCHARS = "0123456789abcdef";
+
+	unsigned char digest[33] = {0};
+	char hexdigest[65] = {0};
+	size_t idxb, idxh;
+
+	SHA256((const unsigned char *)input.c_str(), input.length(), digest);
+
+	for (idxb = 0, idxh = 0; idxb < 32; idxb++, idxh += 2)
+	{
+		uint8_t bval = digest[idxb] & 0xFF;
+		hexdigest[idxh] = hexCHARS[(bval >> 4) & 0xf];
+		hexdigest[idxh + 1] = hexCHARS[bval & 0xF];
+	}
+	hexdigest[idxh] = 0;
+	return std::string(hexdigest);
+}
+
+std::string sha256raw(const std::string &input)
+{
+	unsigned char digest[33] = {0};
+	SHA256((const unsigned char *)input.c_str(), input.length(), digest);
+	return std::string((const char *)digest, 32);
+}
+
+#ifdef _WIN32
+#define gmtime_r(timep, result) gmtime_s(result, timep)
+#endif
+
+constexpr std::array<const char*, 12> months{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+constexpr std::array<const char*, 7> wkdays{ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+
+char* make_web_time(const time_t rawtime)
+{
+	static char buffer[256];
+	struct tm gmt;
+#ifdef _WIN32
+	if (gmtime_r(&rawtime, &gmt)) //windows returns errno_t, which returns zero when successful
+#else
+	if (gmtime_r(&rawtime, &gmt) == nullptr)
+#endif
+	{
+		strcpy(buffer, "Thu, 01 Jan 1970 00:00:00 GMT");
+	}
+	else
+	{
+		sprintf(buffer, "%s, %02d %s %04d %02d:%02d:%02d GMT",
+			wkdays[gmt.tm_wday],
+			gmt.tm_mday,
+			months[gmt.tm_mon],
+			gmt.tm_year + 1900,
+			gmt.tm_hour,
+			gmt.tm_min,
+			gmt.tm_sec);
+	}
+	return buffer;
+}
+
+const std::string base32RFC4648 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=";
+bool base32_decode(const std::string &input, std::string &output)
+{
+	if ((input.size() % 8) != 0)
+		return false;
+
+	std::vector<uint8_t> outTotal;
+
+	for(uint16_t j = 0; j < (input.size() / 8); j++)
+	{
+		// pack 8 bytes
+		uint64_t buffer = 0;
+		for(uint8_t i = 0; i < 8; i++)
+		{
+			if(i != 0)
+			{
+				buffer = (buffer << 5);
+			}
+			// input check
+			size_t pos = base32RFC4648.find(input[(j*8) + i]);
+			if(pos == std::string::npos)
+			{
+				return false;
+			}
+			else if (pos == 32)		// '=' is padding sign, we skip it
+			{
+				buffer = buffer | 0;
+			}
+			else
+			{
+				buffer = buffer | base32RFC4648.find(input[(j*8) + i]);
+			}
+		}
+		// output 5 bytes
+		for(int8_t x = 4; x >= 0; x--)
+		{
+			outTotal.push_back((unsigned char)(buffer >> (x * 8)));
+		}
+	}
+
+	output.assign(std::string(outTotal.begin(), outTotal.end()));
+	return true;
+}
+
+bool base32_encode(const std::string &input, std::string &output)
+{
+	if (input.empty())
+		return false;
+
+	std::vector<uint8_t> outTotal;
+
+	for(uint16_t j = 0; j < (input.size() / 5); j++)
+	{
+		// pack 5 bytes
+		uint64_t buffer = 0;
+		for(uint8_t i = 0; i < 5; i++)
+		{
+			if(i != 0)
+			{
+				buffer = (buffer << 8);
+			}
+			buffer = buffer | input[(j*5) + i];
+		}
+		// output 8 bytes
+		for(int8_t x = 7; x >= 0; x--)
+		{
+			outTotal.push_back(base32RFC4648[(buffer >> (x * 5)) & 0x1F]);
+		}
+	}
+
+	output.assign(std::string(outTotal.begin(), outTotal.end()));
+	return true;
+}
+
+std::string vector_2_string(std::vector<std::string> const& strings, const std::string &delim)
+{
+	std::stringstream ss;
+	for (const auto& itt : strings)
+	{
+		if (!ss.str().empty())
+			ss << delim;
+		ss << itt;
+	}
+	return ss.str();
+}
+
+#define AES_KEY_LENGTH 128/8
+
+bool AESEncryptData(const std::string& szInputBuffer, std::string& szOutputBuffer, const uint8_t* pKey16)
+{
+	//The following block makes it compatible with RTSS dongle code, but in reality you do not need to make a new string that is longer!
+	const size_t encs_length = ((szInputBuffer.size() + AES_BLOCK_SIZE) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
+
+	uint8_t* pInBuf = new uint8_t[encs_length];
+	memset(pInBuf, 0, encs_length);
+
+	memcpy(pInBuf, (const uint8_t*)&szInputBuffer[0], szInputBuffer.size());
+
+	std::string szInputBufffer((const uint8_t*)pInBuf, (const uint8_t*)pInBuf + encs_length);
+
+	delete[] pInBuf;
+
+	// max ciphertext len for a n bytes of plaintext is
+   // n + AES_BLOCK_SIZE - 1 bytes
+	int nLen = (int)szInputBufffer.size();
+	int nCLen = nLen + AES_BLOCK_SIZE;
+	int nFLen = 0;
+
+	unsigned char aes_key[AES_KEY_LENGTH];
+	memcpy(&aes_key, pKey16, 16);
+
+	unsigned char iv_enc[AES_BLOCK_SIZE];
+	memset(iv_enc, 0, AES_BLOCK_SIZE);
+	std::string szIV = "7E973805E90B4CE5";
+	memcpy(iv_enc, szIV.c_str(), szIV.size());
+
+	// Prepare output buffer
+	szOutputBuffer.resize(nCLen);
+
+	bool fOk = false;
+
+	// Perform the encryption
+	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+
+	if (!ctx)
+		return false;
+
+	EVP_CIPHER_CTX_init(ctx);
+
+	fOk = EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, aes_key, iv_enc);
+	if (!fOk)
+	{
+		ERR_print_errors_fp(stderr);
+		goto exit_sub;
+	}
+	EVP_CIPHER_CTX_set_padding(ctx, 0);
+	
+	fOk = EVP_EncryptUpdate(ctx, (uint8_t*)&szOutputBuffer[0], &nCLen, (const uint8_t*)&szInputBufffer[0], nLen);
+	if (!fOk)
+	{
+		ERR_print_errors_fp(stderr);
+		goto exit_sub;
+	}
+
+	fOk = EVP_EncryptFinal_ex(ctx, (uint8_t*)(&szOutputBuffer[0]) + nCLen, &nFLen);
+	if (!fOk)
+	{
+		ERR_print_errors_fp(stderr);
+		goto exit_sub;
+	}
+exit_sub:
+	EVP_CIPHER_CTX_cleanup(ctx);
+	EVP_CIPHER_CTX_free(ctx);
+
+	if (!fOk)
+		return false;
+
+	szOutputBuffer.resize(nCLen + nFLen);
+	return true;
+}
+
+bool AESDecryptData(const std::string& szInputBuffer, std::string& szOutputBuffer, const uint8_t* pKey16)
+{
+	// plaintext will always be equal to or lesser than length of ciphertext
+	int nLen = (int)szInputBuffer.size();
+	int nPLen = nLen, nFLen = 0;
+
+	unsigned char aes_key[AES_KEY_LENGTH];
+	memcpy(&aes_key, pKey16, 16);
+
+	unsigned char iv_enc[AES_BLOCK_SIZE];
+	memset(iv_enc, 0, AES_BLOCK_SIZE);
+	std::string szIV = "7E973805E90B4CE5";
+	memcpy(iv_enc, szIV.c_str(), szIV.size());
+
+	// Prepare output buffer
+	szOutputBuffer.resize(nPLen);
+
+	bool fOk = true;
+
+	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+	if (fOk) fOk = EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, aes_key, iv_enc);
+	if (!fOk)
+	{
+		ERR_print_errors_fp(stderr);
+		goto exit_sub;
+	}
+	EVP_CIPHER_CTX_set_padding(ctx, 0);
+
+	if (fOk) fOk = EVP_DecryptUpdate(ctx, (uint8_t*)&szOutputBuffer[0], &nPLen, (const uint8_t*)&szInputBuffer[0], nLen) != 0;
+	if (!fOk)
+	{
+		ERR_print_errors_fp(stderr);
+		goto exit_sub;
+	}
+
+	if (fOk) fOk = EVP_DecryptFinal_ex(ctx, (uint8_t*)(&szOutputBuffer[0]) + nPLen, &nFLen) != 0;
+	if (!fOk)
+	{
+		ERR_print_errors_fp(stderr);
+	}
+exit_sub:
+	EVP_CIPHER_CTX_free(ctx);
+
+	if (!fOk)
+		return false;
+
+	szOutputBuffer.resize(nPLen + nFLen);
+	return true;
 }
 

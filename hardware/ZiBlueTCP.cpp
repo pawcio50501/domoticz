@@ -3,7 +3,6 @@
 #include "../main/Logger.h"
 #include "../main/Helper.h"
 #include <iostream>
-#include "../main/localtime_r.h"
 
 #define ZiBlue_RETRY_DELAY 30
 
@@ -43,7 +42,7 @@ bool CZiBlueTCP::StopHardware()
 
 void CZiBlueTCP::OnConnect()
 {
-	Log(LOG_STATUS, "connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	m_bIsStarted = true;
 	m_rfbufferpos = 0;
 	m_LastReceivedTime = mytime(nullptr);
@@ -53,13 +52,13 @@ void CZiBlueTCP::OnConnect()
 
 void CZiBlueTCP::OnDisconnect()
 {
-	Log(LOG_STATUS, "disconnected");
+	Log(LOG_STATUS, "Disconnected");
 }
 
 void CZiBlueTCP::Do_Work()
 {
 	int sec_counter = 0;
-	Log(LOG_STATUS, "trying to connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
+	Log(LOG_STATUS, "Trying to connect to %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 	connect(m_szIPAddress, m_usIPPort);
 	while (!IsStopRequested(1000))
 	{
@@ -72,7 +71,7 @@ void CZiBlueTCP::Do_Work()
 	}
 	terminate();
 
-	Log(LOG_STATUS, "TCP/IP Worker stopped...");
+	Log(LOG_STATUS, "Worker stopped...");
 }
 
 void CZiBlueTCP::OnData(const unsigned char *pData, size_t length)

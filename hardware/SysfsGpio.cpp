@@ -109,6 +109,7 @@
 	24-jun-2017	HvB		Add hardware debounce parameter, range 10..750 milli sec.
 	04-jul-2017	HvB		Poll after an interrupt received to recover missed interrupts
 	06-jul-2017 HvB		Removed log message for interrupt state change, forum request
+	05-feb-2023 Es		Add unit id so GPIO outside [0-255] can also be used
 */
 
 #include "stdafx.h"
@@ -126,7 +127,6 @@
 #include "../main/RFXtrx.h"
 #include "../main/mainworker.h"
 #include "../main/SQLHelper.h"
-#include "../main/localtime_r.h"
 
 /*
 Note:
@@ -215,19 +215,19 @@ bool CSysfsGpio::StopHardware()
 	return true;
 }
 
-bool CSysfsGpio::WriteToHardware(const char *pdata, const unsigned char length)
+bool CSysfsGpio::WriteToHardware(const char* pdata, const unsigned char length)
 {
 	bool bOk = false;
-	const tRBUF *pSen = reinterpret_cast<const tRBUF *>(pdata);
+	const tRBUF* pSen = reinterpret_cast<const tRBUF*>(pdata);
 	unsigned char packettype = pSen->ICMND.packettype;
-	int gpio_pin = pSen->LIGHTING2.unitcode;
+	int unit = pSen->LIGHTING2.unitcode;
 
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
-		if ((s.pin_number == gpio_pin) && (s.direction == GPIO_OUT) && (packettype == pTypeLighting2))
+		if ((s.unit == unit) && (s.direction == GPIO_OUT) && (packettype == pTypeLighting2))
 		{
 			int state = pSen->LIGHTING2.cmnd == light2_sOn ? GPIO_HIGH : GPIO_LOW;
-			GpioWrite(gpio_pin, state);
+			GpioWrite(s.pin_number, state);
 			s.db_state = state;
 			s.value = state;
 			bOk = true;
@@ -285,7 +285,7 @@ void CSysfsGpio::Do_Work()
 	}
 
 	/* termination, close all open fd's */
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
 		if (s.read_value_fd != -1)
 		{
@@ -322,7 +322,7 @@ void CSysfsGpio::EdgeDetectThread()
 	FD_ZERO(&m_rfds);
 	m_maxfd = 0;
 
-	for (auto &s : m_saved_state) /* setup gpio pins */
+	for (auto& s : m_saved_state) /* setup gpio pins */
 	{
 		if ((s.direction == GPIO_IN) && (s.edge != GPIO_EDGE_NONE))
 		{
@@ -398,7 +398,7 @@ void CSysfsGpio::EdgeDetectThread()
 		}
 	}
 
-	for (auto &s : m_saved_state) /* close all open edge detect fd's */
+	for (auto& s : m_saved_state) /* close all open edge detect fd's */
 	{
 		if (s.edge_fd > 0)
 		{
@@ -446,7 +446,7 @@ void CSysfsGpio::Init()
 
 	UpdateGpioOutputs();
 
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
 		snprintf(path, GPIO_MAX_PATH, "%s%d/value", GPIO_PATH, s.pin_number);
 		s.read_value_fd = open(path, O_RDONLY);
@@ -469,7 +469,7 @@ void CSysfsGpio::Init()
 	UpdateDomoticzInputs(false); /* Make sure database inputs are in sync with actual hardware */
 
 	Log(LOG_STATUS, "Startup - polling:%s interrupts:%s debounce:%dmsec inputs:%d outputs:%d", m_polling_enabled ? "yes" : "no", m_interrupts_enabled ? "yes" : "no", m_debounce_msec, input_count,
-	    output_count);
+		output_count);
 
 	if (m_interrupts_enabled)
 	{
@@ -508,6 +508,7 @@ void CSysfsGpio::FindGpioExports()
 			gi.id3 = 0;
 			gi.id4 = 0;
 			gi.request_update = -1;
+			gi.unit = ConvertGpioPin(gpio_pin);
 
 			m_saved_state.push_back(gi);
 			close(fd);
@@ -522,7 +523,7 @@ void CSysfsGpio::PollGpioInputs(bool PollOnce)
 		for (int i = 0; i < m_saved_state.size(); i++)
 		{
 			if ((m_saved_state[i].direction == GPIO_IN) && (m_saved_state[i].read_value_fd != -1) &&
-			    (PollOnce || (m_saved_state[i].edge == GPIO_EDGE_NONE) || (m_saved_state[i].edge == GPIO_EDGE_UNKNOWN)))
+				(PollOnce || (m_saved_state[i].edge == GPIO_EDGE_NONE) || (m_saved_state[i].edge == GPIO_EDGE_UNKNOWN)))
 			{
 				GpioSaveState(i, GpioReadFd(m_saved_state[i].read_value_fd));
 			}
@@ -535,7 +536,7 @@ void CSysfsGpio::CreateDomoticzDevices()
 	std::vector<std::vector<std::string>> result;
 	std::vector<std::string> deviceid;
 
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
 		bool createNewDevice = false;
 		deviceid = GetGpioDeviceId();
@@ -544,7 +545,7 @@ void CSysfsGpio::CreateDomoticzDevices()
 		{
 			/* Input */
 
-			result = m_sql.safe_query("SELECT nValue,Options FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.pin_number);
+			result = m_sql.safe_query("SELECT nValue,Options FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.unit);
 
 			if (result.empty())
 			{
@@ -566,7 +567,7 @@ void CSysfsGpio::CreateDomoticzDevices()
 					{
 						if (atoi(sd[1].c_str()) != GPIO_IN) /* device was not an input, delete it */
 						{
-							m_sql.safe_query("DELETE FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.pin_number);
+							m_sql.safe_query("DELETE FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.unit);
 
 							createNewDevice = true;
 						}
@@ -577,17 +578,17 @@ void CSysfsGpio::CreateDomoticzDevices()
 			if (createNewDevice)
 			{
 				/* create new input device */
-				m_sql.safe_query("INSERT INTO DeviceStatus (HardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, "
-						 "SignalLevel, BatteryLevel, Name, nValue, sValue, Options) "
-						 "VALUES (%d,'%q',%d, %d, %d, %d, 0, 12, 255, '%q', %d, ' ', '0')",
-						 m_HwdID, deviceid[0].c_str(), s.pin_number, pTypeLighting2, sTypeAC, int(STYPE_Contact), "Input", s.value);
+				m_sql.safe_query("INSERT INTO DeviceStatus (HardwareID, OrgHardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, "
+					"SignalLevel, BatteryLevel, Name, nValue, sValue, Options) "
+					"VALUES (%d, %d,'%q',%d, %d, %d, %d, 0, 12, 255, '%q', %d, ' ', '0')",
+					m_HwdID, 0, deviceid[0].c_str(), s.unit, pTypeLighting2, sTypeAC, int(STYPE_Contact), "Input", s.value);
 			}
 		}
 		else
 		{
 			/* Output */
 
-			result = m_sql.safe_query("SELECT nValue,Options FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.pin_number);
+			result = m_sql.safe_query("SELECT nValue,Options FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.unit);
 
 			if (result.empty())
 			{
@@ -609,7 +610,7 @@ void CSysfsGpio::CreateDomoticzDevices()
 					{
 						if ((atoi(sd[1].c_str()) != GPIO_OUT)) /* device was not an output, delete it */
 						{
-							m_sql.safe_query("DELETE FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.pin_number);
+							m_sql.safe_query("DELETE FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.unit);
 
 							createNewDevice = true;
 						}
@@ -624,10 +625,10 @@ void CSysfsGpio::CreateDomoticzDevices()
 			if (createNewDevice)
 			{
 				/* create new output device */
-				m_sql.safe_query("INSERT INTO DeviceStatus (HardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, "
-						 "SignalLevel, BatteryLevel, Name, nValue, sValue, Options) "
-						 "VALUES (%d,'%q',%d, %d, %d, %d, 0, 12, 255, '%q', %d, ' ', '1')",
-						 m_HwdID, deviceid[0].c_str(), s.pin_number, pTypeLighting2, sTypeAC, int(STYPE_OnOff), "Output", s.value);
+				m_sql.safe_query("INSERT INTO DeviceStatus (HardwareID, OrgHardwareID, DeviceID, Unit, Type, SubType, SwitchType, Used, "
+					"SignalLevel, BatteryLevel, Name, nValue, sValue, Options) "
+					"VALUES (%d, %d,'%q',%d, %d, %d, %d, 0, 12, 255, '%q', %d, ' ', '1')",
+					m_HwdID, 0, deviceid[0].c_str(), s.unit, pTypeLighting2, sTypeAC, int(STYPE_OnOff), "Output", s.value);
 			}
 		}
 	}
@@ -635,18 +636,18 @@ void CSysfsGpio::CreateDomoticzDevices()
 
 void CSysfsGpio::UpdateDomoticzDatabase()
 {
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
 		if (s.request_update == 1)
 		{
-			std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT nValue,Options FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.pin_number);
+			std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT nValue,Options FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.unit);
 
 			if (!result.empty())
 			{
 				// std::vector<std::string> sd = result[0];
 				s.value = GpioRead(s.pin_number, "value");
 
-				m_sql.safe_query("UPDATE DeviceStatus SET nValue=%d,Options=%d WHERE (HardwareID==%d) AND (Unit==%d)", s.value, s.direction, m_HwdID, s.pin_number);
+				m_sql.safe_query("UPDATE DeviceStatus SET nValue=%d,Options=%d WHERE (HardwareID==%d) AND (Unit==%d)", s.value, s.direction, m_HwdID, s.unit);
 
 				s.db_state = s.value;
 				s.id_valid = -1;
@@ -659,7 +660,7 @@ void CSysfsGpio::UpdateDomoticzDatabase()
 
 void CSysfsGpio::UpdateDomoticzInputs(bool forceUpdate)
 {
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
 		if ((s.direction == GPIO_IN) && (s.value != -1))
 		{
@@ -684,7 +685,7 @@ void CSysfsGpio::UpdateDomoticzInputs(bool forceUpdate)
 			{
 				bool updateDatabase = false;
 				bool log_db_change = false;
-				std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT nValue,Used FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.pin_number);
+				std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT nValue,Used FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.unit);
 
 				if ((!result.empty()) && (!result.empty()))
 				{
@@ -726,13 +727,13 @@ void CSysfsGpio::UpdateDomoticzInputs(bool forceUpdate)
 					}
 
 					UpdateDeviceID(s.pin_number);
-					m_Packet.LIGHTING2.unitcode = (char)s.pin_number;
+					m_Packet.LIGHTING2.unitcode = s.unit;
 					m_Packet.LIGHTING2.seqnbr++;
-					sDecodeRXMessage(this, (const unsigned char *)&m_Packet.LIGHTING2, "Input", 255, m_Name.c_str());
+					sDecodeRXMessage(this, (const unsigned char*)&m_Packet.LIGHTING2, "Input", 255, m_Name.c_str());
 
 					if (log_db_change)
 					{
-						Log(LOG_STATUS, "gpio%d new state = %s", s.pin_number, state ? "on" : "off");
+						Log(LOG_STATUS, "gpio%d (unit %d) new state = %s", s.pin_number, s.unit, state ? "on" : "off");
 					}
 				}
 			}
@@ -763,7 +764,7 @@ void CSysfsGpio::UpdateDeviceID(int pin)
 		if (m_saved_state[index].id_valid == -1)
 		{
 			std::string sdeviceid;
-			std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, pin);
+			std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, m_saved_state[index].unit);
 
 			if ((!result.empty() && (!result.empty())))
 			{
@@ -798,11 +799,11 @@ void CSysfsGpio::UpdateGpioOutputs()
 {
 	/* make sure actual gpio output values match database */
 
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
 		if (s.direction == GPIO_OUT)
 		{
-			std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT nValue,Used FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.pin_number);
+			std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT nValue,Used FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_HwdID, s.unit);
 
 			if ((!result.empty()) && (!result.empty()))
 			{
@@ -835,49 +836,49 @@ std::vector<std::string> CSysfsGpio::GetGpioDeviceId()
 //---------------------------------------------------------------------------
 //	sysfs gpio helper functions
 //
-int CSysfsGpio::GetReadResult(int bytecount, char *value_str)
+int CSysfsGpio::GetReadResult(int bytecount, char* value_str)
 {
 	int retval = -1;
 
 	switch (bytecount)
 	{
-		case -1:
-		case 0:
-		case 1: {
+	case -1:
+	case 0:
+	case 1: {
+		break;
+	}
+
+	default: {
+		if ((memcmp("0", value_str, strlen("0")) == 0) || (memcmp("in", value_str, strlen("in")) == 0) || (memcmp("none", value_str, strlen("none")) == 0))
+		{
+			retval = 0;
 			break;
 		}
 
-		default: {
-			if ((memcmp("0", value_str, strlen("0")) == 0) || (memcmp("in", value_str, strlen("in")) == 0) || (memcmp("none", value_str, strlen("none")) == 0))
-			{
-				retval = 0;
-				break;
-			}
-
-			if ((memcmp("1", value_str, strlen("1")) == 0) || (memcmp("out", value_str, strlen("out")) == 0) || (memcmp("rising", value_str, strlen("rising")) == 0))
-			{
-				retval = 1;
-				break;
-			}
-
-			if (memcmp("falling", value_str, strlen("falling")) == 0)
-			{
-				retval = 2;
-				break;
-			}
-
-			if (memcmp("both", value_str, strlen("both")) == 0)
-			{
-				retval = 3;
-				break;
-			}
+		if ((memcmp("1", value_str, strlen("1")) == 0) || (memcmp("out", value_str, strlen("out")) == 0) || (memcmp("rising", value_str, strlen("rising")) == 0))
+		{
+			retval = 1;
+			break;
 		}
+
+		if (memcmp("falling", value_str, strlen("falling")) == 0)
+		{
+			retval = 2;
+			break;
+		}
+
+		if (memcmp("both", value_str, strlen("both")) == 0)
+		{
+			retval = 3;
+			break;
+		}
+	}
 	}
 
 	return (retval);
 }
 
-int CSysfsGpio::GpioRead(int gpio_pin, const char *param)
+int CSysfsGpio::GpioRead(int gpio_pin, const char* param)
 {
 	char path[GPIO_MAX_PATH];
 	char value_str[GPIO_MAX_VALUE_SIZE];
@@ -964,9 +965,9 @@ std::vector<int> CSysfsGpio::GetGpioIds()
 {
 	std::vector<int> gpio_ids;
 
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
-		std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT ID, Used FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_sysfs_hwdid, s.pin_number);
+		std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT ID, Used FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_sysfs_hwdid, s.unit);
 
 		if (result.empty())
 		{
@@ -982,9 +983,9 @@ std::vector<std::string> CSysfsGpio::GetGpioNames()
 {
 	std::vector<std::string> gpio_names;
 
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
-		std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT ID, Used FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_sysfs_hwdid, s.pin_number);
+		std::vector<std::vector<std::string>> result = m_sql.safe_query("SELECT ID, Used FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==%d)", m_sysfs_hwdid, s.unit);
 
 		if (result.empty())
 		{
@@ -1000,7 +1001,7 @@ std::vector<std::string> CSysfsGpio::GetGpioNames()
 
 void CSysfsGpio::RequestDbUpdate(int pin)
 {
-	for (auto &s : m_saved_state)
+	for (auto& s : m_saved_state)
 	{
 		if (s.pin_number == pin)
 		{
@@ -1027,6 +1028,14 @@ void CSysfsGpio::GpioSaveState(int index, int value)
 	m_state_mutex.lock();
 	m_saved_state[index].value = value;
 	m_state_mutex.unlock();
+}
+
+uint8_t CSysfsGpio::ConvertGpioPin(int pin)
+{
+	// The Sysfs gpio pins can can a higher number than the unit number [0-225]
+	// This function will generate a unit based on the gpio pin.
+	// This is not 100% robust, but the best there is
+	return static_cast<uint8_t>(pin % 255);
 }
 
 //---------------------------------------------------------------------------

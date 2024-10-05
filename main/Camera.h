@@ -51,10 +51,12 @@ public:
   std::string GetCameraURL(const std::string &CamID);
   std::string GetCameraURL(const uint64_t CamID);
   int GetCameraAspectRatio(const std::string& CamIdx);
-  int GetCameraAspectRatio(const uint64_t CamID);
+  int GetCameraAspectRatio(const uint64_t &CamID);
 
 private:
 	void ReloadCameraActiveDevices(const std::string &CamID);
+	bool TakeRaspberrySnapshotRaspiStill(std::vector<unsigned char>& camimage);
+	bool TakeRaspberrySnapshotRPICamStill(std::vector<unsigned char>& camimage);
 
 	std::mutex m_mutex;
 	unsigned char m_seconds_counter;

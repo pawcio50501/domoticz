@@ -1,15 +1,5 @@
 #pragma once
 
-#include <cereal/cereal.hpp>
-//#include "../cereal/types/string.hpp"
-//#include "../cereal/types/utility.hpp"
-//#include "../cereal/types/memory.hpp"
-//#include "../cereal/types/complex.hpp"
-//#include "../cereal/types/base_class.hpp"
-//#include "../cereal/types/array.hpp"
-//#include "../cereal/types/vector.hpp"
-//#include "../cereal/types/map.hpp"
-
 #include "ColorSwitch.h"
 
 #define sTypeTHBFloat 0x10	    // Weather Station
@@ -44,8 +34,8 @@
 #define bmpbaroforecast_unknown 0x05
 #define bmpbaroforecast_rain 0x06 // when forecast was cloudy and pressure is below 1010 we have 50%+ change of rain
 
-#define pTypeThermostat 0xF2
-#define sTypeThermSetpoint 0x01
+#define pTypeSetpoint 0xF2
+#define sTypeSetpoint 0x01
 #define sTypeThermTemperature 0x02
 
 #define pTypeGeneral 0xF3
@@ -60,10 +50,13 @@
 #define sTypePressure 0x09
 #define sTypeSetPoint 0x10
 #define sTypeTemperature 0x11
-#define sTypeZWaveClock 0x12
 #define sTypeTextStatus 0x13
-#define sTypeZWaveThermostatMode 0x14
-#define sTypeZWaveThermostatFanMode 0x15
+#ifdef WITH_OPENZWAVE
+	#define sTypeZWaveThermostatMode 0x14
+	#define sTypeZWaveThermostatFanMode 0x15
+	#define sTypeZWaveAlarm 0x20
+#define sTypeZWaveThermostatOperatingState 0x23
+#endif
 #define sTypeAlert 0x16
 #define sTypeCurrent 0x17
 #define sTypeSoundLevel 0x18
@@ -74,9 +67,7 @@
 #define sTypeKwh 0x1D
 #define sTypeWaterflow 0x1E
 #define sTypeCustom 0x1F
-#define sTypeZWaveAlarm 0x20
 #define sTypeManagedCounter 0x21
-#define sTypeZWaveThermostatOperatingState 0x23
 
 // General Switch
 #define pTypeGeneralSwitch 0xF4
@@ -209,7 +200,9 @@
 
 // Switch commands
 #define gswitch_sOff 0x00
+#define gswitch_sClose 0x00
 #define gswitch_sOn 0x01
+#define gswitch_sOpen 0x01
 #define gswitch_sSetLevel 0x02
 #define gswitch_sGroupOff 0x03
 #define gswitch_sGroupOn 0x04
@@ -252,7 +245,7 @@
 #define sTypeElectric 0x01
 
 #define pTypeAirQuality 0xF9
-#define sTypeVoltcraft 0x01
+#define sTypeVoc 0x01
 
 #define pTypeP1Power 0xFA
 #define sTypeP1Power 0x01
@@ -292,7 +285,7 @@
 //#define sTypeEvohomeStatus 0x40 //Not sure if we can do this in 1 sensor would be for things like zone valve status, boiler relay status (maybe OT values too) and comms errors (maybe seperature
 // sensor or switch for each is easiest)
 
-typedef struct _tThermostat
+typedef struct _tSetpoint
 {
 	uint8_t len;
 	uint8_t type;
@@ -303,38 +296,12 @@ typedef struct _tThermostat
 	uint8_t id4;
 	uint8_t dunit;
 	uint8_t battery_level;
-	float temp;
-	float temp1;
-	float temp2;
-	float temp3;
-	uint8_t utemp1;
-	uint8_t utemp2;
-	uint8_t utemp3;
+	float value;
 
-	template <class Archive> void serialize(Archive &ar)
+	_tSetpoint()
 	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("id1", id1);
-		ar &cereal::make_nvp("id2", id2);
-		ar &cereal::make_nvp("id3", id3);
-		ar &cereal::make_nvp("id4", id4);
-		ar &cereal::make_nvp("dunit", dunit);
-		ar &cereal::make_nvp("battery_level", battery_level);
-		ar &cereal::make_nvp("temp", temp);
-		ar &cereal::make_nvp("temp1", temp1);
-		ar &cereal::make_nvp("temp2", temp2);
-		ar &cereal::make_nvp("temp3", temp3);
-		ar &cereal::make_nvp("utemp1", utemp1);
-		ar &cereal::make_nvp("utemp2", utemp2);
-		ar &cereal::make_nvp("utemp3", utemp3);
-	}
-
-	_tThermostat()
-	{
-		len = sizeof(_tThermostat) - 1;
-		type = pTypeThermostat;
+		len = sizeof(_tSetpoint) - 1;
+		type = pTypeSetpoint;
 		subtype = sTypeThermTemperature;
 		battery_level = 255;
 		id1 = 1;
@@ -342,15 +309,9 @@ typedef struct _tThermostat
 		id3 = 0;
 		id4 = 0;
 		dunit = 0;
-		temp = 0;
-		temp1 = 0;
-		temp2 = 0;
-		temp3 = 0;
-		utemp1 = 0;
-		utemp2 = 0;
-		utemp3 = 0;
+		value = 0;
 	}
-} tThermostat;
+} tSetpoint;
 
 typedef struct _tTempBaro
 {
@@ -362,18 +323,6 @@ typedef struct _tTempBaro
 	float baro;
 	float altitude;
 	uint8_t forecast;
-
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("id1", id1);
-		ar &cereal::make_nvp("temp", temp);
-		ar &cereal::make_nvp("baro", baro);
-		ar &cereal::make_nvp("altitude", altitude);
-		ar &cereal::make_nvp("forecast", forecast);
-	}
 
 	_tTempBaro()
 	{
@@ -397,21 +346,11 @@ typedef struct _tAirQualityMeter
 	uint8_t id2;
 	int32_t airquality;
 
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("id1", id1);
-		ar &cereal::make_nvp("id2", id2);
-		ar &cereal::make_nvp("airquality", airquality);
-	}
-
 	_tAirQualityMeter()
 	{
 		len = sizeof(_tAirQualityMeter) - 1;
 		type = pTypeAirQuality;
-		subtype = sTypeVoltcraft;
+		subtype = sTypeVoc;
 		id1 = 0;
 		id2 = 1;
 		airquality = 0;
@@ -431,25 +370,12 @@ typedef struct _tUsageMeter
 	uint8_t dunit;
 	float fusage;
 
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("rssi", rssi);
-		ar &cereal::make_nvp("id1", id1);
-		ar &cereal::make_nvp("id2", id2);
-		ar &cereal::make_nvp("id3", id3);
-		ar &cereal::make_nvp("id4", id4);
-		ar &cereal::make_nvp("dunit", dunit);
-		ar &cereal::make_nvp("fusage", fusage);
-	}
-
 	_tUsageMeter()
 	{
 		len = sizeof(_tUsageMeter) - 1;
 		type = pTypeUsage;
 		subtype = sTypeElectric;
+		rssi = 0;
 		id1 = 0;
 		id2 = 0;
 		id3 = 0;
@@ -471,20 +397,6 @@ typedef struct _tLightMeter
 	uint8_t dunit;
 	uint8_t battery_level;
 	float fLux;
-
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("id1", id1);
-		ar &cereal::make_nvp("id2", id2);
-		ar &cereal::make_nvp("id3", id3);
-		ar &cereal::make_nvp("id4", id4);
-		ar &cereal::make_nvp("dunit", dunit);
-		ar &cereal::make_nvp("battery_level", battery_level);
-		ar &cereal::make_nvp("fLux", fLux);
-	}
 
 	_tLightMeter()
 	{
@@ -514,21 +426,6 @@ typedef struct _tGeneralDevice
 	int32_t intval1;
 	int32_t intval2;
 	char text[64];
-
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("rssi", rssi);
-		ar &cereal::make_nvp("battery_level", battery_level);
-		ar &cereal::make_nvp("id", id);
-		ar &cereal::make_nvp("floatval1", floatval1);
-		ar &cereal::make_nvp("floatval2", floatval2);
-		ar &cereal::make_nvp("intval1", intval1);
-		ar &cereal::make_nvp("intval2", intval2);
-		ar &cereal::make_nvp("text", text);
-	}
 
 	_tGeneralDevice()
 	{
@@ -561,22 +458,6 @@ typedef struct _tGeneralSwitch
 	int32_t reserved_int;
 	float reserved_float;
 
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("id", id);
-		ar &cereal::make_nvp("unitcode", unitcode);
-		ar &cereal::make_nvp("cmnd", cmnd);
-		ar &cereal::make_nvp("level", level);
-		ar &cereal::make_nvp("rssi", rssi);
-		ar &cereal::make_nvp("battery_level", battery_level);
-		ar &cereal::make_nvp("seqnbr", seqnbr);
-		ar &cereal::make_nvp("reserved_int", reserved_int);
-		ar &cereal::make_nvp("reserved_float", reserved_float);
-	}
-
 	_tGeneralSwitch()
 	{
 		len = sizeof(_tGeneralSwitch) - 1;
@@ -606,20 +487,6 @@ typedef struct _tP1Power
 	uint32_t usagecurrent = 0;
 	uint32_t delivcurrent = 0;
 	int32_t ID = 1;
-
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("powerusage1", powerusage1);
-		ar &cereal::make_nvp("powerusage2", powerusage2);
-		ar &cereal::make_nvp("powerdeliv1", powerdeliv1);
-		ar &cereal::make_nvp("powerdeliv2", powerdeliv2);
-		ar &cereal::make_nvp("usagecurrent", usagecurrent);
-		ar &cereal::make_nvp("delivcurrent", delivcurrent);
-		ar &cereal::make_nvp("ID", ID);
-	}
 } P1Power;
 
 typedef struct _tP1Gas
@@ -629,15 +496,6 @@ typedef struct _tP1Gas
 	uint8_t subtype = sTypeP1Gas;
 	uint32_t gasusage = 0;
 	int32_t ID = 1;
-
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("gasusage", gasusage);
-		ar &cereal::make_nvp("ID", ID);
-	}
 } P1Gas;
 
 typedef struct _tEVOHOME1
@@ -656,24 +514,6 @@ typedef struct _tEVOHOME1
 	uint8_t hrs;
 	uint8_t mins;
 	uint8_t action;
-
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("id1", id1);
-		ar &cereal::make_nvp("id2", id2);
-		ar &cereal::make_nvp("id3", id3);
-		ar &cereal::make_nvp("status", status);
-		ar &cereal::make_nvp("mode", mode);
-		ar &cereal::make_nvp("year", year);
-		ar &cereal::make_nvp("month", month);
-		ar &cereal::make_nvp("day", day);
-		ar &cereal::make_nvp("hrs", hrs);
-		ar &cereal::make_nvp("mins", mins);
-		ar &cereal::make_nvp("action", action);
-	}
 } EVOHOME1;
 
 typedef struct _tEVOHOME2
@@ -695,27 +535,6 @@ typedef struct _tEVOHOME2
 	uint8_t hrs;
 	uint8_t mins;
 	uint8_t battery_level;
-
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("id1", id1);
-		ar &cereal::make_nvp("id2", id2);
-		ar &cereal::make_nvp("id3", id3);
-		ar &cereal::make_nvp("zone", zone);
-		ar &cereal::make_nvp("updatetype", updatetype);
-		ar &cereal::make_nvp("temperature", temperature);
-		ar &cereal::make_nvp("mode", mode);
-		ar &cereal::make_nvp("controllermode", controllermode);
-		ar &cereal::make_nvp("year", year);
-		ar &cereal::make_nvp("month", month);
-		ar &cereal::make_nvp("day", day);
-		ar &cereal::make_nvp("hrs", hrs);
-		ar &cereal::make_nvp("mins", mins);
-		ar &cereal::make_nvp("battery_level", battery_level);
-	}
 } EVOHOME2;
 
 typedef struct _tEVOHOME3
@@ -730,18 +549,4 @@ typedef struct _tEVOHOME3
 	uint8_t demand;
 	uint8_t updatetype;
 	uint8_t battery_level;
-
-	template <class Archive> void serialize(Archive &ar)
-	{
-		ar &cereal::make_nvp("len", len);
-		ar &cereal::make_nvp("type", type);
-		ar &cereal::make_nvp("subtype", subtype);
-		ar &cereal::make_nvp("id1", id1);
-		ar &cereal::make_nvp("id2", id2);
-		ar &cereal::make_nvp("id3", id3);
-		ar &cereal::make_nvp("devno", devno);
-		ar &cereal::make_nvp("demand", demand);
-		ar &cereal::make_nvp("updatetype", updatetype);
-		ar &cereal::make_nvp("battery_level", battery_level);
-	}
 } EVOHOME3;

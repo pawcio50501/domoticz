@@ -229,7 +229,7 @@ void HTTPClient::SetUserAgent(const std::string &useragent)
  *									*
  ************************************************************************/
 
-bool HTTPClient::GETBinary(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, std::vector<std::string> &vHeaderData, const long TimeOut)
+bool HTTPClient::GETBinary(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, std::vector<std::string> &vHeaderData, const long TimeOut, const bool bStartNewSession)
 {
 	try
 	{
@@ -243,6 +243,9 @@ bool HTTPClient::GETBinary(const std::string &url, const std::vector<std::string
 		SetGlobalOptions(curl);
 		if (TimeOut != -1)
 			curl_easy_setopt(curl, CURLOPT_TIMEOUT, TimeOut);
+
+		if (bStartNewSession)
+			curl_easy_setopt(curl, CURLOPT_COOKIESESSION, 1);
 
 		struct curl_slist *headers = nullptr;
 		if (!ExtraHeaders.empty())
@@ -507,6 +510,75 @@ std::vector<std::string> &vHeaderData, const long TimeOut)
 	}
 }
 
+bool HTTPClient::PatchBinary(const std::string& url, const std::string& putdata, const std::vector<std::string>& ExtraHeaders, std::vector<unsigned char>& response,
+	std::vector<std::string>& vHeaderData, const long TimeOut)
+{
+	try
+	{
+		if (!CheckIfGlobalInitDone())
+			return false;
+		CURL* curl = curl_easy_init();
+		if (!curl)
+			return false;
+
+		CURLcode res;
+		SetGlobalOptions(curl);
+		if (TimeOut != -1)
+			curl_easy_setopt(curl, CURLOPT_TIMEOUT, TimeOut);
+
+		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, write_curl_headerdata);
+		curl_easy_setopt(curl, CURLOPT_HEADERDATA, &vHeaderData);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&response);
+		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+		//curl_easy_setopt(curl, CURLOPT_PUT, 1);
+		curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+		struct curl_slist* headers = nullptr;
+		if (!ExtraHeaders.empty())
+		{
+			for (const auto& header : ExtraHeaders)
+			{
+				headers = curl_slist_append(headers, header.c_str());
+			}
+			curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+		}
+
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, putdata.c_str());
+		res = curl_easy_perform(curl);
+
+		if (res != CURLE_OK)
+		{
+			if (res == CURLE_HTTP_RETURNED_ERROR)
+			{
+				//HTTP status code is already inside the header
+				long responseCode;
+				curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
+				LogError(responseCode);
+			}
+			else
+			{
+				//Need to generate a header
+				std::stringstream ss;
+				ss << "HTTP/1.1 " << res << " " << curl_easy_strerror(res);
+				vHeaderData.push_back(ss.str());
+			}
+		}
+
+		curl_easy_cleanup(curl);
+
+		if (headers != nullptr)
+		{
+			curl_slist_free_all(headers); /* free the header list */
+		}
+
+		return (res == CURLE_OK);
+	}
+	catch (...)
+	{
+		return false;
+	}
+}
+
 
 /************************************************************************
  *									*
@@ -514,10 +586,10 @@ std::vector<std::string> &vHeaderData, const long TimeOut)
  *									*
  ************************************************************************/
 
-bool HTTPClient::GETBinary(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, const long TimeOut)
+bool HTTPClient::GETBinary(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, const long TimeOut, const bool bStartNewSession)
 {
 	std::vector<std::string> vHeaderData;
-	return GETBinary(url, ExtraHeaders, response, vHeaderData, TimeOut);
+	return GETBinary(url, ExtraHeaders, response, vHeaderData, TimeOut, bStartNewSession);
 }
 
 bool HTTPClient::GETBinarySingleLine(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, const long TimeOut)
@@ -606,6 +678,11 @@ bool HTTPClient::DeleteBinary(const std::string &url, const std::string &putdata
 	return DeleteBinary(url, putdata, ExtraHeaders, response, vHeaderData, TimeOut);
 }
 
+bool HTTPClient::PatchBinary(const std::string& url, const std::string& putdata, const std::vector<std::string>& ExtraHeaders, std::vector<unsigned char>& response, const long TimeOut)
+{
+	std::vector<std::string> vHeaderData;
+	return PatchBinary(url, putdata, ExtraHeaders, response, vHeaderData, TimeOut);
+}
 
 /************************************************************************
  *									*
@@ -613,11 +690,11 @@ bool HTTPClient::DeleteBinary(const std::string &url, const std::string &putdata
  *									*
  ************************************************************************/
 
-bool HTTPClient::GET(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::string &response, std::vector<std::string> &vHeaderData, const bool bIgnoreNoDataReturned)
+bool HTTPClient::GET(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::string &response, std::vector<std::string> &vHeaderData, const bool bIgnoreNoDataReturned, const bool bStartNewSession)
 {
 	response = "";
 	std::vector<unsigned char> vHTTPResponse;
-	bool bOK = GETBinary(url, ExtraHeaders, vHTTPResponse, vHeaderData, -1);
+	bool bOK = GETBinary(url, ExtraHeaders, vHTTPResponse, vHeaderData, -1, bStartNewSession);
 	response.insert(response.begin(), vHTTPResponse.begin(), vHTTPResponse.end());
 	if (!bOK)
 		return false;
@@ -662,6 +739,17 @@ bool HTTPClient::Delete(const std::string &url, const std::string &putdata, cons
 	return true;
 }
 
+bool HTTPClient::Patch(const std::string& url, const std::string& putdata, const std::vector<std::string>& ExtraHeaders, std::string& response, std::vector<std::string>& vHeaderData, const bool bIgnoreNoDataReturned)
+{
+	response = "";
+	std::vector<unsigned char> vHTTPResponse;
+	if (!PatchBinary(url, putdata, ExtraHeaders, vHTTPResponse, vHeaderData))
+		return false;
+	if (!bIgnoreNoDataReturned && vHTTPResponse.empty())
+		return false;
+	response.insert(response.begin(), vHTTPResponse.begin(), vHTTPResponse.end());
+	return true;
+}
 
 /************************************************************************
  *									*
@@ -669,10 +757,10 @@ bool HTTPClient::Delete(const std::string &url, const std::string &putdata, cons
  *									*
  ************************************************************************/
 
-bool HTTPClient::GET(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::string &response, const bool bIgnoreNoDataReturned)
+bool HTTPClient::GET(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::string &response, const bool bIgnoreNoDataReturned, const bool bStartNewSession)
 {
 	std::vector<std::string> vHeaderData;
-	return GET(url, ExtraHeaders, response, vHeaderData, bIgnoreNoDataReturned);
+	return GET(url, ExtraHeaders, response, vHeaderData, bIgnoreNoDataReturned, bStartNewSession);
 }
 
 bool HTTPClient::POST(const std::string &url, const std::string &postdata, const std::vector<std::string> &ExtraHeaders, std::string &response, const bool bFollowRedirect, const bool bIgnoreNoDataReturned)
@@ -700,10 +788,10 @@ bool HTTPClient::Delete(const std::string &url, const std::string &putdata, cons
  *									*
  ************************************************************************/
 
-bool HTTPClient::GET(const std::string &url, std::string &response, const bool bIgnoreNoDataReturned)
+bool HTTPClient::GET(const std::string &url, std::string &response, const bool bIgnoreNoDataReturned, const bool bStartNewSession)
 {
 	std::vector<std::string> ExtraHeaders;
-	return GET(url, ExtraHeaders, response, bIgnoreNoDataReturned);
+	return GET(url, ExtraHeaders, response, bIgnoreNoDataReturned, bStartNewSession);
 }
 
 bool HTTPClient::GETSingleLine(const std::string &url, std::string &response, const bool bIgnoreNoDataReturned)

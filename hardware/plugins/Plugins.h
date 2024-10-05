@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef ENABLE_PYTHON
+
 #include "../DomoticzHardware.h"
 #include "../hardwaretypes.h"
 #include "../../notifications/NotificationBase.h"
@@ -93,6 +95,7 @@ namespace Plugins {
 	  void ConnectionDisconnect(CDirectiveBase *);
 	  void DisconnectEvent(CEventBase *);
 	  void Callback(PyBorrowedRef& pTarget, const std::string &sHandler, PyObject *pParams);
+	  long PythonThreadCount();
 	  void RestoreThread();
 	  void ReleaseThread();
 	  void Stop();
@@ -151,7 +154,7 @@ namespace Plugins {
 
 	public:
 		PyBorrowedRef()
-			: m_pObject(NULL){};
+			: m_pObject(NULL) {};
 		PyBorrowedRef(PyObject *pObject)
 		{
 			m_pObject = pObject;
@@ -169,6 +172,7 @@ namespace Plugins {
 		bool		IsFloat() { return Type() == "float"; };
 		bool		IsBool() { return Type() == "bool"; };
 		bool		IsNone() { return m_pObject && (m_pObject == Py_None); };
+		bool		IsTrue() { return m_pObject && PyObject_IsTrue(m_pObject); };
 		operator PyObject *() const
 		{
 			return m_pObject;
@@ -243,13 +247,66 @@ namespace Plugins {
 			: PyBorrowedRef(){};
 		PyNewRef(PyObject *pObject)
 			: PyBorrowedRef(pObject){};
-		void operator=(PyObject *pObject)
+		PyNewRef(const std::vector<byte>& value)
+			: PyBorrowedRef() {
+			m_pObject = PyBytes_FromStringAndSize((const char*)value.data(), value.size());
+		};
+		PyNewRef(const byte* value, const size_t size)
+			: PyBorrowedRef() {
+			m_pObject = PyBytes_FromStringAndSize((const char*)value, size);
+		};
+		PyNewRef(const std::string& value)
+			: PyBorrowedRef() {
+			m_pObject = PyUnicode_FromString(value.c_str());
+		};
+		PyNewRef(const char* value)
+			: PyBorrowedRef() {
+			m_pObject = PyUnicode_FromString(value);
+		};
+		PyNewRef(const long value)
+			: PyBorrowedRef() {
+			m_pObject = PyLong_FromLong(value);
+		};
+		PyNewRef(const long long value)
+			: PyBorrowedRef() {
+			m_pObject = Py_BuildValue("L", value);
+		};
+		PyNewRef(const int value)
+			: PyBorrowedRef() {
+			m_pObject = Py_BuildValue("i", value);
+		};
+		PyNewRef(const unsigned int value)
+			: PyBorrowedRef() {
+			m_pObject = Py_BuildValue("I", value);
+		};
+		PyNewRef(const float value)
+			: PyBorrowedRef() {
+			m_pObject = Py_BuildValue("f", value);
+		};
+		PyNewRef(const double value)
+			: PyBorrowedRef() {
+			m_pObject = Py_BuildValue("d", value);
+		};
+		PyNewRef(const bool value)
+			: PyBorrowedRef() {
+			m_pObject = PyBool_FromLong(value);
+		};
+		void operator=(const PyNewRef& pNewRef)
 		{
 			if (m_pObject)
 			{
 				Py_XDECREF(m_pObject);
 			}
-			m_pObject = pObject;
+			m_pObject = pNewRef.m_pObject;
+			Py_XINCREF(m_pObject);
+		}
+		void operator=(PyObject* pObject)
+		{
+			if (m_pObject)
+			{
+				Py_XDECREF(m_pObject);
+			}
+			PyBorrowedRef::operator=(pObject);
 		}
 		void operator+=(PyObject *pObject)
 		{
@@ -300,3 +357,5 @@ namespace Plugins {
 	};
 
 } // namespace Plugins
+
+#endif //#ifdef ENABLE_PYTHON

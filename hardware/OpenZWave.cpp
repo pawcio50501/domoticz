@@ -22,7 +22,6 @@
 #include "../main/mainworker.h"
 
 #include <json/json.h>
-#include "../main/localtime_r.h"
 
 //OpenZWave includes
 #include <Options.h>
@@ -35,6 +34,35 @@
 #include "serial/serial.h"
 
 extern std::string szWWWFolder;
+
+const char* ZWave_Thermostat_Fan_Modes[]
+= { "Auto Low", "On Low", "Auto High", "On High", "Unknown 4", "Unknown 5", "Circulate", "Unknown", nullptr };
+
+int Lookup_ZWave_Thermostat_Modes(const std::vector<std::string>& Modes, const std::string& sMode)
+{
+	int ii = 0;
+	for (const auto& mode : Modes)
+	{
+		if (mode == sMode)
+			return ii;
+		ii++;
+	}
+	return -1;
+}
+
+int Lookup_ZWave_Thermostat_Fan_Modes(const std::string& sMode)
+{
+	int ii = 0;
+	while (ZWave_Thermostat_Fan_Modes[ii] != nullptr)
+	{
+		if (ZWave_Thermostat_Fan_Modes[ii] == sMode)
+		{
+			return ii;
+		}
+		ii++;
+	}
+	return -1;
+}
 
 //Note!, Some devices uses the same instance for multiple values,
 //to solve this we are going to use the Index value!, Except for COMMAND_CLASS_MULTI_INSTANCE
@@ -85,8 +113,6 @@ uint8_t GetIndexFromAlarm(const std::string& sLabel)
 
 extern std::string szStartupFolder;
 extern std::string szUserDataFolder;
-
-#define round(a) ( int ) ( a + .5 )
 
 //Should be obsolete when OZW 2.0 comes out
 uint16_t GetUInt16FromString(const std::string& inStr)
@@ -496,9 +522,6 @@ void COpenZWave::OnZWaveNotification(OpenZWave::Notification const* _notificatio
 		nodeInfo.Product_type = GetUInt16FromString(m_pManager->GetNodeProductType(_homeID, _nodeID));
 		nodeInfo.Product_id = GetUInt16FromString(m_pManager->GetNodeProductId(_homeID, _nodeID));
 		nodeInfo.Product_name = m_pManager->GetNodeProductName(_homeID, _nodeID);
-		nodeInfo.tClockDay = -1;
-		nodeInfo.tClockHour = -1;
-		nodeInfo.tClockMinute = -1;
 		nodeInfo.tMode = -1;
 		nodeInfo.tFanMode = -1;
 
@@ -1999,7 +2022,7 @@ void COpenZWave::AddValue(NodeInfo* pNode, const OpenZWave::ValueID& vID)
 			|| (vOrgIndex == ValueID_Index_SensorMultiLevel::Soil_Humidity)
 			)
 		{
-			_device.intvalue = round(fValue);
+			_device.intvalue = ground(fValue);
 			_device.devType = ZDTYPE_SENSOR_HUMIDITY;
 		}
 		else if (vOrgIndex == ValueID_Index_SensorMultiLevel::Ultraviolet)
@@ -2265,53 +2288,7 @@ void COpenZWave::AddValue(NodeInfo* pNode, const OpenZWave::ValueID& vID)
 	}
 	else if (commandclass == COMMAND_CLASS_CLOCK)
 	{
-		if (vType == OpenZWave::ValueID::ValueType_List)
-		{
-			if (vOrgIndex == ValueID_Index_Clock::Day)
-			{
-				int32 vDay;
-				try
-				{
-					if (m_pManager->GetValueListSelection(vID, &vDay))
-					{
-						if (vDay > 0)
-						{
-							pNode->tClockDay = vDay - 1;
-						}
-					}
-				}
-				catch (...)
-				{
-
-				}
-			}
-		}
-		else if (vType == OpenZWave::ValueID::ValueType_Byte)
-		{
-			if (m_pManager->GetValueAsByte(vID, &byteValue) == false)
-				return;
-			if (vOrgIndex == ValueID_Index_Clock::Hour)
-			{
-				pNode->tClockHour = byteValue;
-			}
-			else if (vOrgIndex == ValueID_Index_Clock::Minute)
-			{
-				pNode->tClockMinute = byteValue;
-				if ((pNode->tClockDay != UINT8_MAX) && (pNode->tClockHour != UINT8_MAX) && (pNode->tClockMinute != UINT8_MAX))
-				{
-					Log(LOG_NORM, "NodeID: %d (0x%02x), Thermostat Clock: %s %02d:%02d", NodeID, NodeID, ZWave_Clock_Days(pNode->tClockDay), pNode->tClockHour, pNode->tClockMinute);
-					_device.intvalue = (pNode->tClockDay * (24 * 60)) + (pNode->tClockHour * 60) + pNode->tClockMinute;
-					_device.devType = ZDTYPE_SENSOR_THERMOSTAT_CLOCK;
-					InsertDevice(_device);
-					SendDevice2Domoticz(&_device);
-				}
-			}
-		}
-		else
-		{
-			Log(LOG_ERROR, "Unhandled value type: %d, %s:%d, NodeID: %d (0x%02x)", vType, std::string(__MYFUNCTION__).substr(std::string(__MYFUNCTION__).find_last_of("/\\") + 1).c_str(), __LINE__, NodeID, NodeID);
-			return;
-		}
+		//Clock not supported anymore
 	}
 	else if (commandclass == COMMAND_CLASS_CLIMATE_CONTROL_SCHEDULE)
 	{
@@ -2826,51 +2803,7 @@ void COpenZWave::UpdateValue(NodeInfo* pNode, const OpenZWave::ValueID& vID)
 	}
 	else if (commandclass == COMMAND_CLASS_CLOCK)
 	{
-		if (vType == OpenZWave::ValueID::ValueType_List)
-		{
-			if (vOrgIndex == ValueID_Index_Clock::Day)
-			{
-				try
-				{
-					int32 vDay;
-					if (m_pManager->GetValueListSelection(vID, &vDay))
-					{
-						if (vDay > 0)
-						{
-							pNode->tClockDay = vDay - 1;
-							return;
-						}
-					}
-				}
-				catch (...)
-				{
-
-				}
-			}
-		}
-		else if (vType == OpenZWave::ValueID::ValueType_Byte)
-		{
-			if (m_pManager->GetValueAsByte(vID, &byteValue) == false)
-				return;
-			if (vOrgIndex == ValueID_Index_Clock::Hour)
-			{
-				pNode->tClockHour = byteValue;
-				return;
-			}
-			else if (vOrgIndex == ValueID_Index_Clock::Minute)
-			{
-				pNode->tClockMinute = byteValue;
-				if ((pNode->tClockDay != UINT8_MAX) && (pNode->tClockHour != UINT8_MAX) && (pNode->tClockMinute != UINT8_MAX))
-				{
-					Log(LOG_NORM, "NodeID: %d (0x%02x), Thermostat Clock: %s %02d:%02d", NodeID, NodeID, ZWave_Clock_Days(pNode->tClockDay), pNode->tClockHour, pNode->tClockMinute);
-				}
-			}
-		}
-		else
-		{
-			Log(LOG_ERROR, "Unhandled value type: %d, %s:%d, NodeID: %d (0x%02x)", vType, std::string(__MYFUNCTION__).substr(std::string(__MYFUNCTION__).find_last_of("/\\") + 1).c_str(), __LINE__, NodeID, NodeID);
-			return;
-		}
+		//Clock not supported anymore
 	}
 
 	_tZWaveDevice *pDevice = nullptr;
@@ -3361,7 +3294,7 @@ void COpenZWave::UpdateValue(NodeInfo* pNode, const OpenZWave::ValueID& vID)
 	case ZDTYPE_SENSOR_HUMIDITY:
 		if (vType != OpenZWave::ValueID::ValueType_Decimal)
 			return;
-		pDevice->intvalue = round(fValue);
+		pDevice->intvalue = ground(fValue);
 		break;
 	case ZDTYPE_SENSOR_UV:
 		if (vType != OpenZWave::ValueID::ValueType_Decimal)
@@ -3472,10 +3405,7 @@ void COpenZWave::UpdateValue(NodeInfo* pNode, const OpenZWave::ValueID& vID)
 	}
 	break;
 	case ZDTYPE_SENSOR_THERMOSTAT_CLOCK:
-		if (vOrgIndex == ValueID_Index_Clock::Minute)
-		{
-			pDevice->intvalue = (pNode->tClockDay * (24 * 60)) + (pNode->tClockHour * 60) + pNode->tClockMinute;
-		}
+		//Clock not supported anymore
 		break;
 	case ZDTYPE_SENSOR_THERMOSTAT_MODE:
 		if (vType != OpenZWave::ValueID::ValueType_List)
@@ -4351,43 +4281,6 @@ void COpenZWave::EnableDisableNodePolling(const uint8_t nodeID)
 			EnableNodePoll(m_controllerID, nodeID, PollTime);
 		else
 			DisableNodePoll(m_controllerID, nodeID);
-	}
-	catch (OpenZWave::OZWException& ex)
-	{
-		Log(LOG_ERROR, "Exception. Type: %d, Msg: %s, File: %s (Line %d) %s:%d",
-			ex.GetType(), ex.GetMsg().c_str(), ex.GetFile().c_str(), ex.GetLine(),
-			std::string(__MYFUNCTION__).substr(std::string(__MYFUNCTION__).find_last_of("/\\") + 1).c_str(), __LINE__);
-	}
-}
-
-void COpenZWave::SetClock(const uint8_t nodeID, const uint8_t /*instanceID*/, const uint8_t /*commandClass*/, const uint8_t day, const uint8_t hour, const uint8_t minute)
-{
-	if (!m_pManager)
-		return;
-
-	//We have to set 3 values here (Later check if we can use COMMAND_CLASS_MULTI_CMD for this to do it in one)
-
-	NodeInfo* pNode = GetNodeInfo(m_controllerID, nodeID);
-	if (!pNode)
-		return;
-
-	OpenZWave::ValueID vDay(0, 0, OpenZWave::ValueID::ValueGenre_Basic, 0, 0, 0, OpenZWave::ValueID::ValueType_Bool);
-	OpenZWave::ValueID vHour(0, 0, OpenZWave::ValueID::ValueGenre_Basic, 0, 0, 0, OpenZWave::ValueID::ValueType_Bool);
-	OpenZWave::ValueID vMinute(0, 0, OpenZWave::ValueID::ValueGenre_Basic, 0, 0, 0, OpenZWave::ValueID::ValueType_Bool);
-
-
-	if (GetValueByCommandClassIndex(nodeID, 1, COMMAND_CLASS_CLOCK, ValueID_Index_Clock::Day, vDay) == false)
-		return;
-	if (GetValueByCommandClassIndex(nodeID, 1, COMMAND_CLASS_CLOCK, ValueID_Index_Clock::Hour, vHour) == false)
-		return;
-	if (GetValueByCommandClassIndex(nodeID, 1, COMMAND_CLASS_CLOCK, ValueID_Index_Clock::Minute, vMinute) == false)
-		return;
-
-	try
-	{
-		m_pManager->SetValueListSelection(vDay, ZWave_Clock_Days(day));
-		m_pManager->SetValue(vHour, (const uint8)hour);
-		m_pManager->SetValue(vMinute, (const uint8)minute);
 	}
 	catch (OpenZWave::OZWException& ex)
 	{
@@ -5439,7 +5332,7 @@ void COpenZWave::ForceUpdateForNodeDevices(const unsigned int homeID, const int 
 //Webserver helpers
 namespace http {
 	namespace server {
-		void CWebServer::RType_OpenZWaveNodes(WebEmSession& /*session*/, const request& req, Json::Value& root)
+		void CWebServer::Cmd_GetOpenZWaveNodes(WebEmSession& /*session*/, const request& req, Json::Value& root)
 		{
 			std::string hwid = request::findValue(&req, "idx");
 			if (hwid.empty())
@@ -5454,7 +5347,7 @@ namespace http {
 			COpenZWave* pOZWHardware = (COpenZWave*)pHardware;
 
 			root["status"] = "OK";
-			root["title"] = "OpenZWaveNodes";
+			root["title"] = "GetOpenZWaveNodes";
 
 			root["NodesQueried"] = (pOZWHardware->m_awakeNodesQueried) || (pOZWHardware->m_allNodesQueried);
 			root["ownNodeId"] = pOZWHardware->m_controllerNodeId;

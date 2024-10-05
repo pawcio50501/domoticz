@@ -77,7 +77,7 @@ bool CRFXBase::CheckValidRFXData(const uint8_t *pData)
 	case pTypeLighting6:
 		return (pLen == 0x0B);
 	case pTypeChime:
-		return (pLen == 0x07);
+		return (pLen >= 0x07);
 	case pTypeFan:
 		return (pLen == 0x08);
 	case pTypeCurtain:
@@ -118,6 +118,8 @@ bool CRFXBase::CheckValidRFXData(const uint8_t *pData)
 		return (pLen == 0x0A);
 	case pTypeBARO:
 		return (pLen == 0x09);
+	case pTypeTEMP_BARO:
+		return (pLen == 0x10);
 	case pTypeTEMP_HUM_BARO:
 		return (pLen == 0x0D);
 	case pTypeRAIN:
@@ -156,6 +158,14 @@ bool CRFXBase::CheckValidRFXData(const uint8_t *pData)
 		return (pLen == 0x0A);
 	case pTypeHunter:
 		return (pLen == 0x0B);
+	case pTypeLEVELSENSOR:
+		return (pLen == 0x0D);
+	case pTypeLIGHTNING:
+		return (pLen == 0x0C);
+	case pTypeDDxxxx:
+		return (pLen == 0x0C);
+	case pTypeHoneywell_AL:
+		return (pLen == 0x0A);
 	default:
 		return false;//unknown Type
 	}
@@ -166,7 +176,6 @@ void CRFXBase::SetAsyncType(_eRFXAsyncType const AsyncType)
 {
 	m_AsyncType = AsyncType;
 	Set_Async_Parameters(m_AsyncType);
-	m_LastP1Received = 0;
 }
 
 void CRFXBase::Set_Async_Parameters(const _eRFXAsyncType AsyncType)
@@ -250,7 +259,6 @@ void CRFXBase::Parse_Async_Data(const uint8_t *pData, const int Len)
 	case ATYPE_P1_DSMR_4:
 	case ATYPE_P1_DSMR_5:
 	default:
-		m_LastP1Received = time(nullptr);
 		ParseP1Data(pData, Len, false, 0);
 		break;
 	}

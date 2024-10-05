@@ -1444,13 +1444,13 @@ function ShowMediaRemote(Name, devIdx, HWType) {
 			if ( HWType.indexOf('Panasonic') >= 0) {
 				// Here is a little painful because we need to get hardware id  first...
 				$.ajax({
-					url: "json.htm?type=devices&rid=" + devIdx,
+					url: "json.htm?type=command&param=getdevices&rid=" + devIdx,
 					async: true,
 					dataType: 'json',
 					success: function (data) { 
 						hwId = data.result[0].HardwareID;
 						$.ajax({
-							url: "json.htm?type=hardware",
+							url: "json.htm?type=command&param=gethardware",
 							async: true,
 							dataType: 'json',
 							success: function (data) { 
@@ -1836,7 +1836,7 @@ function ShowCurrentLog(contentdiv, backfunction, id, name, switchtype) {
 			},
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=counter&idx=" + id + "&range=day", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=counter&idx=" + id + "&range=day", function (data) {
 						if (typeof data.result != 'undefined') {
 							AddDataToCurrentChart(data, $.DayChart.highcharts(), switchtype, 1);
 							$.DayChart.highcharts().redraw();
@@ -1910,7 +1910,7 @@ function ShowCurrentLog(contentdiv, backfunction, id, name, switchtype) {
 			},
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=counter&idx=" + id + "&range=month", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=counter&idx=" + id + "&range=month", function (data) {
 						if (typeof data.result != 'undefined') {
 							AddDataToCurrentChart(data, $.MonthChart.highcharts(), switchtype, 0);
 							$.MonthChart.highcharts().redraw();
@@ -1985,7 +1985,7 @@ function ShowCurrentLog(contentdiv, backfunction, id, name, switchtype) {
 			events: {
 				load: function () {
 
-					$.getJSON("json.htm?type=graph&sensor=counter&idx=" + id + "&range=year", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=counter&idx=" + id + "&range=year", function (data) {
 						if (typeof data.result != 'undefined') {
 							AddDataToCurrentChart(data, $.YearChart.highcharts(), switchtype, 0);
 							$.YearChart.highcharts().redraw();
@@ -2074,7 +2074,7 @@ function ShowUVLog(contentdiv, backfunction, id, name) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=uv&idx=" + id + "&range=day", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=uv&idx=" + id + "&range=day", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.DayChart.highcharts().series[0];
 							var datatable = [];
@@ -2165,7 +2165,7 @@ function ShowUVLog(contentdiv, backfunction, id, name) {
 			events: {
 				load: function () {
 
-					$.getJSON("json.htm?type=graph&sensor=uv&idx=" + id + "&range=month", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=uv&idx=" + id + "&range=month", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.MonthChart.highcharts().series[0];
 							var datatable = [];
@@ -2280,7 +2280,7 @@ function ShowUVLog(contentdiv, backfunction, id, name) {
 			events: {
 				load: function () {
 
-					$.getJSON("json.htm?type=graph&sensor=uv&idx=" + id + "&range=year", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=uv&idx=" + id + "&range=year", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.YearChart.highcharts().series[0];
 							var datatable = [];
@@ -2445,7 +2445,7 @@ function ShowWindLog(contentdiv, backfunction, id, name) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=wind&idx=" + id + "&range=day", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=wind&idx=" + id + "&range=day", function (data) {
 						if (typeof data.result != 'undefined') {
 							var seriessp = $.DayChart.highcharts().series[0];
 							var seriesgu = $.DayChart.highcharts().series[1];
@@ -2664,7 +2664,7 @@ function ShowWindLog(contentdiv, backfunction, id, name) {
 			type: 'column',
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=winddir&idx=" + id + "&range=day", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=winddir&idx=" + id + "&range=day", function (data) {
 						if (typeof data.result_speed != 'undefined') {
 							$.each(data.result_speed, function (i, item) {
 								//make the series
@@ -2753,7 +2753,7 @@ function ShowWindLog(contentdiv, backfunction, id, name) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=wind&idx=" + id + "&range=month", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=wind&idx=" + id + "&range=month", function (data) {
 						if (typeof data.result != 'undefined') {
 							var seriessp = $.MonthChart.highcharts().series[0];
 							var seriesgu = $.MonthChart.highcharts().series[1];
@@ -3031,7 +3031,7 @@ function ShowWindLog(contentdiv, backfunction, id, name) {
 			events: {
 				load: function () {
 
-					$.getJSON("json.htm?type=graph&sensor=wind&idx=" + id + "&range=year", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=wind&idx=" + id + "&range=year", function (data) {
 						if (typeof data.result != 'undefined') {
 							var seriessp = $.YearChart.highcharts().series[0];
 							var seriesgu = $.YearChart.highcharts().series[1];
@@ -3373,7 +3373,7 @@ function ShowMonthReportRain(actMonth, actYear) {
 	var highest_pos = 0;
 	var highest_date = {};
 
-	$.getJSON("json.htm?type=graph&sensor=rain&idx=" + $.devIdx + "&range=year&actmonth=" + actMonth + "&actyear=" + actYear,
+	$.getJSON("json.htm?type=command&param=graph&sensor=rain&idx=" + $.devIdx + "&range=year&actmonth=" + actMonth + "&actyear=" + actYear,
 		function (data) {
 			var lastTotal = -1;
 			$.each(data.result, function (i, item) {
@@ -3587,7 +3587,7 @@ function ShowYearReportRain(actYear) {
 	var highest_val = -1;
 	var highest_date = {};
 
-	$.getJSON("json.htm?type=graph&sensor=rain&idx=" + $.devIdx + "&range=year&actyear=" + actYear,
+	$.getJSON("json.htm?type=command&param=graph&sensor=rain&idx=" + $.devIdx + "&range=year&actyear=" + actYear,
 		function (data) {
 			var lastTotal = -1;
 			var lastMonth = -1;
@@ -3720,7 +3720,7 @@ function ShowRainLog(contentdiv, backfunction, id, name) {
 			type: 'column',
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=rain&idx=" + id + "&range=day", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=rain&idx=" + id + "&range=day", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.DayChart.highcharts().series[0];
 							var datatable = [];
@@ -3781,7 +3781,7 @@ function ShowRainLog(contentdiv, backfunction, id, name) {
 			type: 'column',
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=rain&idx=" + id + "&range=week", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=rain&idx=" + id + "&range=week", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.WeekChart.highcharts().series[0];
 							var datatable = [];
@@ -3853,7 +3853,7 @@ function ShowRainLog(contentdiv, backfunction, id, name) {
 			},
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=rain&idx=" + id + "&range=month", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=rain&idx=" + id + "&range=month", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.MonthChart.highcharts().series[0];
 							var datatable = [];
@@ -3966,7 +3966,7 @@ function ShowRainLog(contentdiv, backfunction, id, name) {
 			events: {
 				load: function () {
 
-					$.getJSON("json.htm?type=graph&sensor=rain&idx=" + id + "&range=year", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=rain&idx=" + id + "&range=year", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.YearChart.highcharts().series[0];
 							var datatable = [];
@@ -4096,7 +4096,7 @@ function ShowBaroLog(contentdiv, backfunction, id, name) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=temp&idx=" + id + "&range=day", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=temp&idx=" + id + "&range=day", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.DayChart.highcharts().series[0];
 							var datatable = [];
@@ -4190,7 +4190,7 @@ function ShowBaroLog(contentdiv, backfunction, id, name) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=temp&idx=" + id + "&range=month", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=temp&idx=" + id + "&range=month", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.MonthChart.highcharts().series[0];
 							var datatable = [];
@@ -4311,7 +4311,7 @@ function ShowBaroLog(contentdiv, backfunction, id, name) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=temp&idx=" + id + "&range=year", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=temp&idx=" + id + "&range=year", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.YearChart.highcharts().series[0];
 							var datatable = [];
@@ -4450,7 +4450,7 @@ function ShowAirQualityLog(contentdiv, backfunction, id, name) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=counter&idx=" + id + "&range=day", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=counter&idx=" + id + "&range=day", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.DayChart.highcharts().series[0];
 							var datatable = [];
@@ -4593,7 +4593,7 @@ function ShowAirQualityLog(contentdiv, backfunction, id, name) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=counter&idx=" + id + "&range=month", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=counter&idx=" + id + "&range=month", function (data) {
 						if (typeof data.result != 'undefined') {
 							var datatable1 = [];
 							var datatable2 = [];
@@ -4802,7 +4802,7 @@ function ShowAirQualityLog(contentdiv, backfunction, id, name) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=counter&idx=" + id + "&range=year", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=counter&idx=" + id + "&range=year", function (data) {
 						if (typeof data.result != 'undefined') {
 							var datatable1 = [];
 							var datatable2 = [];
@@ -5030,7 +5030,7 @@ function ShowFanLog(contentdiv, backfunction, id, name, sensor) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=fan&idx=" + id + "&range=day", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=fan&idx=" + id + "&range=day", function (data) {
 						if (typeof data.result != 'undefined') {
 							var series = $.DayChart.highcharts().series[0];
 							var datatable = [];
@@ -5125,7 +5125,7 @@ function ShowFanLog(contentdiv, backfunction, id, name, sensor) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=fan&idx=" + id + "&range=month", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=fan&idx=" + id + "&range=month", function (data) {
 						if (typeof data.result != 'undefined') {
 							var datatable1 = [];
 							var datatable2 = [];
@@ -5234,7 +5234,7 @@ function ShowFanLog(contentdiv, backfunction, id, name, sensor) {
 			marginRight: 10,
 			events: {
 				load: function () {
-					$.getJSON("json.htm?type=graph&sensor=fan&idx=" + id + "&range=year", function (data) {
+					$.getJSON("json.htm?type=command&param=graph&sensor=fan&idx=" + id + "&range=year", function (data) {
 						if (typeof data.result != 'undefined') {
 							var datatable1 = [];
 							var datatable2 = [];
@@ -5896,52 +5896,6 @@ function ShowTherm3Popup(event, idx, Protected, MaxDimLevel, LevelInt, hue) {
 	});
 }
 
-
-function CloseSetpointPopup() {
-	$("#setpoint_popup").hide();
-}
-
-function SetpointUp() {
-	var curValue = parseFloat($('#setpoint_popup #popup_setpoint').val());
-	curValue += 0.5;
-	curValue = Math.round(curValue / 0.5) * 0.5;
-	var curValueStr = curValue.toFixed(1);
-	$('#setpoint_popup #popup_setpoint').val(curValueStr);
-}
-
-function SetpointDown() {
-	var curValue = parseFloat($('#setpoint_popup #popup_setpoint').val());
-	curValue -= 0.5;
-	curValue = Math.round(curValue / 0.5) * 0.5;
-	var curValueStr = curValue.toFixed(1);
-	$('#setpoint_popup #popup_setpoint').val(curValueStr);
-}
-
-function SetSetpoint() {
-	var curValue = parseFloat($('#setpoint_popup #popup_setpoint').val());
-	$.ajax({
-		url: "json.htm?type=command&param=setsetpoint&idx=" + $.devIdx +
-		"&setpoint=" + curValue,
-		async: false,
-		dataType: 'json',
-		success: function (data) {
-			CloseSetpointPopup();
-			if (data.status == "ERROR") {
-				HideNotify();
-				bootbox.alert($.t('Problem setting Setpoint value'));
-			}
-			//wait 1 second
-			setTimeout(function () {
-				HideNotify();
-			}, 1000);
-		},
-		error: function () {
-			HideNotify();
-			bootbox.alert($.t('Problem setting Setpoint value'));
-		}
-	});
-}
-
 function RFYEnableSunWind(bDoEnable) {
 	var switchcmd = "EnableSunWind";
 	if (bDoEnable == false) {
@@ -5951,13 +5905,21 @@ function RFYEnableSunWind(bDoEnable) {
 	SwitchLight($.devIdx, switchcmd, $.Protected);
 }
 
-function ShowSetpointPopupInt(mouseX, mouseY, idx, currentvalue, ismobile) {
+function ShowSetpointPopupInt(mouseX, mouseY, idx, currentvalue, ismobile, step, min, max) {
 	$.devIdx = idx;
-	var curValue = parseFloat(currentvalue).toFixed(1);
+	$.setstep = step;
+	$.setmin = min;
+	$.setmax = max;
+	var curValue = (Number.isInteger(currentvalue)) ? currentvalue : parseFloat(currentvalue).toFixed(1);
 	$('#setpoint_popup #actual_value').html(curValue);
 	$('#setpoint_popup #popup_setpoint').val(curValue);
 
-	if (typeof ismobile == 'undefined') {
+	var bIsMobile = false;
+	if (typeof ismobile !== 'undefined') {
+		bIsMobile = ismobile;
+	}
+
+	if (bIsMobile == false) {
 		$("#setpoint_popup").css({
 			"top": mouseY,
 			"left": mouseX + 15,
@@ -5983,8 +5945,71 @@ function ShowSetpointPopupInt(mouseX, mouseY, idx, currentvalue, ismobile) {
 	$("#setpoint_popup").show();
 }
 
-function ShowSetpointPopup(event, idx, Protected, currentvalue, ismobile) {
+function CloseSetpointPopup() {
+	$("#setpoint_popup").hide();
+}
+
+function SetpointUp() {
+	var curValue = parseFloat($('#setpoint_popup #popup_setpoint').val());
+	curValue += $.setstep;
+	curValue = Math.round(curValue / $.setstep) * $.setstep;
+	if (curValue > $.setmax)
+		curValue = $.setmax;
+	var curValueStr = (Number.isInteger(curValue)) ? curValue : curValue.toFixed(1);
+	$('#setpoint_popup #popup_setpoint').val(curValueStr);
+}
+
+function SetpointDown() {
+	var curValue = parseFloat($('#setpoint_popup #popup_setpoint').val());
+	curValue -= $.setstep;
+	curValue = Math.round(curValue / $.setstep) * $.setstep;
+	if (curValue < $.setmin)
+		curValue = $.setmin;
+	var curValueStr = (Number.isInteger(curValue)) ? curValue : curValue.toFixed(1);
+	$('#setpoint_popup #popup_setpoint').val(curValueStr);
+}
+
+function SetSetpoint() {
+	var currentvalue = parseFloat($('#setpoint_popup #popup_setpoint').val());
+	var curValue = (Number.isInteger(currentvalue)) ? currentvalue : currentvalue.toFixed(1);
+	if ((curValue < $.setmin) || (curValue > $.setmax)) {
+		var betmsg = "!";
+		betmsg = " " + $.t('between') + " " + $.setmin + " " + $.t('and') + " " + $.setmax + "!";
+		var msg = $.t('Please enter a valid integer') + betmsg;
+		bootbox.alert(msg);
+		return;
+	}
+	$.ajax({
+		url: "json.htm?type=command&param=setsetpoint&idx=" + $.devIdx +
+		"&setpoint=" + curValue,
+		async: false,
+		dataType: 'json',
+		success: function (data) {
+			CloseSetpointPopup();
+			if (data.status == "ERROR") {
+				HideNotify();
+				bootbox.alert($.t('Problem setting Setpoint value'));
+			}
+			//wait 1 second
+			setTimeout(function () {
+				HideNotify();
+			}, 1000);
+		},
+		error: function () {
+			HideNotify();
+			bootbox.alert($.t('Problem setting Setpoint value'));
+		}
+	});
+}
+
+
+function ShowSetpointPopup(event, idx, Protected, currentvalue, ismobile, step, min, max) {
 	$.Protected = Protected;
+
+	if (typeof step == 'undefined') step = 0.5;
+	if (typeof min == 'undefined') min = -200;
+	if (typeof max == 'undefined') max = 200;
+
 	event = event || window.event;
 	// If pageX/Y aren't available and clientX/Y are,
 	// calculate pageX/Y - logic taken from jQuery.
@@ -6003,8 +6028,9 @@ function ShowSetpointPopup(event, idx, Protected, currentvalue, ismobile) {
 	}
 	var mouseX = event.pageX;
 	var mouseY = event.pageY;
-
-	ShowSetpointPopupInt(mouseX, mouseY, idx, currentvalue, ismobile);
+	HandleProtection(Protected, function () {
+		ShowSetpointPopupInt(mouseX, mouseY, idx, currentvalue, ismobile, step, min, max);
+	});
 }
 
 function CloseRFYPopup() {
@@ -6276,3 +6302,208 @@ function fromInstanceOrFunction(functionTemplate = f => f()) {
 		}
 	}
 }
+
+
+/* LiveSearch Functions: Filters devices when typing in the INPUT field ##################################### */
+var _debug_livesearch= false;
+
+function AddToLiveSearch(current_data, new_value) {
+	if (
+		(typeof new_value == 'undefined') ||
+		(new_value === "")
+	   ) {
+		return current_data;
+	}
+	if (
+		(typeof current_data == 'undefined') ||
+		(current_data === "")
+	) {
+		return new_value;
+	}
+	if (current_data.includes(new_value))
+		return current_data;
+	return current_data + " " +  new_value;
+}
+
+GenerateLiveSearchTextDefault = function (item) {
+	var searchText = "";
+	searchText = AddToLiveSearch(searchText, item.idx);
+	searchText = AddToLiveSearch(searchText, item.Name);
+	searchText = AddToLiveSearch(searchText, item.Description.replace('"',"'"));
+	searchText = AddToLiveSearch(searchText, item.Type);
+	searchText = AddToLiveSearch(searchText, item.HardwareName);
+	if (typeof item.SubType != 'undefined') {
+		searchText = AddToLiveSearch(searchText, item.SubType);
+	}
+	return searchText;
+}
+//Lights
+GenerateLiveSearchTextL = function (item, bigtext) {
+	var searchText = GenerateLiveSearchTextDefault(item);
+	if (typeof (bigtext) !== 'undefined') {
+		if (bigtext !== "") {
+			if (bigtext.includes(' %')) {
+				if (item.SwitchType=="Dimmer") {
+					//treat dimmer percentage as on
+					searchText = AddToLiveSearch(searchText, "On");
+				} else {
+					//possible a blind
+				}
+			}
+			else 
+				searchText = AddToLiveSearch(searchText, bigtext);
+		}
+	}
+	if (item.SwitchType!=="On/Off") {
+		searchText = AddToLiveSearch(searchText, item.SwitchType);
+	}
+	return searchText;
+}
+//Scenes/Groups
+GenerateLiveSearchTextSG = function (item, bigtext) {
+	var searchText = GenerateLiveSearchTextDefault(item);
+	searchText = AddToLiveSearch(searchText, bigtext);
+	return searchText;
+}
+//Temperature (do we need to search for temp/humidity/gust or only name/type?)
+GenerateLiveSearchTextT = function (item) {
+	var searchText = GenerateLiveSearchTextDefault(item);
+	//searchText = AddToLiveSearch(searchText, item.Temp);
+	//searchText = AddToLiveSearch(searchText, item.Humidity);
+	searchText = AddToLiveSearch(searchText, item.HumidityStatus);
+	searchText = AddToLiveSearch(searchText, item.Gust);
+	return searchText;
+}
+
+//Weather (do we need to search for temp/humidity/gust or only name/type?)
+GenerateLiveSearchTextW = function (item) {
+	var searchText = GenerateLiveSearchTextDefault(item);
+	//searchText = AddToLiveSearch(searchText, item.Temp);
+	//searchText = AddToLiveSearch(searchText, item.Humidity);
+	searchText = AddToLiveSearch(searchText, item.HumidityStatus);
+	//searchText = AddToLiveSearch(searchText, item.Gust);
+	//searchText = AddToLiveSearch(searchText, item.Barometer);
+	searchText = AddToLiveSearch(searchText, item.ForecastStr);
+	//searchText = AddToLiveSearch(searchText, item.Rain);
+	//searchText = AddToLiveSearch(searchText, item.Radiation);
+	return searchText;
+}
+GenerateLiveSearchTextU = function (item, bigtext) {
+	var searchText = GenerateLiveSearchTextDefault(item);
+	//searchText = AddToLiveSearch(searchText, bigtext);
+	return searchText;
+}
+
+
+/* Triggers LiveSearch change ----------------------------------  */
+function RefreshLiveSearch(){
+	if(_debug_livesearch) console.log('LiveSearch: Refreshing...');
+	$('.jsLiveSearch').trigger('change');
+}
+
+/* Watches the LiveSearch INPUT field -------------------------------- */
+function WatchLiveSearch(){
+	if(_debug_livesearch) console.log('LiveSearch: Start Watching ...');
+	_tbDisplayResults(false,0);
+
+	/* Watches INPUT ++++++++++++++++++++ */
+	$('.jsLiveSearch').off().on('keyup change',function(e){
+		if(_debug_livesearch)  console.log('LiveSearch: processing on keyup - "'+$(this).val()+'"');
+		var query	=$(this).val();
+		var div		=$('.divider');
+		var cont	=$('.devicesList');
+		var items	=$('.itemBlock');
+		var cl_shown	='liveSearchShown';
+		var filt_search		=$(this).closest('.jsTbFiltSearch');
+		var cl_withres	='tbFiltSearchWithResults';
+
+		if(query.length == 0){
+			filt_search.removeClass(cl_withres);
+			if(cont.hasClass('devicesListFiltered')){
+				cont.removeClass('devicesListFiltered');
+				div.css('display','block');
+				div.addClass('row');
+				div.find('.clearfix').show(); /* only for Weather and Temperatures pages */
+				items.show().removeClass('liveSearchShown');	
+			}
+		}
+		else{
+			filt_search.addClass(cl_withres);
+			if(! cont.hasClass('devicesListFiltered')){
+				cont.addClass('devicesListFiltered');
+				div.css('display','inline');
+			}
+			div.removeClass('row');
+			div.find('.clearfix').hide();  /* only for Weather and Temperatures pages */
+
+			var searchString=query.replace('\\','').replace('[','\\[').replace(']','\\]').replace('.','\\.')
+			const regexStr = '(?=.*' + searchString.split(/\,|\s/).join(')(?=.*') + ')';
+			const searchRegEx = new RegExp(regexStr, 'gi');
+
+			items.each(function(index){
+				var searchText	=$(this).find('#name').attr('data-search')	|| '';
+				var to_hide=$(this);
+
+				if (searchText.match(searchRegEx) !== null) {
+					to_hide.show();
+					to_hide.addClass(cl_shown);
+				}
+				else{
+					to_hide.hide();
+					to_hide.removeClass(cl_shown);
+				}
+			});
+		}
+
+		var count   =$('.' + cl_shown).length;
+		if(_debug_livesearch)  console.log('LiveSearch: Found '+ count +' items');
+		_tbDisplayResults(count || query.length, count);
+	});
+
+	/* Watches Close icon ++++++++++++++++++++ */
+	$(".jsTbResultsClose,.jsTbResults").off().on('click',function(e) {
+		e.preventDefault();
+		if(_debug_livesearch)  console.log('LiveSearch: Close Clicked');
+		$('.jsLiveSearch').val('').trigger('change');
+	});
+}
+
+/* Toggle Results display ------------------------------------------ */
+function _tbDisplayResults(on, count){
+	if(on){
+		$('.jsTbSearch').hide();
+		$('.jsTbResults').show();
+		$('.jsTbResultsCount').html(_tbPadCount(count));
+	}
+	else{
+		$('.jsTbSearch').show();
+		$('.jsTbResults').hide();
+		$('.jsTbResultsCount').html('');
+	}
+}
+
+/* Pad Left with spaces ------------------------------------------- */
+function _tbPadCount(txt){
+	return String('xxx' + txt).slice(-4).replace(/x/g, '&nbsp;');
+}
+
+function truncateString(str, num) {
+  if (str.length <= num) {
+    return str
+  }
+  return str.slice(0, num) + '...'
+}
+
+/* Display descriptions when hovering name ################################################################## */
+function WatchDescriptions(){
+	/* Show description when hovering item's name */
+	$(".item-name").hover(function() {
+		if(_debug_livesearch) console.log("Hover Description!");
+		var desc=$(this).attr('data-desc');
+		if(desc.length > 0){
+			$(this).css('cursor','pointer').attr('title', desc);
+		}
+	}, function() {
+		$(this).css('cursor','auto');
+	});
+};

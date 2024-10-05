@@ -11,7 +11,8 @@ class HTTPClient
 		HTTP_METHOD_GET,
 		HTTP_METHOD_POST,
 		HTTP_METHOD_PUT,
-		HTTP_METHOD_DELETE
+		HTTP_METHOD_DELETE,
+		HTTP_METHOD_PATCH
 	};
 
       protected:
@@ -42,7 +43,7 @@ class HTTPClient
 	 *									*
 	 ************************************************************************/
 
-	static bool GET(const std::string &url, std::string &response, bool bIgnoreNoDataReturned = false);
+	static bool GET(const std::string &url, std::string &response, const bool bIgnoreNoDataReturned = false, const bool bStartNewSession = false);
 	static bool GETSingleLine(const std::string &url, std::string &response, bool bIgnoreNoDataReturned = false);
 	static bool GETBinaryToFile(const std::string &url, const std::string &outputfile);
 
@@ -54,7 +55,7 @@ class HTTPClient
 	 *									*
 	 ************************************************************************/
 
-	static bool GET(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::string &response, bool bIgnoreNoDataReturned = false);
+	static bool GET(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::string &response, const bool bIgnoreNoDataReturned = false, const bool bStartNewSession = false);
 	static bool POST(const std::string &url, const std::string &postdata, const std::vector<std::string> &ExtraHeaders, std::string &response, bool bFollowRedirect = true,
 			 bool bIgnoreNoDataReturned = false);
 	static bool PUT(const std::string &url, const std::string &putdata, const std::vector<std::string> &ExtraHeaders, std::string &response, bool bIgnoreNoDataReturned = false);
@@ -68,13 +69,15 @@ class HTTPClient
 	 *									*
 	 ************************************************************************/
 
-	static bool GET(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::string &response, std::vector<std::string> &vHeaderData, bool bIgnoreNoDataReturned = false);
+	static bool GET(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::string &response, std::vector<std::string> &vHeaderData, const bool bIgnoreNoDataReturned = false, const bool bStartNewSession = false);
 	static bool POST(const std::string &url, const std::string &postdata, const std::vector<std::string> &ExtraHeaders, std::string &response, std::vector<std::string> &vHeaderData,
 			 bool bFollowRedirect = true, bool bIgnoreNoDataReturned = false);
 	static bool PUT(const std::string &url, const std::string &putdata, const std::vector<std::string> &ExtraHeaders, std::string &response, std::vector<std::string> &vHeaderData,
 			bool bIgnoreNoDataReturned = false);
 	static bool Delete(const std::string &url, const std::string &putdata, const std::vector<std::string> &ExtraHeaders, std::string &response, std::vector<std::string> &vHeaderData,
 			   bool bIgnoreNoDataReturned = false);
+	static bool Patch(const std::string& url, const std::string& putdata, const std::vector<std::string>& ExtraHeaders, std::string& response, std::vector<std::string>& vHeaderData,
+		bool bIgnoreNoDataReturned = false);
 
 	/************************************************************************
 	 *									*
@@ -84,12 +87,13 @@ class HTTPClient
 	 *									*
 	 ************************************************************************/
 
-	static bool GETBinary(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, long TimeOut = -1);
+	static bool GETBinary(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, const long TimeOut = -1, const bool bStartNewSession = false);
 	static bool GETBinarySingleLine(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, long TimeOut = -1);
 	static bool POSTBinary(const std::string &url, const std::string &postdata, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, bool bFollowRedirect = true,
 			       long TimeOut = -1);
 	static bool PUTBinary(const std::string &url, const std::string &putdata, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, long TimeOut = -1);
-	static bool DeleteBinary(const std::string &url, const std::string &putdata, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, long TimeOut = -1);
+	static bool DeleteBinary(const std::string& url, const std::string& putdata, const std::vector<std::string>& ExtraHeaders, std::vector<unsigned char>& response, long TimeOut = -1);
+	static bool PatchBinary(const std::string& url, const std::string& putdata, const std::vector<std::string>& ExtraHeaders, std::vector<unsigned char>& response, long TimeOut = -1);
 
 	/************************************************************************
 	 *									*
@@ -97,13 +101,15 @@ class HTTPClient
 	 *									*
 	 ************************************************************************/
 
-	static bool GETBinary(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, std::vector<std::string> &vHeaderData, long TimeOut = -1);
+	static bool GETBinary(const std::string &url, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response, std::vector<std::string> &vHeaderData, const long TimeOut = -1, const bool bStartNewSession = false);
 	static bool POSTBinary(const std::string &url, const std::string &postdata, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response,
 			       std::vector<std::string> &vHeaderData, bool bFollowRedirect = true, long TimeOut = -1);
 	static bool PUTBinary(const std::string &url, const std::string &putdata, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response,
 			      std::vector<std::string> &vHeaderData, long TimeOut = -1);
 	static bool DeleteBinary(const std::string &url, const std::string &putdata, const std::vector<std::string> &ExtraHeaders, std::vector<unsigned char> &response,
 				 std::vector<std::string> &vHeaderData, long TimeOut = -1);
+	static bool PatchBinary(const std::string& url, const std::string& putdata, const std::vector<std::string>& ExtraHeaders, std::vector<unsigned char>& response,
+		std::vector<std::string>& vHeaderData, long TimeOut = -1);
 
       private:
 	static void SetGlobalOptions(void *curlobj);

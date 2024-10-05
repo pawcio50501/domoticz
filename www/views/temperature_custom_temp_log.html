@@ -1,13 +1,7 @@
 <div class="container">
 
-    <table class="bannav" id="bannav" border="0" cellpadding="0" cellspacing="0" width="100%">
-        <tr>
-            <td>
-                <a class="btnstylerev" href="#/Temperature" data-i18n="Back">Back</a>
-            </td>
-        </tr>
-    </table>
-    <br>
+	<div ng-include="'views/inc_topbar.html'" ng-repeat="tb in [{hideFilters:true,hideTimeSun:true}]"></div>
+
 
     <div id="customlog">
         <table width="100%">
@@ -29,7 +23,7 @@
                                 <table>
                                     <tr>
                                         <td align="left"><label for="graphfrom"><span data-i18n="From"></span>:</label></td>
-                                        <td><input type="text" style="width: 80px;" id="graphfrom" class="datepick" name="graphfrom"></td>
+                                        <td><input type="text" style="width: 80px;" id="graphfrom" class="datepick" name="graphfrom" autocomplete="off"></td>
                                     </tr>
                                     <tr>
                                         <td align="left"><label for="graphto"><span data-i18n="TO1">To</span>:</label></td>

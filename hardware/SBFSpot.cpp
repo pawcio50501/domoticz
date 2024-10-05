@@ -2,7 +2,6 @@
 #include "SBFSpot.h"
 #include "../main/Helper.h"
 #include "../main/Logger.h"
-#include "../main/localtime_r.h"
 #include "../main/RFXtrx.h"
 #include "../main/SQLHelper.h"
 #include "../main/mainworker.h"
@@ -12,8 +11,6 @@
 #include "hardwaretypes.h"
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
-
-#define round(a) ( int ) ( a + .5 )
 
 CSBFSpot::CSBFSpot(const int ID, const std::string &SMAConfigFile)
 {
@@ -172,7 +169,7 @@ void CSBFSpot::SendMeter(const unsigned char ID1,const unsigned char ID2, const 
 
 	tsen.ENERGY.battery_level=9;
 
-	unsigned long long instant=(unsigned long long)(musage*1000.0);
+	uint64_t instant=(uint64_t)(musage*1000.0);
 	tsen.ENERGY.instant1=(unsigned char)(instant/0x1000000);
 	instant-=tsen.ENERGY.instant1*0x1000000;
 	tsen.ENERGY.instant2=(unsigned char)(instant/0x10000);
@@ -263,7 +260,7 @@ void CSBFSpot::ImportOldMonthData(const uint64_t DevID, const int Year, const in
 	if (m_SBFPlantName.empty())
 		return;
 
-	int iInvOff = 1;
+	size_t iInvOff = 1;
 	char szLogFile[256];
 	std::string tmpPath = m_SBFDataPath;
 	stdreplace(tmpPath, "%Y", std::to_string(Year));
@@ -310,7 +307,7 @@ void CSBFSpot::ImportOldMonthData(const uint64_t DevID, const int Year, const in
 					szKwhCounter = "0," + szKwhCounter;
 				stdreplace(szKwhCounter, ",", ".");
 				double kWhCounter = atof(szKwhCounter.c_str()) * 1000;
-				unsigned long long ulCounter = (unsigned long long)kWhCounter;
+				uint64_t ulCounter = (uint64_t)kWhCounter;
 
 				//check if this day record does not exists in the database, and insert it
 				std::vector<std::vector<std::string> > result;
@@ -322,7 +319,7 @@ void CSBFSpot::ImportOldMonthData(const uint64_t DevID, const int Year, const in
 				if (result.empty())
 				{
 					//Insert value into our database
-					m_sql.safe_query("INSERT INTO Meter_Calendar (DeviceRowID, Value, Date) VALUES ('%" PRIu64 "', '%llu', '%q')", DevID, ulCounter, szDate);
+					m_sql.safe_query("INSERT INTO Meter_Calendar (DeviceRowID, Value, Date) VALUES ('%" PRIu64 "', '%" PRIu64 "', '%q')", DevID, ulCounter, szDate);
 					Log(LOG_STATUS, "SBFSpot Import Old Month Data: Inserting %s",szDate);
 				}
 
@@ -376,7 +373,7 @@ void CSBFSpot::ImportOldMonthData(const uint64_t DevID, const int Year, const in
 						std::string szKwhCounter = results[iInvOff + 1];
 						stdreplace(szKwhCounter, ",", ".");
 						double kWhCounter = atof(szKwhCounter.c_str()) * 1000;
-						unsigned long long ulCounter = (unsigned long long)kWhCounter;
+						uint64_t ulCounter = (uint64_t)kWhCounter;
 
 						//check if this day record does not exists in the database, and insert it
 						std::vector<std::vector<std::string> > result;
@@ -389,7 +386,7 @@ void CSBFSpot::ImportOldMonthData(const uint64_t DevID, const int Year, const in
 						if (result.empty())
 						{
 							//Insert value into our database
-							m_sql.safe_query("INSERT INTO Meter_Calendar (DeviceRowID, Value, Date) VALUES ('%" PRIu64 "', '%llu', '%q')",
+							m_sql.safe_query("INSERT INTO Meter_Calendar (DeviceRowID, Value, Date) VALUES ('%" PRIu64 "', '%" PRIu64 "', '%q')",
 								DevID, ulCounter, szDate);
 							Log(LOG_STATUS, "SBFSpot Import Old Month Data: Inserting %s", szDate);
 						}
@@ -557,7 +554,8 @@ void CSBFSpot::GetMeterDetails()
 		}
 		if ((results[28] != "OK") && (results[28] != "Ok"))
 		{
-			Log(LOG_ERROR, "Invalid field [28] should be OK!");
+			//could be because it's winter and not active yet
+			//Log(LOG_ERROR, "Invalid field [28] should be OK!");
 			return;
 		}
 
@@ -592,9 +590,10 @@ void CSBFSpot::GetMeterDetails()
 		percentage = static_cast<float>(atof(tmpString.c_str()));
 		SendPercentageSensor((InvIdx * 10) + 1, 0, 255, percentage, "Efficiency");
 		tmpString = results[24];
-		stdreplace(tmpString, ",", ".");
-		percentage = static_cast<float>(atof(tmpString.c_str()));
-		SendPercentageSensor((InvIdx * 10) + 2, 0, 255, percentage, "Hz");
+		stdreplace(tmpString, ",", ".");	
+		float frequency = static_cast<float>(atof(tmpString.c_str()));
+//		SendPercentageSensor((InvIdx * 10) + 2, 0, 255, percentage, "Hz");
+		SendCustomSensor((InvIdx * 10) + 2, 0, 255, frequency, "Hz", "Hz");
 		tmpString = results[27];
 		stdreplace(tmpString, ",", ".");
 		percentage = static_cast<float>(atof(tmpString.c_str()));
