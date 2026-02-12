@@ -61,6 +61,8 @@ extern std::string szAppHash;
 extern std::string szAppDate;
 extern std::string szPyVersion;
 
+extern bool g_bLlmMCPSupport;
+
 namespace http
 {
 	namespace server
@@ -136,8 +138,23 @@ namespace http
 
 			if (!settings.vhostname.empty())
 				sRealm += settings.vhostname;
+			else if (settings.listening_address != "::")
+				sRealm += settings.listening_address;
 			else
-				sRealm += (settings.listening_address == "::") ? "domoticz.local" : settings.listening_address;
+			{
+				std::string sValue;
+				std::string szInstanceName = "domoticz.local";
+				if (m_sql.GetPreferencesVar("Title", sValue))
+				{
+					if (!sValue.empty())
+					{
+						stdlower(sValue);
+						szInstanceName = sValue + ".local";
+					}
+				}
+
+				sRealm += szInstanceName;
+			}
 			if (settings.listening_port != "80" || settings.listening_port != "443")
 				sRealm += ":" + settings.listening_port;
 			sRealm += "/";
@@ -224,7 +241,13 @@ namespace http
 					m_iamsettings.discovery_url.c_str(), [this](auto&& session, auto&& req, auto&& rep) { GetOpenIDConfiguration(session, req, rep); }, true);
 			}
 
+			if (g_bLlmMCPSupport)
+			{
+				m_pWebEm->RegisterPageCode("/mcp", [this](auto&& session, auto&& req, auto&& rep) { PostMcp(session, req, rep); }, false);
+			}
+
 			m_pWebEm->RegisterPageCode("/json.htm", [this](auto&& session, auto&& req, auto&& rep) { GetJSonPage(session, req, rep); });
+			m_pWebEm->RegisterPageCode("/alexa.htm", [this](auto&& session, auto&& req, auto&& rep) { GetAlexaPage(session, req, rep); });
 			// These 'Pages' should probably be 'moved' to become Command codes handled by the 'json.htm API', so we get all API calls through one entry point
 			// And why .php or .cgi while all these commands are NOT handled by a PHP or CGI processor but by Domoticz ?? Legacy? Rename these?
 			m_pWebEm->RegisterPageCode("/backupdatabase.php", [this](auto&& session, auto&& req, auto&& rep) { GetDatabaseBackup(session, req, rep); });
@@ -415,9 +438,8 @@ namespace http
 			RegisterCommandCode("execute_script", [this](auto&& session, auto&& req, auto&& root) { Cmd_ExcecuteScript(session, req, root); });
 			RegisterCommandCode("getcosts", [this](auto&& session, auto&& req, auto&& root) { Cmd_GetCosts(session, req, root); });
 			RegisterCommandCode("checkforupdate", [this](auto&& session, auto&& req, auto&& root) { Cmd_CheckForUpdate(session, req, root); });
-			RegisterCommandCode("downloadupdate", [this](auto&& session, auto&& req, auto&& root) { Cmd_DownloadUpdate(session, req, root); });
-			RegisterCommandCode("downloadready", [this](auto&& session, auto&& req, auto&& root) { Cmd_DownloadReady(session, req, root); });
 			RegisterCommandCode("update_application", [this](auto&& session, auto&& req, auto&& root) { Cmd_ApplicationUpdate(session, req, root); });
+			RegisterCommandCode("getupdatelog", [this](auto&& session, auto&& req, auto&& root) { Cmd_GetUpdateLog(session, req, root); });
 			RegisterCommandCode("deletedatapoint", [this](auto&& session, auto&& req, auto&& root) { Cmd_DeleteDataPoint(session, req, root); });
 			RegisterCommandCode("deletedaterange", [this](auto&& session, auto&& req, auto&& root) { Cmd_DeleteDateRange(session, req, root); });
 			RegisterCommandCode("customevent", [this](auto&& session, auto&& req, auto&& root) { Cmd_CustomEvent(session, req, root); });
@@ -536,6 +558,7 @@ namespace http
 			//MQTT-AD
 			RegisterCommandCode("mqttadgetconfig", [this](auto&& session, auto&& req, auto&& root) { Cmd_MQTTAD_GetConfig(session, req, root); });
 			RegisterCommandCode("mqttupdatenumber", [this](auto&& session, auto&& req, auto&& root) { Cmd_MQTTAD_UpdateNumber(session, req, root); });
+			RegisterCommandCode("mqttpublishpayload", [this](auto&& session, auto&& req, auto&& root) { Cmd_MQTTAD_PublishPayload(session, req, root); });
 
 #ifdef WITH_OPENZWAVE
 			// ZWave
@@ -613,7 +636,10 @@ namespace http
 
 			//EnergyDashboard
 			RegisterCommandCode("getenergydashboarddevices", [this](auto&& session, auto&& req, auto&& root) { Cmd_GetEnergyDashboardDevices(session, req, root); });
-			
+
+			//kWh stats
+			RegisterCommandCode("getkwhstats", [this](auto&& session, auto&& req, auto&& root) { Cmd_GetkWhStats(session, req, root); });
+			RegisterCommandCode("resetkwhstats", [this](auto&& session, auto&& req, auto&& root) { Cmd_ResetkWhStats(session, req, root); });
 
 			//Whitelist
 			m_pWebEm->RegisterWhitelistURLString("/images/floorplans/plan");
@@ -744,7 +770,7 @@ namespace http
 			}
 			// Add 'Applications' as User with special privilege URIGHTS_CLIENTID
 			result.clear();
-			result = m_sql.safe_query("SELECT ID, Active, Public, Applicationname, Secret, Pemfile FROM Applications");
+			result = m_sql.safe_query("SELECT ID, Active, Public, Applicationname, Secret, Pemfile, RefreshExpire, SigningSecret, AcceptLegacyTokensUntil FROM Applications");
 			if (!result.empty())
 			{
 				for (const auto& sd : result)
@@ -757,9 +783,10 @@ namespace http
 						std::string applicationname = sd[3];
 						std::string secret = sd[4];
 						std::string pemfile = sd[5];
-						if (bPublic && secret.empty())
-							secret = GenerateMD5Hash(pemfile);
-						AddUser(ID, applicationname, secret, "", URIGHTS_CLIENTID, bPublic, pemfile);
+						uint32_t refreshexpire = static_cast<uint32_t>(atol(sd[6].c_str()));
+						std::string signingsecret = sd[7];
+						time_t accept_legacy_until = static_cast<time_t>(atol(sd[8].c_str()));
+						AddUser(ID, applicationname, secret, "", URIGHTS_CLIENTID, bPublic, pemfile, refreshexpire, signingsecret, accept_legacy_until);
 					}
 				}
 			}
@@ -767,7 +794,7 @@ namespace http
 			m_mainworker.LoadSharedUsers();
 		}
 
-		void CWebServer::AddUser(const unsigned long ID, const std::string& username, const std::string& password, const std::string& mfatoken, const int userrights, const int activetabs, const std::string& pemfile)
+		void CWebServer::AddUser(const unsigned long ID, const std::string& username, const std::string& password, const std::string& mfatoken, const int userrights, const int activetabs, const std::string& pemfile, const uint32_t refreshexpire, const std::string& signingsecret, const time_t accept_legacy_until)
 		{
 			if (m_pWebEm == nullptr)
 				return;
@@ -849,6 +876,8 @@ namespace http
 			wtmp.PubKey = pubkey;
 			wtmp.userrights = (_eUserRights)userrights;
 			wtmp.ActiveTabs = activetabs;
+			wtmp.RefreshExpire = refreshexpire;
+			wtmp.SigningSecret = signingsecret.empty() ? password : signingsecret;
 			wtmp.TotSensors = atoi(result[0][0].c_str());
 			m_users.push_back(wtmp);
 
@@ -862,7 +891,7 @@ namespace http
 			utmp.RedirectUri = "";
 			m_accesscodes.push_back(utmp);
 
-			m_pWebEm->AddUserPassword(ID, username, password, mfatoken, (_eUserRights)userrights, activetabs, privkey, pubkey);
+			m_pWebEm->AddUserPassword(ID, username, password, mfatoken, (_eUserRights)userrights, activetabs, privkey, pubkey, refreshexpire, signingsecret, accept_legacy_until);
 		}
 
 		void CWebServer::ClearUserPasswords()
@@ -1246,7 +1275,7 @@ namespace http
 					{
 						sprintf(szOrderBy, "A.[Order],A.%s ASC", order.c_str());
 					}
-					//_log.Log(LOG_STATUS, "Getting all devices: order by %s ", szOrderBy);
+					//_log.Log(LOG_STATUS, "Getting all devices: order by %s", szOrderBy);
 					if (!hardwareid.empty())
 					{
 						szQuery = ("SELECT A.ID, A.DeviceID, A.Unit, A.Name, A.Used,A.Type, A.SubType,"
@@ -1707,31 +1736,12 @@ namespace http
 
 					bool bHasTimers = false;
 
-					if (
-						(dType == pTypeLighting1)
-						|| (dType == pTypeLighting2)
-						|| (dType == pTypeLighting3)
-						|| (dType == pTypeLighting4)
-						|| (dType == pTypeLighting5)
-						|| (dType == pTypeLighting6)
-						|| (dType == pTypeFan)
-						|| (dType == pTypeColorSwitch)
-						|| (dType == pTypeCurtain)
-						|| (dType == pTypeBlinds)
-						|| (dType == pTypeRFY)
-						|| (dType == pTypeChime)
-						|| (dType == pTypeThermostat2)
-						|| (dType == pTypeThermostat3)
-						|| (dType == pTypeThermostat4)
-						|| (dType == pTypeRemote)
-						|| (dType == pTypeGeneralSwitch)
-						|| (dType == pTypeHomeConfort)
-						|| (dType == pTypeFS20)
-						|| ((dType == pTypeRadiator1) && (dSubType == sTypeSmartwaresSwitchRadiator))
-						|| ((dType == pTypeRego6XXValue) && (dSubType == sTypeRego6XXStatus))
-						|| (dType == pTypeHunter)
-						|| (dType == pTypeDDxxxx)
-						)
+					if ((IsLightOrSwitch(dType, dSubType)
+					     || ((dType == pTypeRego6XXValue) && (dSubType == sTypeRego6XXStatus)))
+					    && (dType != pTypeSecurity1)
+					    && (dType != pTypeSecurity2)
+					    && (dType != pTypeHoneywell_AL)
+					    )
 					{
 						// add light details
 						bHasTimers = m_sql.HasTimers(sd[0]);
@@ -1943,6 +1953,7 @@ namespace http
 						}
 						else if (
 							(switchtype == STYPE_Blinds)
+							|| (switchtype == STYPE_BlindsWithStop)
 							|| (switchtype == STYPE_BlindsPercentage)
 							|| (switchtype == STYPE_BlindsPercentageWithStop)
 							|| (switchtype == STYPE_VenetianBlindsUS)
@@ -2196,6 +2207,97 @@ namespace http
 								sprintf(szData, "%.1f %c, %s, %s", temp, tempsign, strarray[1].c_str(), strstatus.c_str());
 							root["result"][ii]["Data"] = szData;
 							root["result"][ii]["HaveTimeout"] = bHaveTimeout;
+						}
+					}
+					else if (dType == pTypeThermostat6)
+					{
+						bHasTimers = m_sql.HasTimers(sd[0]);
+						root["result"][ii]["HaveTimeout"] = bHaveTimeout;
+						root["result"][ii]["TypeImg"] = "override_mini";
+
+						std::string value_step = options["ValueStep"];
+						std::string value_min = options["ValueMin"];
+						std::string value_max = options["ValueMax"];
+						std::string value_unit = options["ValueUnit"];
+
+						double valuestep = (!value_step.empty()) ? atof(value_step.c_str()) : 0.5;
+						double valuemin = (!value_min.empty()) ? atof(value_min.c_str()) : -200.0;
+						double valuemax = (!value_max.empty()) ? atof(value_max.c_str()) : 200.0;
+
+						if (
+							(value_unit.empty())
+							|| (value_unit == "°C")
+							|| (value_unit == "°F")
+							|| (value_unit == "C")
+							|| (value_unit == "F")
+							)
+						{
+							if (tempsign == 'C')
+								value_unit = "°C";
+							else
+								value_unit = "°F";
+						}
+
+						root["result"][ii]["step"] = valuestep;
+						root["result"][ii]["min"] = valuemin;
+						root["result"][ii]["max"] = valuemax;
+						root["result"][ii]["vunit"] = value_unit;
+
+						std::vector<std::string> strarray;
+						StringSplit(sValue, ";", strarray);
+						if (strarray.size() >= 2)
+						{
+							double tempCelcius = atof(strarray[0].c_str());
+							double temp = ConvertTemperature(tempCelcius, tempsign);
+							double tempSetPointCelcius = atof(strarray[1].c_str());
+							double tempSetPoint = ConvertTemperature(tempSetPointCelcius, tempsign);
+							root["result"][ii]["Temp"] = temp;
+							root["result"][ii]["SetPoint"] = tempSetPoint;
+
+							_tTrendCalculator::_eTendencyType tstate = _tTrendCalculator::_eTendencyType::TENDENCY_UNKNOWN;
+							uint64_t tID = ((uint64_t)(hardwareID & 0x7FFFFFFF) << 32) | (devIdx & 0x7FFFFFFF);
+							if (m_mainworker.m_trend_calculator.find(tID) != m_mainworker.m_trend_calculator.end())
+							{
+								tstate = m_mainworker.m_trend_calculator[tID].m_state;
+							}
+							root["result"][ii]["trend"] = (int)tstate;
+
+							if (dSubType == sTypeThermostat6TempHum && strarray.size() >= 4)
+							{
+								int humidity = atoi(strarray[2].c_str());
+								root["result"][ii]["Humidity"] = humidity;
+								root["result"][ii]["HumidityStatus"] = RFX_Humidity_Status_Desc(atoi(strarray[3].c_str()));
+
+								// Calculate dew point
+								double dewpoint = ConvertTemperature(CalculateDewPoint(temp, humidity), tempsign);
+								root["result"][ii]["DewPoint"] = dewpoint;
+								sprintf(szData, "%.1f %c, (%.1f %c) / %d%%", temp, tempsign, tempSetPoint, tempsign, humidity);
+							}
+							else if (dSubType == sTypeThermostat6TempBaro && strarray.size() >= 3)
+							{
+								float barometer = static_cast<float>(atof(strarray[2].c_str()));
+								root["result"][ii]["Barometer"] = barometer;
+								sprintf(szData, "%.1f %c, (%.1f %c), %.1f hPa", temp, tempsign, tempSetPoint, tempsign, barometer);
+							}
+							else if (dSubType == sTypeThermostat6TempHumBaro && strarray.size() >= 5)
+							{
+								int humidity = atoi(strarray[2].c_str());
+								root["result"][ii]["Humidity"] = humidity;
+								root["result"][ii]["HumidityStatus"] = RFX_Humidity_Status_Desc(atoi(strarray[3].c_str()));
+
+								// Calculate dew point
+								double dewpoint = ConvertTemperature(CalculateDewPoint(temp, humidity), tempsign);
+								root["result"][ii]["DewPoint"] = dewpoint;
+
+								float barometer = static_cast<float>(atof(strarray[4].c_str()));
+								root["result"][ii]["Barometer"] = barometer;
+								sprintf(szData, "%.1f %c, (%.1f %c), %d%%, %.1f hPa", temp, tempsign, tempSetPoint, tempsign, humidity, barometer);
+							}
+							else
+							{
+								sprintf(szData, "%.1f %c, (%.1f %c)", temp, tempsign, tempSetPoint, tempsign);
+							}
+							root["result"][ii]["Data"] = szData;
 						}
 					}
 					else if ((dType == pTypeTEMP) || (dType == pTypeRego6XXTemp))
@@ -2539,7 +2641,21 @@ namespace http
 						if (!result2.empty())
 						{
 							std::vector<std::string> sd2 = result2[0];
-
+							if (sd2[0].empty())
+							{
+								_log.Log(LOG_ERROR, "Empty Value in Meter table for device idx: '%q'", sd[0].c_str());
+								continue;
+							}
+							if (!is_number(sValue))
+							{
+								_log.Log(LOG_ERROR, "Invalid Number sValue: '%q' for device idx: '%q'", sValue.c_str(), sd[0].c_str());
+								continue;
+							}
+							if (!is_number(sd2[0]))
+							{
+								_log.Log(LOG_ERROR, "Invalid Number value: '%q' for device idx: '%q'", sd2[0].c_str(), sd[0].c_str());
+								continue;
+							}
 							int64_t total_first = std::stoll(sd2[0]);
 							int64_t total_last = std::stoll(sValue);
 							int64_t total_real = total_last - total_first;
@@ -3483,6 +3599,22 @@ namespace http
 							{
 								std::vector<std::string> sd2 = result2[0];
 
+								if (sd2[0].empty())
+								{
+									_log.Log(LOG_ERROR, "Empty Value in Meter table for device idx: '%q'", sd[0].c_str());
+									continue;
+								}
+								if (!is_number(sValue))
+								{
+									_log.Log(LOG_ERROR, "Invalid Number sValue: '%q' for device idx: '%q'", sValue.c_str(), sd[0].c_str());
+									continue;
+								}
+								if (!is_number(sd2[0]))
+								{
+									_log.Log(LOG_ERROR, "Invalid Number value: '%q' for device idx: '%q'", sd2[0].c_str(), sd[0].c_str());
+									continue;
+								}
+
 								int64_t total_first = std::stoll(sd2[0]);
 								int64_t total_last = std::stoll(sValue);
 								int64_t total_real = total_last - total_first;
@@ -3788,7 +3920,15 @@ namespace http
 
 			queryString.append(", ");
 			if (!isCounter)
-				queryString.append("AVG(" + dfield + ")");
+			{
+				//probably should add an additional option to select AVG/MIN/MAX
+				if (dfield.find("_Min") != std::string::npos)
+					queryString.append("MIN(" + dfield + ")");
+				else if (dfield.find("_Max") != std::string::npos)
+					queryString.append("MAX(" + dfield + ")");
+				else
+					queryString.append("AVG(" + dfield + ")");
+			}
 			else
 				queryString.append("SUM(" + dfield + ")");
 			queryString.append("/" + std::to_string(divider));
@@ -3872,7 +4012,7 @@ namespace http
 			}
 			else
 			{
-				queryString.append("  sum(Value) as Sum");
+				queryString.append("  sum(" + value("") + ") as Sum");
 			}
 
 			if (sgroupby == "quarter")
@@ -4101,7 +4241,7 @@ namespace http
 						std::string TableField = db.first;
 						std::string IconFile = db.second;
 
-						if (!file_exist(IconFile.c_str()))
+						if (!file_exist_not_empty(IconFile.c_str()))
 						{
 							// Does not exists, extract it from the database and add it
 							std::vector<std::vector<std::string>> result2;
@@ -4112,6 +4252,7 @@ namespace http
 								file.open(IconFile.c_str(), std::ios::out | std::ios::binary);
 								if (!file.is_open())
 								{
+									_log.Log(LOG_ERROR, "Error writing custom image to disk: %s", IconFile.c_str());
 									bError = true;
 									continue;
 								}
@@ -4124,7 +4265,7 @@ namespace http
 					if (bError)
 					{
 						cImage.Title += " (INVALID!!)";
-						cImage.Description = "probably invalid characters in Title/Descriptionn!";
+						cImage.Description = "probably invalid characters in Title/Description!";
 					}
 					m_custom_light_icons.push_back(cImage);
 					m_custom_light_icons_lookup[cImage.idx] = (int)m_custom_light_icons.size() - 1;
@@ -4144,7 +4285,7 @@ namespace http
 				std::string cparam = request::findValue(&req, "param");
 				if (!cparam.empty())
 				{
-					_log.Debug(DEBUG_WEBSERVER, "CWebServer::GetJSonPage :%s :%s ", cparam.c_str(), req.uri.c_str());
+					_log.Debug(DEBUG_WEBSERVER, "CWebServer::GetJSonPage: %s : %s", cparam.c_str(), req.uri.c_str());
 
 					auto pf = m_webcommands.find(cparam);
 					if (pf != m_webcommands.end())
@@ -4162,113 +4303,14 @@ namespace http
 				}
 			} //(rtype=="command")
 			else
-			{	// TODO: remove this after next stable
-				// Could be a call to an old style RType, try to handle it and alert the user to update
-				_log.Debug(DEBUG_WEBSERVER, "CWebServer::GetJSonPage(rtype) :%s :%s ", rtype.c_str(), req.uri.c_str());
-
-				std::string altrtype;
-				if (rtype.compare("settings") == 0)
-				{
-					altrtype = "getsettings";
-				}
-				else if (rtype.compare("users") == 0)
-				{
-					altrtype = "getusers";
-				}
-				else if (rtype.compare("devices") == 0)
-				{
-					altrtype = "getdevices";
-				}
-				else if (rtype.compare("hardware") == 0)
-				{
-					altrtype = "gethardware";
-				}
-				else if (rtype.compare("scenes") == 0)
-				{
-					altrtype = "getscenes";
-				}
-				else if (rtype.compare("notifications") == 0)
-				{
-					altrtype = "getnotifications";
-				}
-				else if (rtype.compare("scenelog") == 0)
-				{
-					altrtype = "getscenelog";
-				}
-				else if (rtype.compare("mobiles") == 0)
-				{
-					altrtype = "getmobiles";
-				}
-				else if (rtype.compare("cameras") == 0)
-				{
-					altrtype = "getcameras";
-				}
-				else if (rtype.compare("cameras_user") == 0)
-				{
-					altrtype = "getcameras_user";
-				}
-				else if (rtype.compare("schedules") == 0)
-				{
-					altrtype = "getschedules";
-				}
-				else if (rtype.compare("timers") == 0)
-				{
-					altrtype = "gettimers";
-				}
-				else if (rtype.compare("scenetimers") == 0)
-				{
-					altrtype = "getscenetimers";
-				}
-				else if (rtype.compare("setpointtimers") == 0)
-				{
-					altrtype = "getsetpointtimers";
-				}
-				else if (rtype.compare("plans") == 0)
-				{
-					altrtype = "getplans";
-				}
-				else if (rtype.compare("floorplans") == 0)
-				{
-					altrtype = "getfloorplans";
-				}
-				else if (rtype.compare("lightlog") == 0)
-				{
-					altrtype = "getlightlog";
-				}
-				else if (rtype.compare("textlog") == 0)
-				{
-					altrtype = "gettextlog";
-				}
-				else if (rtype.compare("graph") == 0)
-				{
-					altrtype = "graph";
-				}
-				else if (rtype.compare("createdevice") == 0)
-				{
-					altrtype = "createdevice";
-				}
-				else if (rtype.compare("setused") == 0)
-				{
-					altrtype = "setused";
-				}
-
-				if (!altrtype.empty())
-				{
-					auto pf = m_webcommands.find(altrtype);
-					if (pf != m_webcommands.end())
-					{
-						_log.Log(LOG_NORM, "[WebServer] Deprecated RType (%s) for API request. Handled via fallback (%s), please use correct API Command! (%s)", rtype.c_str(), altrtype.c_str(), req.host_remote_address.c_str());
-						pf->second(session, req, root);
-					}
-				}
-				else
-				{
-					_log.Log(LOG_STATUS, "[WebServer] Deprecated RType (%s) for API request. Call ignored, please use correct API Command! (%s)", rtype.c_str(), req.host_remote_address.c_str());
-				}
-
+			{
+				_log.Debug(DEBUG_WEBSERVER, "CWebServer::GetJSonPage(rtype) :%s :%s", rtype.c_str(), req.uri.c_str());
+				rep.status = http::server::reply::not_found;
+				return;
 			}
 
 			reply::set_content(&rep, root.toStyledString());
+			rep.status = static_cast<http::server::reply::status_type>(session.reply_status);
 		}
 
 		void CWebServer::UploadFloorplanImage(WebEmSession& session, const request& req, std::string& redirect_uri)

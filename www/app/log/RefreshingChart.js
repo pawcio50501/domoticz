@@ -82,7 +82,7 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
         function createChartDefinition(template) {
             return _.merge({
                     chart: {
-                        type: 'spline',
+                        type: (self.dataSupplier.isShortLogChart) ? 'area' : 'spline',
                         zoomType: 'x',
                         marginTop: 45,
                         panning: true,
@@ -176,7 +176,7 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
                                                     self.dataSupplier.isShortLogChart,
                                                     Intl.DateTimeFormat().resolvedOptions().timeZone
                                                 ).then(function () {
-                                                    self.$route.reload();
+													window.location.reload();
                                                 });
                                             }
                                         }
@@ -221,6 +221,19 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
                                     }
                                 }
                             }
+                        },
+                        area: {
+							threshold: null,
+                            lineWidth: 1.4,
+                            marker: {
+                                enabled: false
+                            },
+                            states: {
+                                hover: {
+                                    lineWidth: 2
+                                }
+                            },
+							fillOpacity: 0.4
                         },
                         areasplinerange: {
                             marker: {
@@ -564,13 +577,25 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
             self.$scope.zoomHours = function (hours) {
                 const xAxis = self.chart.xAxis[0];
                 const right = Math.min(xAxis.max, xAxis.dataMax);
-                zoom(right - hours * 3600 * 1000, right);
+				let cLabel = hours.toString() + ' ';
+				if (hours == 1)
+					cLabel = $.t('Hour');
+				else
+					cLabel += $.t('Hours');
+                zoom(right - hours * 3600 * 1000, right, $.t('Last') + ' ' + cLabel);
             }
 
             self.$scope.zoomDays = function (days) {
                 const xAxis = self.chart.xAxis[0];
                 const right = Math.min(xAxis.max, xAxis.dataMax);
-                zoom(addDays(right, -days), right);
+				let cLabel = days.toString() + ' ';
+				if (days == 1)
+					cLabel = $.t('Day');
+				else if (days == 7)
+					cLabel = $.t('Week');
+				else
+					cLabel += $.t('Days');
+                zoom(addDays(right, -days), right, $.t('Last') + ' ' + cLabel);
 
                 function addDays(right, days) {
                     const leftDate = new Date(right);
@@ -582,7 +607,12 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
             self.$scope.zoomMonths = function (months) {
                 const xAxis = self.chart.xAxis[0];
                 const right = Math.min(xAxis.max, xAxis.dataMax);
-                zoom(addMonths(right, -months), right);
+				let cLabel = months.toString() + ' ';
+				if (months == 1)
+					cLabel = $.t('Month');
+				else
+					cLabel += $.t('Months');
+                zoom(addMonths(right, -months), right, $.t('Last') + ' ' + cLabel);
 
                 function addMonths(right, months) {
                     const leftDate = new Date(right);
@@ -592,15 +622,35 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
                     return leftDate.getTime();
                 }
             }
+			
+			self.$scope.zoomToday = function() {
+				var dstart = new Date();
+				dstart.setHours(0,0,0,0);
+				var dend = new Date();
+				dend.setHours(23,59,59,999);
+				zoom(dstart.getTime(), dend.getTime(), $.t('Today'));
+			}
 
             self.$scope.zoomreset = function () {
                 const xAxis = self.chart.xAxis[0];
-                zoom(xAxis.dataMin, xAxis.dataMax);
+                zoom(xAxis.dataMin, xAxis.dataMax, '');
             }
 
 			self.$scope.changeCompTypeTemp = function() {
 				self.ctrl.var_name = self.$scope.comptype;
 				refreshChartData();
+			}
+			
+			self.$scope.isTemp = function() {
+				if (self.ctrl !== undefined) {
+					if (self.ctrl.sensorType !== undefined) {
+						let sensorType = self.ctrl.sensorType;
+						if (sensorType == "hum") {
+							return false;
+						}
+					}
+				}
+				return true;
 			}
 
             self.$scope.groupByLabel = function (label) {
@@ -627,6 +677,32 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
                         }
                     }, false);
                 refreshChartData();
+            };
+
+            self.$scope.priceResolution = (self.ctrl && self.ctrl.priceResolution) || 60;
+            self.$scope.resolution = (self.ctrl && self.ctrl.resolution) || 60;
+
+            self.$scope.setResolution = function (minutes) {
+                self.ctrl.resolution = minutes;
+                self.$scope.resolution = minutes;
+                var isSubHour = (minutes < 60);
+                self.chart.update({
+                    xAxis: {
+                        dateTimeLabelFormats: {
+                            hour: isSubHour ? '%H:%M' : '%H:00',
+                            day: isSubHour ? '%H:%M' : '%H:00'
+                        },
+                        tickInterval: isSubHour ? (minutes * 60 * 1000) : 3600000
+                    }
+                }, false);
+                self.chartName = $.t('Usage') + ' / ' + (isSubHour ? minutes + ' ' + $.t('Minutes') : $.t('Hour'));
+                self.$scope.chartTitle = chartTitle();
+                refreshChartData();
+            };
+
+            self.$scope.resolutionLabel = function (minutes) {
+                if (minutes >= 60) return '1' + $.t('Hour').substring(0, 1).toLowerCase();
+                return minutes + $.t('Minute').substring(0, 1).toLowerCase();
             };
 
             self.$element.find('.chart-title-container').on('click', function (e) {
@@ -713,17 +789,26 @@ define(['lodash', 'Base', 'DomoticzBase', 'DataLoader', 'ChartLoader', 'ChartZoo
             }
         }
 
-        function zoom(min, max) {
-            self.chart.xAxis[0].zoom(min, max);
+        function zoom(min, max, period) {
+			self.chart.xAxis[0].setExtremes(min, max);
             synchronizeYaxes();
+			if (period == '') {
+				self.$scope.chartTitle = chartTitle();
+			} else {
+                let chartName = fromInstanceOrFunction()(self.chartName);
+				let title = '';
+				if (chartName !== undefined) {
+					title = chartName + ' ';
+				}
+				self.$scope.chartTitle= title + period;
+			}
             self.chart.redraw();
             self.chart.tooltip.hide();
         }
 
         function chartTitle() {
             if (self.chartName !== undefined) {
-                let chartName;
-                chartName = fromInstanceOrFunction()(self.chartName);
+                let chartName = fromInstanceOrFunction()(self.chartName);
                 const periodInTitle = chartTitlePeriod();
                 return chartName + (periodInTitle ? ' ' + periodInTitle : '');
             } else {

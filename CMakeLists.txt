@@ -5,6 +5,7 @@ project(domoticz)
 
 INCLUDE(CheckIncludeFile)
 INCLUDE(CheckIncludeFiles)
+INCLUDE(CheckFunctionExists)
 INCLUDE(InstallRequiredSystemLibraries)
 INCLUDE(TestBigEndian)
 
@@ -12,7 +13,7 @@ INCLUDE(TestBigEndian)
 #
 #
 ## required min. libBoost version
-SET(DOMO_MIN_LIBBOOST_VERSION 1.66.0)
+SET(DOMO_MIN_LIBBOOST_VERSION 1.69.0)
 ##
 
 ### USER-SETTABLE OPTIONS
@@ -22,14 +23,15 @@ SET(DOMO_MIN_LIBBOOST_VERSION 1.66.0)
 # Bundled libraries
 option(USE_BUILTIN_JSONCPP "Use builtin JSonCPP" YES)
 option(USE_BUILTIN_MINIZIP "Use builtin Minizip" YES)
-option(USE_BUILTIN_MQTT "Use builtin Mosquitto library" YES)
 option(USE_BUILTIN_SQLITE "Use builtin sqlite library" NO)
+option(USE_BUILTIN_JWTCPP "Use builtin JWT-CPP" YES)
 
 # Optional dependencies
 option(USE_PYTHON "Use Python for Plugins and Event-Scripts" YES)
 option(INCLUDE_LINUX_I2C "Include I2C support" YES)
 option(INCLUDE_SPI "Include SPI support" YES)
 option(WITH_LIBUSB "Enable libusb support" YES)
+option(WITH_TELLDUSCORE "Enable Telldus support" NO)
 
 # Link static or shared, external dependencies
 option(USE_LUA_STATIC "Link LUA static" YES)
@@ -37,6 +39,11 @@ option(USE_OPENSSL_STATIC "Link OpenSSL static" NO)
 option(USE_STATIC_BOOST "Build with static BOOST libraries" YES)
 option(USE_STATIC_OPENZWAVE "Build with static OpenZwave libraries" YES)
 
+# Disable updater functionality
+option(DISABLE_UPDATER "Disable updater functionality" NO)
+IF(DISABLE_UPDATER)
+  add_definitions(-DDISABLE_UPDATER)
+ENDIF()
 
 # Developer-oriented options
 option(USE_PRECOMPILED_HEADER "Use precompiled header feature to speed up build time " YES)
@@ -76,6 +83,7 @@ MACRO(History_GET_REVISION variable)
   IF(EXISTS ${CMAKE_SOURCE_DIR}/History.txt)
     MESSAGE(STATUS "Read ProjectRevision from History.txt")
     CMAKE_POLICY(SET CMP0007 NEW)
+    CMAKE_POLICY(SET CMP0167 NEW)
     FILE(STRINGS ${CMAKE_SOURCE_DIR}/History.txt AppVersionContent)
     LIST(GET AppVersionContent 0 AppVersionContent)
     STRING(REPLACE " " ";" AppVersionContent ${AppVersionContent})
@@ -127,10 +135,10 @@ ENDIF()
 IF(USE_BUILTIN_MINIZIP AND NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/minizip/CMakeLists.txt")
   message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 ENDIF()
-IF(USE_BUILTIN_MQTT AND NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/mosquitto/CMakeLists.txt")
+IF(USE_BUILTIN_SQLITE AND NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/sqlite-amalgamation/CMakeLists.txt")
   message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 ENDIF()
-IF(USE_BUILTIN_SQLITE AND NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/sqlite-amalgamation/CMakeLists.txt")
+IF(USE_BUILTIN_JWTCPP AND NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/jwtcpp/CMakeLists.txt")
   message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 ENDIF()
 
@@ -138,6 +146,7 @@ ENDIF()
 set(
 domoticz_SRCS
 main/stdafx.cpp
+main/Alexa.cpp
 main/BaroForecastCalculator.cpp
 main/CmdLine.cpp
 main/Camera.cpp
@@ -150,6 +159,7 @@ main/Helper.cpp
 main/HTMLSanitizer.cpp
 main/IFTTT.cpp
 main/json_helper.cpp
+main/KWHStats.cpp
 main/localtime_r.cpp
 main/lsignal.cpp
 main/Logger.cpp
@@ -157,13 +167,14 @@ main/LuaCommon.cpp
 main/LuaHandler.cpp
 main/LuaTable.cpp
 main/mainworker.cpp
-main/mosquitto_helper.cpp
+main/mqtt_helper.cpp
 main/NotificationObserver.cpp
 main/NotificationSystem.cpp
 main/RFXNames.cpp
 main/Scheduler.cpp
 main/SignalHandler.cpp
 main/SQLHelper.cpp
+main/StoppableTask.cpp
 main/SunRiseSet.cpp
 main/TrendCalculator.cpp
 main/WebServer.cpp
@@ -172,7 +183,9 @@ main/WebServerCommands.cpp
 main/WebServerHandleGraph.cpp
 main/WebServerHelper.cpp
 main/WindCalculation.cpp
+mdns/mdns.cpp
 iamserver/IamService.cpp
+mcpserver/McpService.cpp
 push/BasePush.cpp
 push/FibaroPush.cpp
 push/GooglePubSubPush.cpp
@@ -294,6 +307,7 @@ hardware/P1MeterTCP.cpp
 hardware/PhilipsHue/PhilipsHue.cpp
 hardware/PhilipsHue/PhilipsHueHelper.cpp
 hardware/PhilipsHue/PhilipsHueSensors.cpp
+hardware/PhilipsHue/PhilipsHueV2Sensors.cpp
 hardware/PiFace.cpp
 hardware/Pinger.cpp
 hardware/PVOutput_Input.cpp
@@ -327,7 +341,6 @@ hardware/TeleinfoSerial.cpp
 hardware/TeleinfoTCP.cpp
 hardware/Tellstick.cpp
 hardware/TellstickFactory.cpp
-hardware/Thermosmart.cpp
 hardware/ToonThermostat.cpp
 hardware/TTNMQTT.cpp
 hardware/USBtin.cpp
@@ -509,7 +522,7 @@ include_directories(${CMAKE_SOURCE_DIR}/main)
 ADD_CUSTOM_TARGET(revisiontag ALL)
 
 # creates appversion.h using cmake script
-ADD_CUSTOM_COMMAND(TARGET revisiontag COMMAND ${CMAKE_COMMAND}
+ADD_CUSTOM_COMMAND(TARGET revisiontag PRE_BUILD COMMAND ${CMAKE_COMMAND}
    -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
    -P ${CMAKE_CURRENT_SOURCE_DIR}/getgit.cmake)
 
@@ -518,8 +531,8 @@ MESSAGE(STATUS "Compiling Revision #${ProjectRevision}")
 MESSAGE(STATUS "###########################")
 
 # The version number.
-set (domoticz_VERSION_MAJOR 2020)
-set (domoticz_VERSION_MINOR 1)
+set (domoticz_VERSION_MAJOR 2025)
+set (domoticz_VERSION_MINOR 2)
 set (domoticz_VERSION_PATCH ${ProjectRevision})
 
 # explicitly say that the executable depends on the revisiontag
@@ -563,26 +576,15 @@ ELSE(USE_BUILTIN_JSONCPP)
 ENDIF(USE_BUILTIN_JSONCPP)
  
 # mosquitto
-IF(USE_BUILTIN_MQTT)
-  MESSAGE(STATUS "Using builtin Mosquitto library")
-  option(WITH_STATIC_LIBRARIES "Build static versions of the libmosquitto/pp libraries?" ON)
-  option(DOCUMENTATION "Build documentation?" OFF)
-  add_subdirectory (extern/mosquitto EXCLUDE_FROM_ALL)
-  target_link_libraries(domoticz libmosquitto_static)
-  target_link_libraries(domoticztester libmosquitto_static)
-  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/extern/mosquitto/include)
-  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/extern/mosquitto/lib)
-ELSE(USE_BUILTIN_MQTT)
-  find_library(MQTT_LIBRARIES NAMES libmosquitto.so)
-  find_path(MQTT_INCLUDE_DIRS NAMES mosquitto.h)
-  IF(MQTT_LIBRARIES AND MQTT_INCLUDE_DIRS)
-    MESSAGE(STATUS "MQTT includes found at: ${MQTT_INCLUDE_DIRS}")
-    INCLUDE_DIRECTORIES(${MQTT_INCLUDE_DIRS})
-  ELSE(MQTT_LIBRARIES AND MQTT_INCLUDE_DIRS)
-    MESSAGE(FATAL_ERROR "Mosquitto library not found on your system, see install.txt how to get them installed. (for example 'sudo apt-get install libmosquitto-dev')")
-  ENDIF(MQTT_LIBRARIES AND MQTT_INCLUDE_DIRS)
-ENDIF(USE_BUILTIN_MQTT)
-
+find_library(MQTT_LIBRARIES NAMES libmosquitto.so)
+find_path(MQTT_INCLUDE_DIRS NAMES mosquitto.h)
+IF(MQTT_LIBRARIES AND MQTT_INCLUDE_DIRS)
+  MESSAGE(STATUS "MQTT includes found at: ${MQTT_INCLUDE_DIRS}")
+  INCLUDE_DIRECTORIES(${MQTT_INCLUDE_DIRS})
+ELSE(MQTT_LIBRARIES AND MQTT_INCLUDE_DIRS)
+  MESSAGE(FATAL_ERROR "Mosquitto library not found on your system, see install.txt how to get them installed. (for example 'sudo apt-get install libmosquitto-dev')")
+ENDIF(MQTT_LIBRARIES AND MQTT_INCLUDE_DIRS)
+ 
 # sqlite3
 IF(USE_BUILTIN_SQLITE)
   MESSAGE(STATUS "Using builtin SQLite library")
@@ -625,6 +627,12 @@ ELSE(USE_BUILTIN_MINIZIP)
   ENDIF(MINIZIP_FOUND)
 ENDIF(USE_BUILTIN_MINIZIP)
 
+# jwtcpp
+IF(USE_BUILTIN_JWTCPP)
+  MESSAGE(STATUS "Using builtin jwt-cpp library")
+  target_include_directories(domoticz PRIVATE ${CMAKE_SOURCE_DIR}/extern/jwtcpp/include)
+ENDIF(USE_BUILTIN_JWTCPP)
+
 #
 # Find MD5/RMD160/SHA library
 #
@@ -666,14 +674,14 @@ ELSE(USE_STATIC_BOOST)
    message(STATUS "Linking against boost dynamic libraries")
 ENDIF(USE_STATIC_BOOST)
 
-find_package(Boost REQUIRED COMPONENTS thread system)
+find_package(Boost CONFIG REQUIRED COMPONENTS thread)
 IF(Boost_FOUND)
-    MESSAGE(STATUS "BOOST includes found at: ${Boost_INCLUDE_DIR}")
+    MESSAGE(STATUS "BOOST ${Boost_VERSION} includes found at: ${Boost_INCLUDE_DIR}")
 ELSE(Boost_FOUND)
-    MESSAGE(FATAL_ERROR "Boost thread/system library not found on your system, try to get this installed.")
+    MESSAGE(FATAL_ERROR "Boost thread library not found on your system, try to get this installed.")
 ENDIF(Boost_FOUND)
 
-target_link_libraries(domoticz Boost::thread Boost::system)
+target_link_libraries(domoticz Boost::thread)
 
 # compare found vs required libBoost version
 IF(Boost_VERSION VERSION_LESS DOMO_MIN_LIBBOOST_VERSION)
@@ -766,31 +774,40 @@ ELSE()
   message(STATUS "GPIO is not available")
 ENDIF()
 
-find_path(TELLDUSCORE_INCLUDE NAMES telldus-core.h)
-IF(TELLDUSCORE_INCLUDE)
-  message(STATUS "Found telldus-core (telldus-core.h) at : ${TELLDUSCORE_INCLUDE}")
-  find_library(TELLDUS_LIBRARIES NAMES libtelldus-core.so)
-  IF(TELLDUS_LIBRARIES)
-    message(STATUS "Found libtelldus-core at : ${TELLDUS_LIBRARIES}, adding telldus support")
-    add_definitions(-DWITH_TELLDUSCORE)
-  ENDIF(TELLDUS_LIBRARIES)
-ELSE()
-  message(STATUS "Not found telldus-core (telldus-core.h), not adding tellstick support")
-ENDIF(TELLDUSCORE_INCLUDE)
+IF(WITH_TELLDUSCORE)
+  find_path(TELLDUSCORE_INCLUDE NAMES telldus-core.h)
+  IF(TELLDUSCORE_INCLUDE)
+    message(STATUS "Found telldus-core (telldus-core.h) at : ${TELLDUSCORE_INCLUDE}")
+    find_library(TELLDUS_LIBRARIES NAMES libtelldus-core.so)
+    IF(TELLDUS_LIBRARIES)
+      message(STATUS "Found libtelldus-core at : ${TELLDUS_LIBRARIES}, adding telldus support")
+      add_definitions(-DWITH_TELLDUSCORE)
+    ENDIF(TELLDUS_LIBRARIES)
+  ELSE()
+    message(FATAL_ERROR "Not found telldus-core (telldus-core.h), not adding tellstick support")
+  ENDIF(TELLDUSCORE_INCLUDE)
+ENDIF(WITH_TELLDUSCORE)
 
-target_link_libraries(domoticz ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${MINIZIP_LIBRARIES} ${CURL_LIBRARIES} pthread ${MQTT_LIBRARIES} ${LUA_LIBRARIES} ${CMAKE_DL_LIBS} ${TELLDUS_LIBRARIES})
-target_link_libraries(domoticztester ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${MINIZIP_LIBRARIES} ${CURL_LIBRARIES} pthread ${MQTT_LIBRARIES} ${LUA_LIBRARIES} ${CMAKE_DL_LIBS} ${TELLDUS_LIBRARIES})
+# Handle resolving
+check_function_exists(res_init HAVE_LIBC_RESOLV)
+if(HAVE_LIBC_RESOLV)
+  set(RESOLV_LIBRARIES)
+else()
+  set(RESOLV_LIBRARIES -lresolv)
+endif()
 
-IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  target_link_libraries(domoticz -lresolv)
-ELSEIF(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
+target_link_libraries(domoticz ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${MINIZIP_LIBRARIES} ${RESOLV_LIBRARIES} ${CURL_LIBRARIES} pthread ${MQTT_LIBRARIES} ${LUA_LIBRARIES} ${CMAKE_DL_LIBS} ${TELLDUS_LIBRARIES})
+target_link_libraries(domoticztester ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${MINIZIP_LIBRARIES} ${RESOLV_LIBRARIES} ${CURL_LIBRARIES} pthread ${MQTT_LIBRARIES} ${LUA_LIBRARIES} ${CMAKE_DL_LIBS} ${TELLDUS_LIBRARIES})
+
+IF(EXECINFO_LIBRARIES)
   target_link_libraries(domoticz ${EXECINFO_LIBRARIES})
-ELSEIF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
-  target_link_libraries(domoticz ${EXECINFO_LIBRARIES})
-ELSE()
-  target_link_libraries(domoticz -lrt -lresolv ${EXECINFO_LIBRARIES})
-  target_link_libraries(domoticztester -lrt -lresolv ${EXECINFO_LIBRARIES})
-ENDIF()
+ENDIF(EXECINFO_LIBRARIES)
+
+find_library(LIBRT rt)
+if(LIBRT)
+  target_link_libraries(domoticz -lrt)
+  target_link_libraries(domoticztester -lrt)
+endif()
 
 IF(USE_PRECOMPILED_HEADER)
   message(STATUS "Using precompiled headers")
@@ -849,4 +866,6 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/server_cert.pem DESTINATION ${CMAKE_IN
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts DESTINATION ${CMAKE_INSTALL_PREFIX} USE_SOURCE_PERMISSIONS)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/plugins DESTINATION ${CMAKE_INSTALL_PREFIX})
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dzVents DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/updatedomo DESTINATION ${CMAKE_INSTALL_PREFIX} PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ)
+IF(OpenZWave)
+  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Config DESTINATION ${CMAKE_INSTALL_PREFIX})
+ENDIF()

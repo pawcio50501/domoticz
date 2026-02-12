@@ -314,6 +314,21 @@ define(['app', 'livesocket'], function (app) {
 				return; //idx not found
 			}
 
+			var bigtext = TranslateStatusShort(item.Status);
+			if (item.UsedByCamera == true) {
+				var streamimg = '<img src="images/webcam.png" title="' + $.t('Stream Video') + '" height="16" width="16">';
+				var streamurl = "<a href=\"javascript:ShowCameraLiveStream('" + escape(item.Name) + "'," + item.CameraIdx + "," + item.CameraAspect + ")\">" + streamimg + "</a>";
+				bigtext += "&nbsp;" + streamurl;
+			}
+			var searchText = GenerateLiveSearchTextL(item, bigtext);
+			var query = $('.jsLiveSearch').val();
+			if (query && query.length > 0) {
+				var match = searchText.toLowerCase().indexOf(query.toLowerCase()) !== -1;
+				if (!match) {
+					return; // Don't update items that don't match the filter
+				}
+			}
+
 			if ($(id + " #name").html() != item.Name) {
 				$(id + " #name").html(item.Name);
 			}
@@ -323,9 +338,7 @@ define(['app', 'livesocket'], function (app) {
 			var img3 = "";
 			var status = "";
 
-			//console.log(item);
-
-			var bigtext = TranslateStatusShort(item.Status);
+			bigtext = TranslateStatusShort(item.Status);
 			if (item.UsedByCamera == true) {
 				var streamimg = '<img src="images/webcam.png" title="' + $.t('Stream Video') + '" height="16" width="16">';
 				var streamurl = "<a href=\"javascript:ShowCameraLiveStream('" + escape(item.Name) + "'," + item.CameraIdx + "," + item.CameraAspect + ")\">" + streamimg + "</a>";
@@ -599,6 +612,7 @@ define(['app', 'livesocket'], function (app) {
 			else if (
 				(item.SubType.indexOf("Itho") == 0) ||
 				(item.SubType.indexOf("Lucci") == 0) ||
+				(item.SubType.indexOf("Falmec") == 0) ||
 				(item.SubType.indexOf("Westinghouse") == 0)
 			) {
 				img = $(id + " #img").html();
@@ -694,7 +708,6 @@ define(['app', 'livesocket'], function (app) {
 				$(id + " #lastupdate").html(item.LastUpdate);
 			}
 
-			var searchText = GenerateLiveSearchTextL(item, bigtext);
 			$(id).find('#name').attr('data-search', searchText);
 			
 			if (!document.hidden) {
@@ -797,6 +810,7 @@ define(['app', 'livesocket'], function (app) {
 									|| (item.SubType.indexOf('DC106') == 0)
 									|| (item.SubType.indexOf('Confexx') == 0)
 									|| (item.SwitchType.indexOf("Venetian Blinds") == 0)
+									|| (item.SwitchType == "Blinds % + Stop")
 									|| (item.SwitchType == "Blinds + Stop")
 								) {
 									xhtm += '\t    <table id="itemtabletrippleicon" border="0" cellpadding="0" cellspacing="0">\n';
@@ -1114,6 +1128,10 @@ define(['app', 'livesocket'], function (app) {
 								bAddTimer = false;
 								xhtm += '\t      <td id="img"><img src="images/Fan48_On.png" height="48" width="48" class="lcursor" onclick="ShowLucciPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + window.myglobals.ismobile + ');"></td>\n';
 							}
+							else if (item.SubType.indexOf("Falmec") == 0) {
+								bAddTimer = false;
+								xhtm += '\t      <td id="img"><img src="images/Fan48_On.png" height="48" width="48" class="lcursor" onclick="ShowFalmecPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + window.myglobals.ismobile + ');"></td>\n';
+							}
 							else {
 								if (
 									(item.Status == 'On') ||
@@ -1161,7 +1179,7 @@ define(['app', 'livesocket'], function (app) {
 							else if (item.SwitchType == "Blinds Percentage") {
 								xhtm += '<br><div style="margin-left:108px; margin-top:7px;" class="dimslider dimsmall" id="slider" data-idx="' + item.idx + '" data-type="blinds" data-maxlevel="' + item.MaxDimLevel + '" data-isprotected="' + item.Protected + '" data-svalue="' + item.LevelInt + '"></div>';
 							}
-							else if (item.SwitchType == "Blinds + Stop") {
+							else if (item.SwitchType == "Blinds % + Stop") {
 								xhtm += '<br><div style="margin-left:132px; margin-top:12px;" class="dimslider dimsmall3" id="slider" data-idx="' + item.idx + '" data-type="blinds" data-maxlevel="' + item.MaxDimLevel + '" data-isprotected="' + item.Protected + '" data-svalue="' + item.LevelInt + '"></div>';
 							}
 							else if (item.SwitchType == "Selector") {

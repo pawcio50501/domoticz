@@ -8,7 +8,7 @@ cache:
   - apt
 
 sources:
-  - jammy
+  - noble
 
 # What to install before the build
 before_install:
@@ -24,7 +24,7 @@ matrix:
   include:
   # Linux x86_64
   - os: linux
-    dist: jammy
+    dist: noble
     sudo: required
     compiler: gcc
     env:
@@ -50,6 +50,7 @@ matrix:
           - python3-dev
           - liblua5.3-dev
           - uthash-dev
+          - libmosquitto-dev
     script:
       - (cd open-zwave-read-only; make)
 

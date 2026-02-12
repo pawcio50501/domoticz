@@ -2,10 +2,10 @@
 #ifndef ASYNCSERIAL_H
 #define ASYNCSERIAL_H
 
-#include <stddef.h> // for size_t
+#include <stddef.h>
 #include "../main/Noncopyable.h"
-#include <boost/asio/serial_port_base.hpp>	      // for serial_port_base
-#include <boost/exception/diagnostic_information.hpp> //for exception printing
+#include <boost/asio/serial_port_base.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 namespace boost
 {
 	namespace system
@@ -123,27 +123,27 @@ class AsyncSerial : private domoticz::noncopyable
 
 	/**
 	 * Callback called to start an asynchronous read operation.
-	 * This callback is called by the io_service in the spawned thread.
+	 * This callback is called by the io_context in the spawned thread.
 	 */
 	void doRead();
 
 	/**
 	 * Callback called at the end of the asynchronous operation.
-	 * This callback is called by the io_service in the spawned thread.
+	 * This callback is called by the io_context in the spawned thread.
 	 */
 	void readEnd(const boost::system::error_code &error, size_t bytes_transferred);
 
 	/**
 	 * Callback called to start an asynchronous write operation.
 	 * If it is already in progress, does nothing.
-	 * This callback is called by the io_service in the spawned thread.
+	 * This callback is called by the io_context in the spawned thread.
 	 */
 	void doWrite();
 
 	/**
 	 * Callback called at the end of an asynchronuous write operation,
 	 * if there is more data to write, restarts a new write operation.
-	 * This callback is called by the io_service in the spawned thread.
+	 * This callback is called by the io_context in the spawned thread.
 	 */
 	void writeEnd(const boost::system::error_code &error);
 

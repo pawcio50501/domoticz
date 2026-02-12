@@ -26,8 +26,10 @@ class CNetatmo : public CDomoticzHardwareBase
                 NETYPE_HOMESDATA,
                 NETYPE_STATUS,
 
+                NETYPE_SCENARIOS,
                 NETYPE_EVENTS,
                 NETYPE_SETSTATE,
+                NETYPE_ROOMMEASURE,
                 NETYPE_SETROOMTHERMPOINT,
                 NETYPE_SETTHERMMODE,
                 NETYPE_SETPERSONSAWAY,
@@ -46,7 +48,8 @@ class CNetatmo : public CDomoticzHardwareBase
         bool WriteToHardware(const char *, unsigned char) override;
         void SetSetpoint(unsigned long ID, const float temp);
         bool SetProgramState(const int uid, const int newState);
-        void Get_Respons_API(const m_eNetatmoType& NType, std::string& sResult, std::string& home_id, bool& bRet, Json::Value& root, std::string extra_data);
+	bool SetDimmerState(const int uid, const int newState);
+        void Get_Response_API(const m_eNetatmoType& NType, std::string& sResult, std::string& home_id, bool& bRet, Json::Value& root, std::string extra_data);
 
       private:
         struct m_tNetatmoDevice
@@ -72,17 +75,15 @@ class CNetatmo : public CDomoticzHardwareBase
 	std::string m_password;
 	std::string m_accessToken;
 	std::string m_refreshToken;
+	std::string m_netatmo_api_uri;
 	std::vector<m_tNetatmoDevice> m_known_thermotats;
 	std::map<int, std::string> m_thermostatModuleID;
 	bool m_bPollThermostat;
 	bool m_bPollWeatherData;
 	bool m_bPollHomecoachData;
 	bool m_bPollGetEvents;
-	bool m_bPollHomeData;
-	bool m_bPollHomesData;
 	bool m_bPollHomeStatus;
-	bool m_bPollHome;
-	bool m_bFirstTimeThermostat;
+	bool m_bFirstTimeHomeStatus;
 	bool m_bFirstTimeWeatherData;
 	bool m_bForceSetpointUpdate;
 	time_t m_tSetpointUpdateTime;
@@ -92,7 +93,7 @@ class CNetatmo : public CDomoticzHardwareBase
 	time_t m_nextRefreshTs;
 
 	std::map<int, float> m_RainOffset;
-	std::map<int, int> m_OldRainCounter;
+	std::map<int, float> m_OldRainCounter;
 
 	std::map<int, bool> m_bNetatmoRefreshed;
 
@@ -109,10 +110,13 @@ class CNetatmo : public CDomoticzHardwareBase
 	void GetHomeStatusDetails();
 	void Get_Picture();
 	void Get_Measure(std::string gateway, std::string module_id, std::string scale, std::string type);
-	void Get_Events(std::string home_id, std::string device_types, std::string event_id, std::string person_id, std::string device_id, std::string module_id, bool offset, bool size, std::string locale);
+	void Get_RoomMeasure(std::string& home_id, std::string& room_id, std::string& device_id, std::string& home_data);
+	void Get_Events(std::string home_id, std::string device_types, std::string event_id, std::string person_id, std::string device_id, std::string module_id, int offset, int size, std::string locale);
+	void Get_Scenarios(std::string& home_id, Json::Value& scenarios);
 
-	bool ParseStationData(const std::string &sResult, bool bIsThermostat);
-	bool ParseHomeStatus(const std::string &sResult, Json::Value& root, std::string& home_id);
+	bool ParseScenarios(const std::string& sResult, Json::Value& scenarios, std::string& home_id);
+	bool ParseStationData(const std::string& sResult, bool bIsThermostat);
+	bool ParseHomeStatus(const std::string& sResult, Json::Value& root, std::string& home_id);
 	bool ParseEvents(const std::string& sResult, Json::Value& root );
 
 	bool SetAway(int idx, bool bIsAway);
@@ -121,16 +125,17 @@ class CNetatmo : public CDomoticzHardwareBase
 	bool Login();
 	bool RefreshToken(bool bForce = false);
 	bool LoadRefreshToken();
-	void StoreRefreshToken();
-	void StoreRequestTokenFlag(bool bFlag = false);
+	void StoreRefreshToken(bool bFlag = false);
+
 	bool m_isLogged;
+	bool m_ErrorFlag;
 	bool m_bForceLogin;
+	bool find_scopes();
 
 	m_eNetatmoType m_weatherType;
 	m_eNetatmoType m_homecoachType;
 	m_eNetatmoType m_energyType;
 
-	int m_ActHome;
 	std::vector<std::string> m_homeid;
 	std::string m_Home_ID;
 	std::string m_Home_name;
@@ -144,6 +149,8 @@ class CNetatmo : public CDomoticzHardwareBase
 	std::map<std::string, std::string> m_Room_Temp;
 	std::map<std::string, std::string> m_RoomIDs;
 	std::map<std::string, std::string> m_Module_category;
+	std::map<std::string, std::string> m_Device_types;
+	std::map<std::string, std::string> m_DeviceBridge;
 	std::map<std::string, std::string> m_ModuleNames;
 	std::map<int, std::string> m_ScheduleHome;
 	std::map<std::string, int> m_Module_Bat_Level;
@@ -152,11 +159,16 @@ class CNetatmo : public CDomoticzHardwareBase
 	std::map<uint64_t, int> m_ModuleIDs;
 	std::map<uint8_t, std::string> m_DeviceModuleID;
 	std::map<uint8_t, std::string> m_LightDeviceID;
+	std::map<uint8_t, std::string> m_PowerDeviceID;
 	std::map<std::string, std::string> m_DeviceHomeID;
 	std::map<std::string, std::string> m_PersonsNames;
-	std::map<int, std::string> m_ScheduleNames;
-	std::map<int, std::string> m_ScheduleIDs;
-	int m_selectedScheduleID;
+	std::map<std::string, std::map<int, std::string>> m_ScheduleID_s;
+	std::map<std::string, std::string> m_Schedule_Names;
+	std::map<std::string, int> m_selectedScheduleID;
+	std::map<int, std::string> m_ScheduleHomes;
+	std::map<std::string, int> m_selected_Schedule;
+	std::map<std::string, std::map<int, std::string>> m_Scenarios;
+	std::map<std::string, std::string> m_selectedScenario;
 
 	std::map<int, CBaroForecastCalculator> m_forecast_calculators;
 

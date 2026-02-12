@@ -43,11 +43,11 @@ namespace http {
 				std::string host_local_endpoint_port_;
 				std::string host_last_request_uri_;
 			};
-			/// Construct a connection with the given io_service.
-			explicit connection(boost::asio::io_service& io_service,
+			/// Construct a connection with the given io_context.
+			explicit connection(boost::asio::io_context& io_context,
 				connection_manager& manager, request_handler& handler, int timeout);
 #ifdef WWW_ENABLE_SSL
-			explicit connection(boost::asio::io_service& io_service,
+			explicit connection(boost::asio::io_context& io_context,
 				connection_manager& manager, request_handler& handler, int timeout, boost::asio::ssl::context& context);
 #endif
 			~connection() = default;
@@ -127,12 +127,12 @@ namespace http {
 			int read_timeout_;
 
 			/// Read timeout timer
-			boost::asio::deadline_timer read_timer_;
+			boost::asio::steady_timer read_timer_;
 
 			/// Abandoned connection timeout (in seconds)
 			long default_abandoned_timeout_;
 			/// Abandoned timeout timer
-			boost::asio::deadline_timer abandoned_timer_;
+			boost::asio::steady_timer abandoned_timer_;
 
 			/// The manager for this connection.
 			connection_manager& connection_manager_;
