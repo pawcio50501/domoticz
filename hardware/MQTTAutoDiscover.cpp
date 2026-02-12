@@ -2171,68 +2171,14 @@ bool MQTTAutoDiscover::GuessSensorTypeValue(_tMQTTASensor* pSensor, uint8_t& dev
 
 		bool bTotalIncreasing = (pSensor->state_class == "total_increasing");
 
-		// Log(LOG_ERROR, "[PK] dkWh %lf", dkWh);
-
-		if (dkWh < -1000000)
-		{
-			//Way too negative, probably a bug in the sensor
-			//return false;
-		}
+		double dkWh = atof(pSensor->last_value.c_str());
 
 		if (bTotalIncreasing)
 		{
-			double dPrevkWh = pSensor->prev_value;
-
-			// Log(LOG_ERROR, "[PK] pSensor->prev_value %lf", pSensor->prev_value);
-			
-			if (!pSensor->last_received != 0)
-			{
-				// Log(LOG_ERROR, "[PK] last_received time");
-				
-				auto result = m_sql.safe_query("SELECT sValue,StrParam1 FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q') AND (Type==%d) AND (Subtype==%d)",
-					m_HwdID, pSensor->unique_id.c_str(), devType, subType);
-				if (!result.empty()) {
-					std::vector<std::string> strarray;
-					StringSplit(result[0][0], ";", strarray);
-					if (strarray.size() == 2)
-						dPrevkWh = atof(strarray[1].c_str());
-
-					// For total_increasing sensors, the epoch is stored in StrParam1
-					if (!result[0][1].empty())
-						pSensor->epoch = atof(result[0][1].c_str());
-				}
-			}
-
-			// GuessSensorTypeValue() is sometimes invoked with empty sValue to do
-			// only what its name implies, nothing more. Do not bump the epoch when
-			// when that happens; just use the previous value.
-			if (dkWh == 0)
-			{
-				// Log(LOG_ERROR, "[PK] use prev value");
-				dkWh = dPrevkWh;
-			}
-			else if (pSensor->state_class == "total_increasing")
-			{
-				// If the value resulting from this reading would be lower than the
-				// previous value, the sensor must have reset. Bump its epoch, which
-				// we store in StrParam1.
-				
-				// Log(LOG_ERROR, "[PK] dkWh(%lf)+epoch(%lf)=%lf dPrevkWh(%lf)", dkWh, pSensor->epoch, dkWh + pSensor->epoch, dPrevkWh);
-				
-				// if (dkWh + pSensor->epoch < dPrevkWh)
-				// {
-					// pSensor->epoch = dPrevkWh;
-					// m_sql.safe_query("UPDATE DeviceStatus SET StrParam1='%f' WHERE (HardwareID==%d) AND (DeviceID=='%q') AND (Type==%d) AND (Subtype==%d)",
-							 // pSensor->epoch, m_HwdID, pSensor->unique_id.c_str(), devType, subType);
-				// }
-
-				// dkWh += pSensor->epoch;
-			}
+			dkWh = m_kwh_counter_helper[pSensor->unique_id].CheckTotalCounter(this, pSensor->unique_id, 1, dkWh);
 		}
 		pSensor->prev_value = dkWh;
-
-		// Log(LOG_ERROR, "[PK] resulting dkWh %lf", dkWh);
-
+		double dUsage = 0;
 		_tMQTTASensor* pWattSensor = get_auto_discovery_sensor_WATT_unit(pSensor);
 		if (pWattSensor && pWattSensor->last_received != 0)
 		{

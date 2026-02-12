@@ -496,7 +496,7 @@ namespace Plugins {
 			SSL_set_tlsext_host_name(m_TLSSock->native_handle(), m_IP.c_str());			// Enable SNI
 
 			m_TLSSock->set_verify_mode(boost::asio::ssl::verify_none);
-			m_TLSSock->set_verify_callback(boost::asio::ssl::host_name_verification(m_IP));
+			m_TLSSock->set_verify_callback(boost::asio::ssl::rfc2818_verification(m_IP));
 			// m_TLSSock->set_verify_callback([this](auto v, auto &c){ VerifyCertificate(v, c);});
 			try
 			{
