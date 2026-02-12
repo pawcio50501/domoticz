@@ -496,7 +496,7 @@ void CAnnaThermostat::GetMeterDetails()
 		{
 			sname = GetElementChildValue(pElem, "type");
 			//tmpstr = GetPeriodMeasurement(pElem);
-			//Log (LOG_NORM,"%s : %s ", sname.c_str(), tmpstr.c_str());
+			//Log (LOG_NORM,"%s : %s", sname.c_str(), tmpstr.c_str());
 			if (sname == "temperature")
 			{
 				tmpstr = GetPeriodMeasurement(pElem);
@@ -521,7 +521,7 @@ void CAnnaThermostat::GetMeterDetails()
 				if (!tmpstr.empty())
 				{
 					float temperature = (float)atof(tmpstr.c_str());
-					SendSetPointSensor(0, 0, 0, sAnnaThermostat, 1, temperature, sname);
+					SendSetPointSensor(0, 0, 0, sAnnaThermostat, 1, 255, temperature, sname);
 				}
 			}
 			else if (sname == "intended_boiler_temperature")

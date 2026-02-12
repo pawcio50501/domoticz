@@ -54,3 +54,6 @@ sqlite3_config.h
 /domoticz.iml
 __pycache__
 /.vs/
+/tools/token.txt
+/tools/tx.exe
+_codeql_detected_source_root

@@ -1,19 +1,9 @@
 #pragma once
 
 #include "RFLinkBase.h"
-#include "../main/mosquitto_helper.h"
+#include "../main/mqtt_helper.h"
 
-// #ifdef BUILTIN_MQTT
-// #include "../MQTT/mosquittopp.h"
-// #else
-// #ifdef WIN32
-// #include "../MQTT/mosquittopp.h"
-// #else
-// #include <mosquittopp.h>
-// #endif
-// #endif
-
-class CRFLinkMQTT: public CRFLinkBase, mosqdz::mosquittodz
+class CRFLinkMQTT: public CRFLinkBase, mdz::mqttdz
 {
 public:
 	CRFLinkMQTT(const int ID, const std::string &IPAddress, const unsigned short usIPPort , const std::string &Username, const std::string &Password , const std::string &CAfilenameExtra, const int TLS_Version, const int PublishScheme, const bool Multidomonodesync);
@@ -46,7 +36,7 @@ protected:
 	boost::signals2::connection m_sDeviceReceivedConnection;
 	boost::signals2::connection m_sSwitchSceneConnection;
 	void selectNextIPAdress( void );
-	virtual bool WriteInt(const std::string &sendString); // override;
+	bool WriteInt(const std::string &sendString) override;
 	void Do_Work();
 	virtual void SendHeartbeat();
 	void StopMQTT();

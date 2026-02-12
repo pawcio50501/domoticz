@@ -75,7 +75,6 @@ class CDomoticzHardwareBase : public StoppableTask
 
 	// Heartbeat thread for classes that can not provide this themselves
 	void StartHeartbeatThread();
-	void StartHeartbeatThread(const char *ThreadName);
 	void StopHeartbeatThread();
 
 	// Sensor Helpers
@@ -86,10 +85,10 @@ class CDomoticzHardwareBase : public StoppableTask
 	void SendTempHumBaroSensor(int NodeID, int BatteryLevel, float temperature, int humidity, float pressure, int forecast, const std::string &defaultname, int RssiLevel = 12);
 	void SendTempHumBaroSensorFloat(int NodeID, int BatteryLevel, float temperature, int humidity, float pressure, uint8_t forecast, const std::string &defaultname, int RssiLevel = 12);
 	void SendTempBaroSensor(uint8_t NodeID, int BatteryLevel, float temperature, float pressure, const std::string &defaultname);
-	void SendSetPointSensor(const uint8_t ID1, const uint8_t ID2, const uint8_t ID3, const uint8_t ID4, const uint8_t Unit, const float Value, const std::string &defaultname);
+	void SendSetPointSensor(const uint8_t ID1, const uint8_t ID2, const uint8_t ID3, const uint8_t ID4, const uint8_t Unit, const int BatteryLevel, const float Value, const std::string &defaultname);
 	void SendKwhMeterOldWay(int NodeID, int ChildID, int BatteryLevel, double musage, double mtotal, const std::string &defaultname, int RssiLevel = 12);
 	void SendKwhMeter(int NodeID, int ChildID, int BatteryLevel, double musage, double mtotal, const std::string &defaultname, int RssiLevel = 12);
-	void SendWattMeter(uint8_t NodeID, uint8_t ChildID, int BatteryLevel, float musage, const std::string &defaultname, int RssiLevel = 12);
+	void SendWattMeter(int NodeID, uint8_t ChildID, int BatteryLevel, float musage, const std::string &defaultname, int RssiLevel = 12);
 	double GetKwhMeter(int NodeID, int ChildID, bool &bExists);
 	void SendLuxSensor(uint8_t NodeID, uint8_t ChildID, uint8_t BatteryLevel, float Lux, const std::string &defaultname);
 	void SendAirQualitySensor(uint8_t NodeID, uint8_t ChildID, int BatteryLevel, int AirQuality, const std::string &defaultname);
@@ -137,6 +136,7 @@ class CDomoticzHardwareBase : public StoppableTask
 	bool m_bIsStarted = { false };
 
       private:
+	void StartHeartbeatThread(const std::string& szThreadName);
 	void Do_Heartbeat_Work();
 
 	volatile bool m_stopHeartbeatrequested = { false };

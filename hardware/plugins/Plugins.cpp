@@ -2450,6 +2450,35 @@ namespace Plugins
 		MessagePlugin(new onCommandCallback(DeviceID, Unit, command, level));
 	}
 
+	void CPlugin::SetPendingUser(const std::string& user)
+	{
+		if (!user.empty())
+		{
+			std::lock_guard<std::mutex> lock(m_pending_user_mutex);
+			m_pending_user = user;
+			m_pending_user_time = time(nullptr);
+		}
+	}
+
+	std::string CPlugin::ConsumePendingUser()
+	{
+		std::lock_guard<std::mutex> lock(m_pending_user_mutex);
+		if (!m_pending_user.empty())
+		{
+			if (time(nullptr) - m_pending_user_time <= PENDING_USER_TIMEOUT_SECONDS)
+			{
+				std::string user = std::move(m_pending_user);
+				m_pending_user.clear();
+				m_pending_user_time = 0;
+				return user;
+			}
+			// Stale entry, discard
+			m_pending_user.clear();
+			m_pending_user_time = 0;
+		}
+		return "";
+	}
+
 	bool CPlugin::HasNodeFailed(const std::string DeviceID, const int Unit)
 	{
 		if (!m_DeviceDict)
@@ -2586,11 +2615,7 @@ namespace Plugins
 	std::string CPluginNotifier::GetIconFile(const std::string &ExtraData)
 	{
 		std::string szImageFile;
-#ifdef WIN32
-		std::string szImageFolder = szWWWFolder + "\\images\\";
-#else
 		std::string szImageFolder = szWWWFolder + "/images/";
-#endif
 
 		std::string szStatus = "Off";
 		int posStatus = (int)ExtraData.find("|Status=");
@@ -2667,6 +2692,7 @@ namespace Plugins
 					szTypeImage = "Contact48";
 					break;
 				case STYPE_Blinds:
+				case STYPE_BlindsWithStop:
 				case STYPE_BlindsPercentage:
 				case STYPE_BlindsPercentageWithStop:
 				case STYPE_VenetianBlindsUS:

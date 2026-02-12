@@ -21,23 +21,23 @@
 #if BOOST_VERSION >= 107000
 #define GET_IO_SERVICE(s) ((boost::asio::io_context&)(s).get_executor().context())
 #else
-#define GET_IO_SERVICE(s) ((s).get_io_service())
+#define GET_IO_SERVICE(s) ((s).get_io_context())
 #endif
 
 class pinger
 	: private domoticz::noncopyable
 {
 public:
-  pinger(boost::asio::io_service &io_service, const char *destination, const int iPingTimeoutms)
+  pinger(boost::asio::io_context &io_context, const char *destination, const int iPingTimeoutms)
 	  : num_replies_(0)
 	  , m_PingState(false)
-	  , resolver_(io_service)
-	  , socket_(io_service, boost::asio::ip::icmp::v4())
-	  , timer_(io_service)
+	  , resolver_(io_context)
+	  , socket_(io_context, boost::asio::ip::icmp::v4())
+	  , timer_(io_context)
 	  , sequence_number_(0)
   {
-	  boost::asio::ip::icmp::resolver::query query(boost::asio::ip::icmp::v4(), destination, "");
-	  destination_ = *resolver_.resolve(query);
+	  auto endpoints = resolver_.resolve(boost::asio::ip::icmp::v4(), destination, "");
+	  destination_ = endpoints.begin()->endpoint();
 
 	  num_tries_ = 1;
 	  PingTimeoutms_ = iPingTimeoutms;
@@ -67,11 +67,11 @@ private:
 		os << echo_request << body;
 
 		// Send the request.
-		time_sent_ = boost::posix_time::microsec_clock::universal_time();
+		time_sent_ = std::chrono::steady_clock::now();
 		socket_.send_to(request_buffer.data(), destination_);
 
 		num_replies_ = 0;
-		timer_.expires_at(time_sent_ + boost::posix_time::milliseconds(PingTimeoutms_));
+		timer_.expires_at(time_sent_ + std::chrono::milliseconds(PingTimeoutms_));
 		timer_.async_wait([this](auto err) { handle_timeout(err); });
 	}
 
@@ -82,7 +82,7 @@ private:
 			if (num_replies_ == 0)
 			{
 				m_PingState = false;
-				timer_.expires_at(time_sent_ + boost::posix_time::milliseconds(PingTimeoutms_));
+				timer_.expires_at(time_sent_ + std::chrono::milliseconds(PingTimeoutms_));
 				num_tries_++;
 				if (num_tries_ > 4)
 				{
@@ -149,9 +149,9 @@ private:
 	boost::asio::ip::icmp::resolver resolver_;
 	boost::asio::ip::icmp::endpoint destination_;
 	boost::asio::ip::icmp::socket socket_;
-	boost::asio::deadline_timer timer_;
+	boost::asio::steady_timer timer_;
 	unsigned short sequence_number_;
-	boost::posix_time::ptime time_sent_;
+	std::chrono::time_point<std::chrono::steady_clock> time_sent_;
 	boost::asio::streambuf reply_buffer_;
 };
 
@@ -332,11 +332,11 @@ void CPinger::ReloadNodes()
 void CPinger::Do_Ping_Worker(const PingNode &Node)
 {
 	bool bPingOK = false;
-	boost::asio::io_service io_service;
+	boost::asio::io_context io_context;
 	try
 	{
-		pinger p(io_service, Node.IP.c_str(), m_iPingTimeoutms);
-		io_service.run();
+		pinger p(io_context, Node.IP.c_str(), m_iPingTimeoutms);
+		io_context.run();
 		if (p.m_PingState == true)
 		{
 			bPingOK = true;

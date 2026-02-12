@@ -197,7 +197,8 @@ define(['app', 'livesocket'], function (app) {
 					(item.SubType == "Relay") ||
 					((typeof item.SubType != 'undefined') && (item.SubType.indexOf('Itho') == 0)) ||
 					((typeof item.SubType != 'undefined') && (item.SubType.indexOf('Lucci') == 0)) ||
-					((typeof item.SubType != 'undefined') && (item.SubType.indexOf('Westinghouse') == 0))
+					((typeof item.SubType != 'undefined') && (item.SubType.indexOf('Westinghouse') == 0)) ||
+					((typeof item.SubType != 'undefined') && (item.SubType.indexOf('Falmec') == 0))
 				)
 			) {
 				id = "#light_" + item.idx;
@@ -471,6 +472,39 @@ define(['app', 'livesocket'], function (app) {
 								'<button class="' + class_4 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'off\',' + item.Protected + ');">' + $.t("Off") + '</button> ' +
 								'<button class="' + class_light + '" type="button" onclick="SwitchLight(' + item.idx + ',\'light\',' + item.Protected + ');">' + $.t("Light") + '</button>';
 						}
+						else if (item.SubType.indexOf("Falmec") == 0) {
+							var class_light_on = "btn btn-mini";
+							var class_light_off = "btn btn-mini";
+							var class_1 = "btn btn-mini";
+							var class_2 = "btn btn-mini";
+							var class_3 = "btn btn-mini";
+							var class_4 = "btn btn-mini";
+							if (item.Status == "light on") {
+								class_light_on += " btn-info";
+							}
+							else if (item.Status == "light off") {
+								class_light_off += " btn-info";
+							}
+							else if (item.Status == "speed 1") {
+								class_1 += " btn-info";
+							}
+							else if (item.Status == "speed 2") {
+								class_2 += " btn-info";
+							}
+							else if (item.Status == "speed 3") {
+								class_3 += " btn-info";
+							}
+							else if (item.Status == "speed 4") {
+								class_4 += " btn-info";
+							}
+							status =
+								'<button class="' + class_light_on + '" type="button" onclick="SwitchLight(' + item.idx + ',\'light on\',' + item.Protected + ');">' + $.t("On") + '</button> ' +
+								'<button class="' + class_light_off + '" type="button" onclick="SwitchLight(' + item.idx + ',\'light off\',' + item.Protected + ');">' + $.t("Off") + '</button> ' +
+								'<button class="' + class_1 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'speed 1\',' + item.Protected + ');">' + $.t("1") + '</button> ' +
+								'<button class="' + class_2 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'speed 2\',' + item.Protected + ');">' + $.t("2") + '</button> ' +
+								'<button class="' + class_3 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'speed 3\',' + item.Protected + ');">' + $.t("3") + '</button> ' +
+								'<button class="' + class_4 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'speed 4\',' + item.Protected + ');">' + $.t("4") + '</button>';
+						}
 						else {
 							if (
 								(item.Status == 'On') ||
@@ -729,6 +763,7 @@ define(['app', 'livesocket'], function (app) {
 						else if (
 							(item.SubType.indexOf("Itho") == 0) ||
 							(item.SubType.indexOf("Lucci") == 0) ||
+							(item.SubType.indexOf("Falmec") == 0) ||
 							(item.SubType.indexOf("Westinghouse") == 0)
 						) {
 							img = $(id + " #img").html();
@@ -960,7 +995,17 @@ define(['app', 'livesocket'], function (app) {
 					if (($scope.config.DashboardType == 2) || (window.myglobals.ismobile == true)) {
 						var status = "";
 						var bHaveBefore = false;
+						if (typeof item.SetPoint != 'undefined') {
+							var step = item.step || 0.5;
+							var min = item.min || -200;
+							var max = item.max || 200;
+							status += '<button class="btn btn-mini btn-info" type="button" onclick="ShowSetpointPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + item.SetPoint + ',true, ' + step + ', ' + min + ', ' + max +');">' + item.SetPoint + '&deg; ' + $scope.config.TempSign + '</button> ';
+							bHaveBefore = true;
+						}
 						if (typeof item.Temp != 'undefined') {
+							if (bHaveBefore) {
+								status += ', ';
+							}
 							if ($rootScope.DisplayTrend(item.trend))
 							{
 								status += '<img src="images/arrow_' + $rootScope.TrendState(item.trend) + '.png" width="14" height="15">';
@@ -1009,11 +1054,30 @@ define(['app', 'livesocket'], function (app) {
 						if ($(id + " #img").html() != img) {
 							$(id + " #img").html(img);
 						}
+						var img2 = '';
+						if (typeof item.SetPoint != 'undefined') {
+							var step = item.step || 0.5;
+							var min = item.min || -200;
+							var max = item.max || 200;
+							img2 = '<img src="images/override.png" class="lcursor" onclick="ShowSetpointPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + item.SetPoint + ', false, ' + step + ', ' + min + ', ' + max + ');" height="36" width="40" title="Adjust Setpoint">';
+						}
+						if ($(id + " #img2").length > 0) {
+							if ($(id + " #img2").html() != img2) {
+								$(id + " #img2").html(img2);
+							}
+						}
 						var status = "";
 						var bigtext = "";
 						var bHaveBefore = false;
+						if (typeof item.SetPoint != 'undefined') {
+							bigtext = item.SetPoint + '\u00B0 ' + $scope.config.TempSign;
+							bHaveBefore = true;
+						}
 						if (typeof item.Temp != 'undefined') {
-							bigtext = item.Temp + '\u00B0 ' + $scope.config.TempSign;
+							if (bHaveBefore) {
+								bigtext += ' / ';
+							}
+							bigtext += item.Temp + '\u00B0 ' + $scope.config.TempSign;
 						}
 						if (typeof item.Chill != 'undefined') {
 							if (bigtext != "") {
@@ -1788,6 +1852,7 @@ define(['app', 'livesocket'], function (app) {
 									((typeof item.SubType != 'undefined') && (item.SubType.indexOf('Itho') == 0)) ||
 									((typeof item.SubType != 'undefined') && (item.SubType.indexOf('Lucci') == 0)) ||
 									((typeof item.SubType != 'undefined') && (item.SubType.indexOf('Westinghouse') == 0)) ||
+									((typeof item.SubType != 'undefined') && (item.SubType.indexOf('Falmec') == 0)) ||
 									((item.Type.indexOf('Value') == 0) && (typeof item.SwitchType != 'undefined'))
 								)
 							) {
@@ -2067,6 +2132,39 @@ define(['app', 'livesocket'], function (app) {
 											'<button class="' + class_3 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'min\',' + item.Protected + ');">' + $.t("min") + '</button> ' +
 											'<button class="' + class_4 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'light\',' + item.Protected + ');">' + $.t("light") + '</button>';
 									}
+									else if (item.SubType.indexOf("Falmec") == 0) {
+										var class_light_on = "btn btn-mini";
+										var class_light_off = "btn btn-mini";
+										var class_1 = "btn btn-mini";
+										var class_2 = "btn btn-mini";
+										var class_3 = "btn btn-mini";
+										var class_4 = "btn btn-mini";
+										if (item.Status == "light on") {
+											class_light_on += " btn-info";
+										}
+										else if (item.Status == "light off") {
+											class_light_off += " btn-info";
+										}
+										else if (item.Status == "speed 1") {
+											class_1 += " btn-info";
+										}
+										else if (item.Status == "speed 2") {
+											class_2 += " btn-info";
+										}
+										else if (item.Status == "speed 3") {
+											class_3 += " btn-info";
+										}
+										else if (item.Status == "speed 4") {
+											class_4 += " btn-info";
+										}
+										status =
+											'<button class="' + class_light_on + '" type="button" onclick="SwitchLight(' + item.idx + ',\'light on\',' + item.Protected + ');">' + $.t("On") + '</button> ' +
+											'<button class="' + class_light_off + '" type="button" onclick="SwitchLight(' + item.idx + ',\'light off\',' + item.Protected + ');">' + $.t("Off") + '</button> ' +
+											'<button class="' + class_1 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'speed 1\',' + item.Protected + ');">' + $.t("1") + '</button> ' +
+											'<button class="' + class_2 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'speed 2\',' + item.Protected + ');">' + $.t("2") + '</button> ' +
+											'<button class="' + class_3 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'speed 3\',' + item.Protected + ');">' + $.t("3") + '</button> ' +
+											'<button class="' + class_4 + '" type="button" onclick="SwitchLight(' + item.idx + ',\'speed 4\',' + item.Protected + ');">' + $.t("4") + '</button>';
+									}
 									else {
 										if (
 											(item.Status == 'On') ||
@@ -2109,7 +2207,7 @@ define(['app', 'livesocket'], function (app) {
 									}
 									else if (
 										(item.SwitchType == "Blinds Percentage")
-										|| (item.SwitchType == "Blinds + Stop")
+										|| (item.SwitchType == "Blinds % + Stop")
 									) {
 										xhtm += '<tr>';
 										xhtm += '<td colspan="2" style="border:0px solid red; padding-top:10px; padding-bottom:10px;">';
@@ -2169,6 +2267,7 @@ define(['app', 'livesocket'], function (app) {
 										|| (item.SwitchType == "Blinds")
 										|| (item.SwitchType == "Blinds Percentage")
 										|| (item.SwitchType == "Blinds + Stop")
+										|| (item.SwitchType == "Blinds % + Stop")
 										|| (item.SwitchType.indexOf("Venetian Blinds") == 0)
 										|| (item.SwitchType.indexOf("Media Player") == 0)
 									) {
@@ -2188,6 +2287,7 @@ define(['app', 'livesocket'], function (app) {
 											|| (item.SubType.indexOf('DC106') == 0)
 											|| (item.SubType.indexOf('Confexx') == 0)
 											|| (item.SwitchType.indexOf("Venetian Blinds") == 0)
+											|| (item.SwitchType == "Blinds % + Stop")
 											|| (item.SwitchType == "Blinds + Stop")
 										) {
 											xhtm += '\t    <table id="itemtablesmalltrippleicon" id="itemtablesmalltripleicon" border="0" cellpadding="0" cellspacing="0">\n';
@@ -2426,6 +2526,9 @@ define(['app', 'livesocket'], function (app) {
 									) {
 										xhtm += '\t      <td id="img" class="img img1"><img src="images/Fan48_On.png" height="40" width="40" class="lcursor" onclick="ShowLucciPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + window.myglobals.ismobile + ');"></td>\n';
 									}
+									else if (item.SubType.indexOf("Falmec") == 0) {
+										xhtm += '\t      <td id="img" class="img img1"><img src="images/Fan48_On.png" height="40" width="40" class="lcursor" onclick="ShowFalmecPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + window.myglobals.ismobile + ');"></td>\n';
+									}
 									else {
 										if (
 											(item.Status == 'On') ||
@@ -2471,7 +2574,7 @@ define(['app', 'livesocket'], function (app) {
 									else if (item.SwitchType == "Blinds Percentage") {
 										xhtm += '<td class="input"><div style="margin-left:94px; margin-top: 7px;" class="dimslider dimslidersmalldouble" id="light_' + item.idx + '_slider" data-idx="' + item.idx + '" data-type="blinds" data-maxlevel="' + item.MaxDimLevel + '" data-isprotected="' + item.Protected + '" data-svalue="' + item.LevelInt + '"></div></td>';
 									}
-									else if (item.SwitchType == "Blinds + Stop") {
+									else if (item.SwitchType == "Blinds % + Stop") {
 										xhtm += '<td class="input"><div style="margin-left:124px; margin-top: 7px;" class="dimslider dimslidersmalltripple" id="light_' + item.idx + '_slider" data-idx="' + item.idx + '" data-type="blinds" data-maxlevel="' + item.MaxDimLevel + '" data-isprotected="' + item.Protected + '" data-svalue="' + item.LevelInt + '"></div></td>';
 									}
 									else if (item.SwitchType == "Selector") {
@@ -2578,7 +2681,17 @@ define(['app', 'livesocket'], function (app) {
 											'\t      <td id="name" class="name item-name" data-idx="'+item.idx+'" data-desc="'+item.Description.replace('"',"'")+'">' + vname + '</td>\n';
 										var status = "";
 										var bHaveBefore = false;
+										if (typeof item.SetPoint != 'undefined') {
+											var step = item.step || 0.5;
+											var min = item.min || -200;
+											var max = item.max || 200;
+											status += '<button class="btn btn-mini btn-info" type="button" onclick="ShowSetpointPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + item.SetPoint + ',true, ' + step + ', ' + min + ', ' + max +');">' + item.SetPoint + '&deg; ' + $scope.config.TempSign + '</button> ';
+											bHaveBefore = true;
+										}
 										if (typeof item.Temp != 'undefined') {
+											if (bHaveBefore) {
+												status += ', ';
+											}
 											if ($rootScope.DisplayTrend(item.trend))
 											{
 												status += '<img src="images/arrow_' + $rootScope.TrendState(item.trend) + '.png" width="14" height="15">';
@@ -2617,12 +2730,24 @@ define(['app', 'livesocket'], function (app) {
 											xhtm = '\t<div class="span3 movable" id="temp_' + item.idx + '">\n';
 										}
 										xhtm += '\t  <div id="bstatus" class="item itemBlock ' + backgroundClass + '">\n';
-										xhtm += '\t    <table id="itemtablesmall" class="itemtablesmall" border="0" cellpadding="0" cellspacing="0">\n';
+										if (typeof item.SetPoint != 'undefined') {
+											xhtm += '\t    <table id="itemtablesmalldoubleicon" class="itemtablesmalldoubleicon" border="0" cellpadding="0" cellspacing="0">\n';
+										} else {
+											xhtm += '\t    <table id="itemtablesmall" class="itemtablesmall" border="0" cellpadding="0" cellspacing="0">\n';
+										}
 										xhtm += '\t    <tr>\n';
 										xhtm += '\t      <td id="name" class="name item-name" data-idx="'+item.idx+'" data-desc="'+item.Description.replace('"',"'")+'">' + item.Name + '</td>\n';
 										xhtm += '\t      <td id="bigtext" class="bigtext"><span>';
 										var bigtext = "";
+										var bHaveBefore = false;
+										if (typeof item.SetPoint != 'undefined') {
+											bigtext = item.SetPoint + '\u00B0 ' + $scope.config.TempSign;
+											bHaveBefore = true;
+										}
 										if (typeof item.Temp != 'undefined') {
+											if (bHaveBefore) {
+												bigtext += ' / ';
+											}
 											if ($rootScope.DisplayTrend(item.trend))
 											{
 												bigtext += '<img src="images/arrow_' + $rootScope.TrendState(item.trend) + '.png" width="14" height="15">';
@@ -2654,8 +2779,14 @@ define(['app', 'livesocket'], function (app) {
 												xhtm += GetTemp48Item(item.Chill);
 											}
 										}
-										xhtm += '" class="lcursor" height="40" width="40"></a></td>\n' +
-											'\t      <td id="status" class="status">';
+										xhtm += '" class="lcursor" height="40" width="40"></a></td>\n';
+										if (typeof item.SetPoint != 'undefined') {
+											var step = item.step || 0.5;
+											var min = item.min || -200;
+											var max = item.max || 200;
+											xhtm += '\t      <td id="img2" class="img2"><img src="images/override.png" class="lcursor" onclick="ShowSetpointPopup(event, ' + item.idx + ', ' + item.Protected + ', ' + item.SetPoint + ', false, ' + step + ', ' + min + ', ' + max + ');" height="36" width="40" title="Adjust Setpoint"></td>\n';
+										}
+										xhtm += '\t      <td id="status" class="status">';
 										var bHaveBefore = false;
 										if (typeof item.HumidityStatus != 'undefined') {
 											xhtm += $.t(item.HumidityStatus);
@@ -3633,7 +3764,7 @@ define(['app', 'livesocket'], function (app) {
 					'</h2><p><br>' +
 					$.t('If this is your first time here, please setup your') + ' <a href="javascript:SwitchLayout(\'Hardware\')" data-i18n="Hardware">Hardware</a>, ' +
 					$.t('and add some') + ' <a href="javascript:SwitchLayout(\'Devices\')" data-i18n="Devices">Devices</a>.</p><p>' +
-					$.t('Visit the Getting Started page at the') + ' <a href="https://www.domoticz.com/wiki/Getting_started">Domoticz Wiki</a>.</p>';
+					$.t('Visit the Getting Started page at the') + ' <a href="https://wiki.domoticz.com/Getting_started">Domoticz Wiki</a>.</p>';
 
 			}
 			else {

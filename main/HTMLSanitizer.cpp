@@ -1,121 +1,70 @@
 #include "stdafx.h"
 #include "HTMLSanitizer.h"
 #include "Helper.h"
+#include <regex>
+#include <algorithm>
 
-namespace
-{
-	// https://html5sec.org/
-	const auto szForbiddenContent = std::array<std::string, 28>{
-		"script",		 // noscript/onbeforescriptexecute
-		"style",		 //
-		"svg",			 //
-		"audio",		 //
-		"video",		 //
-		"head",			 //
-		"math",			 //
-		"template",		 //
-		"form",			 // formaction
-		"input",		 // oninput
-		"onerror",		 //
-		"frame",		 // iframe/noframe/frameset
-		"img",			 //
-		"marquee",		 //
-		"applet",		 //
-		"object",		 //
-		"embed",		 //
-		"math",			 //
-		"href",			 //
-		"onfocus",		 //
-		"onresize",		 //
-		"onactivate",		 //
-		"onscroll",		 //
-		"onwebkittransitionend", //
-		"onanimationstart",	 //
-		"ontoggle",		 //
-		"details",		 //
-		"table",		 //
-	};
-} // namespace
-
-//Maybe the way we search for 'safe' words is to safe, but better safe then sorry
+//Maybe the way we search for 'safe' words is to safe, but better safe than sorry
 std::string HTMLSanitizer::Sanitize(const std::string& szText)
 {
-	std::string ret;
-	std::string tmpstr(szText);
+	if (szText.empty())
+		return szText;
+	// https://html5sec.org/
+	const auto szForbiddenContent = std::array<std::string, 28>{
+		"a",
+		"span",
+		"script",
+		"style",
+		"svg",
+		"audio",
+		"video",
+		"head",
+		"math",
+		"template",
+		"form",
+		"input",
+		"frame",
+		"img",
+		"marquee",
+		"applet",
+		"object",
+		"embed",
+		"math",
+		"href",
+		"details",
+		"table",
+		"alert",
+		"iframe",
+		"meta",
+		"link",
+		"style",
+		"xss"
+	};
 
-	do
-	{
-		size_t pos_start = tmpstr.find('<');
-		if (pos_start == std::string::npos)
-		{
-			ret += tmpstr;
-			return ret;
-		}
+	std::string result = szText;
 
-		ret += tmpstr.substr(0, pos_start);
-		tmpstr = tmpstr.substr(pos_start);
+	// Remove each forbidden tag (both opening and closing tags)
+	for (const auto& tag : szForbiddenContent) {
+		// Create regex patterns for opening and closing tags
+		// Matches: <tag>, <tag attr="value">, </tag>
+		std::string pattern = "<\\s*/?\\s*" + std::string(tag) +
+			"(?:\\s+[^>]*)?>";
 
-		size_t pos_end = tmpstr.find('>');
-		if (pos_end == std::string::npos)
-		{
-			ret += tmpstr;
-			return ret;
-		}
+		std::regex tagRegex(pattern, std::regex::icase);
+		result = std::regex_replace(result, tagRegex, "");
+	}
+	if (result.empty())
+		return "Invalid!?";
 
-		std::string tag = tmpstr.substr(0, pos_end + 1);
-		std::string org_tag(tag);
-		tmpstr = tmpstr.substr(pos_end + 1);
+	// Also remove on* event handlers (onclick, onerror, etc.)
+	std::regex eventRegex("\\s+on\\w+\\s*=\\s*[\"'][^\"']*[\"']",
+		std::regex::icase);
+	result = std::regex_replace(result, eventRegex, "");
 
-		//See if we have a forbidden tag, if yes remove it
-		stdlower(tag);
+	// Remove javascript: protocol
+	std::regex jsProtocol("javascript:", std::regex::icase);
+	result = std::regex_replace(result, jsProtocol, "");
 
-		bool bHaveForbiddenTag = std::any_of(szForbiddenContent.begin(), szForbiddenContent.end(), [&](const std::string &content) { return tag.find(content) != std::string::npos; });
-		if (!bHaveForbiddenTag)
-			ret += org_tag;
-	} while (true);
-	//will never be reached
-	return ret;
+	return result;
 }
 
-std::wstring HTMLSanitizer::Sanitize(const std::wstring& szText)
-{
-	std::wstring ret;
-	std::wstring tmpstr(szText);
-
-	do
-	{
-		size_t pos_start = tmpstr.find('<');
-		if (pos_start == std::wstring::npos)
-		{
-			ret += tmpstr;
-			return ret;
-		}
-
-		ret += tmpstr.substr(0, pos_start);
-		tmpstr = tmpstr.substr(pos_start);
-
-		size_t pos_end = tmpstr.find('>');
-		if (pos_end == std::wstring::npos)
-		{
-			ret += tmpstr;
-			return ret;
-		}
-
-		std::wstring tag = tmpstr.substr(0, pos_end + 1);
-		std::wstring org_tag(tag);
-		tmpstr = tmpstr.substr(pos_end + 1);
-
-		//See if we have a forbidden tag, if yes remove it
-		stdlower(tag);
-
-		bool bHaveForbiddenTag = std::any_of(szForbiddenContent.begin(), szForbiddenContent.end(), [&](const std::string &content) {
-			std::wstring wsTmp(content.begin(), content.end());
-			return tag.find(wsTmp) != std::wstring::npos;
-		});
-
-		if (!bHaveForbiddenTag)
-			ret += org_tag;
-	} while (true);
-	//will never be reached
-	return ret;
-}

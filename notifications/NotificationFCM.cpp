@@ -6,7 +6,7 @@
 #include "../main/json_helper.h"
 
 #define JWT_DISABLE_BASE64
-#include "../jwt-cpp/jwt.h"
+#include <jwt-cpp/jwt.h>
 #include "../webserver/Base64.h"
 
 #define GAPI_FCM_POST_URL_BASE "https://fcm.googleapis.com/v1/projects/##PROJECTID##/messages:send"
@@ -58,29 +58,41 @@ CNotificationFCM::CNotificationFCM() : CNotificationBase(std::string("fcm"), OPT
 	m_slAccessToken_exp_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now()).time_since_epoch()).count();
 
 	SetupConfig(std::string("FCMEnabled"), &m_IsEnabled);
+	SetupConfig(std::string("FCMClientEmail"), m_FCMClientEmail);
+	SetupConfigBase64(std::string("FCMPrivateKey"), m_FCMPrivateKey);
+	SetupConfig(std::string("FCMProjectId"), m_FCMProjectId);
 }
 
 bool CNotificationFCM::IsConfigured()
 {
-	constexpr const char* FCMKeyB64 = R"pKey(eyAgInR5cGUiOiAic2VydmljZV9hY2NvdW50IiwgICAicHJvamVjdF9pZCI6ICJtb2pkb20tZDE3NjYiLCAgICJwcml2YXRlX2tleV9pZCI6ICIxMzUxMjZiYzBhZTdkZDNlNzEwN2RmMjM5N2JiNDNlYzA4Mjk5NDYzIiwgICAicHJpdmF0ZV9rZXkiOiAiLS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2QUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktZd2dnU2lBZ0VBQW9JQkFRQzdvY1RtUUMvaFpMejMKWmIremF2TnR4cGpRTjl5a3ZKZmlWRzZLRDR6M1BpWW9hQ3lTWkRVQmVRQW9ib1BlRW85cHR6NEZCY210N2xaNgp3bi93bFdrSEYwWXBQOW1Pdm5UeDBXQ0Z6YlYvTXhKNm8vSUZzem8zV0tZeVZib3JRZTVKQ0hQYnhkK3grQ25uClJpUlN6Y25Qd1l1eFhQZ2ovV1RZYlNYYnBnSTdrYnpUdGVUMmh1bzBtNHhGZzhORVJ0YzNGN1Z6Q3RnNVRzc2kKVGErMmk1NzFHa3MzWkRRVEVwNFN4L3JCWTZSU0JBanV3MnhCVnpISjZON1hORHRWNkJZRHhEOExsMmVmL1paNworUjJOeWl2aUV6TzY0RnErczZYcXRHMHhTTWgvUVF2b3BIbVkvTnNwYkx2MzJlQWZRbEU4c0dzdmdKQ05uTFFaClJ4cXU3cGR6QWdNQkFBRUNnZ0VBR0lIMzYzdm56OHR1TSt4UGlVK3lHSEp2eEZ2L2p4UkR6SFZySGlVTGdjSFYKanhmb1M5TnQ2YWJValVpK0l2NjVTbWdtWUN2bmgySG5CdEFxa09kRnhDalhQN2U0ellCMVd2UHJ1bk8vazFhUwo2OVR5aUZSbTNyMTVXOVZwdWVaa2laZmlpNHJCZmdmNW1vZndEUHdYTWtmeXNmU0FSREhWVkdybW5vQXZzTTJqClpKQ2p6OEp4b3BXZUVsYi84Y1FodkdEemFyNldVdUFEM0h5d0FUQ1NMVEwrL0RIalhyTEJialQ4MVRjNjNLaXkKQUxBMm9MQkVyYTAvTEtUYk1nUFA0QzEwbkhYb09qK01CeG5qczlUYTluWDR5NUY3dzdUSVhPQ3RCdS9jMFJxVgo2M0dSSXFUbzRhaWp0WUk5OUhGaWgweE1GTmFyY3FiOXN4d0UzMjFuaFFLQmdRRHdjaEtDdGIwL0JoY280aWRCCnkvbEI0ZjdWd01wbE1RUDQzaWV3R1hiVFExL09COGVkSkJGNWQyRWhPNEhrTnJqTGFLcE5qV0hRUkxTNTFmTlEKODFkbEdTbnA0QXdkTDBOdmJyak9CNVZUaWxUR0F2T2hGaEduckVCYmdYTTZmc0tBdGZXczZpY2VVaDNXaThoMgpMcFg2R3kwa21EYnR2WE1Dd2NZeHZTOWg5d0tCZ1FESHhSSFBiWU96ckpWSkVUS1VQT21ianJtd2N2SVpRc1NxCmhxN0ltdklZQkNKWXpmNFE3V3ByQ0I0SzNlRFV1dWZBMlc5QkxYQ01NVnJIREhLTW42dytJejFsY2trK0tnNWYKMm94U2tDUzQwb2VidVB1blB2VnJNbEMrTjBnV1FTWWdSZmo1VTRRR0dvYTBaRkdneEdXeGdGSGxCMWUrTjZFYwpsaWp6dWg1WFpRS0JnRENlb0dlVjRFS1NOTFNycGt5RHRrOUFKNHVKaEdPWjJiZkZGRGxqck1kalpFZ0JBcmdmCnh2ak16dk10V1VLUVhpV2pjR3htSGxWQ3oxaVVqckxid2R4TGpsSWdYOUsyNytma2Q3SVJqbnhxQ0dKUnpublEKUUptckZ3aHAwS2NQWXIwc0RoVjg4NVFKL3NhWFZWMndaZHRCQzR2T3k2eWZGbGFFWUZOR2NnSlpBb0dBVytBeAp3Y0Z2U2VvOHVsOFRjUVBXdUxsYWcyRktJUDRKTHhoRU9IU3lsUU1Kdk9mNFNsYTJrOFVtOC81NWtiem9LMVNWCkMxZlhwRkpxbXBNSjk4elR6Ynd0VjRQSlZiTEg2Nk82MTVuOW1aY1IwVGV4WFlqaUhFd0d3SVR5UFhIM0UrNjYKaEFpNTlvaXFuVHBxSkZOUEplU0xSWmNyN29ydEtSV1NmZzJDT05VQ2dZQWdjTnl6cHR3MzF6Qmh5bEx6RjVBeApSa1dwcUhhZTVGeGZPSXRLWm0zMjFSRGNpVUZ2anBWTEVTSytxK0FtRUJZRFd0M1NIVkJvSGVjK2JkRjI1d1lQCno3VFlXZEFmK2hDK3RydVpJbUNOd0R0VVl1ZmUzNnRDYVZ4c2hVeW9vZURTMENIaU10RGJWSG81dlVoeHNqRTcKT0VaMm5seksyOFdNWUVRZzdrbjlJUT09Ci0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0KIiwgICAiY2xpZW50X2VtYWlsIjogImZpcmViYXNlLWFkbWluc2RrLTFlNmJ3QG1vamRvbS1kMTc2Ni5pYW0uZ3NlcnZpY2VhY2NvdW50LmNvbSIsICAgImNsaWVudF9pZCI6ICIxMDg4OTc1MjYzMDU4ODkyOTk5MDYiLCAgICJhdXRoX3VyaSI6ICJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20vby9vYXV0aDIvYXV0aCIsICAgInRva2VuX3VyaSI6ICJodHRwczovL29hdXRoMi5nb29nbGVhcGlzLmNvbS90b2tlbiIsICAgImF1dGhfcHJvdmlkZXJfeDUwOV9jZXJ0X3VybCI6ICJodHRwczovL3d3dy5nb29nbGVhcGlzLmNvbS9vYXV0aDIvdjEvY2VydHMiLCAgICJjbGllbnRfeDUwOV9jZXJ0X3VybCI6ICJodHRwczovL3d3dy5nb29nbGVhcGlzLmNvbS9yb2JvdC92MS9tZXRhZGF0YS94NTA5L2ZpcmViYXNlLWFkbWluc2RrLTFlNmJ3JTQwbW9qZG9tLWQxNzY2LmlhbS5nc2VydmljZWFjY291bnQuY29tIiwgICAidW5pdmVyc2VfZG9tYWluIjogImdvb2dsZWFwaXMuY29tIiB9)pKey";
-
-	Json::Value root;
-
-	if (ParseJSon(base64_decode(FCMKeyB64), root))
+	// Check if user has provided FCM configuration fields
+	if (m_FCMClientEmail.empty() || m_FCMPrivateKey.empty() || m_FCMProjectId.empty())
 	{
-		std::string sGAPI_FCM_ProjectID;
-
-		m_GAPI_FCM_issuer = root["client_email"].asString();
-		m_GAPI_FCM_privkey = root["private_key"].asString();
-		sGAPI_FCM_ProjectID = root["project_id"].asString();
-
-		m_GAPI_FCM_PostURL = GAPI_FCM_POST_URL_BASE;
-		stdreplace(m_GAPI_FCM_PostURL, "##PROJECTID##", sGAPI_FCM_ProjectID);
-
-		return true;
+		if (!m_FCMClientEmail.empty() || !m_FCMPrivateKey.empty() || !m_FCMProjectId.empty())
+		{
+			if (m_FCMClientEmail.empty())
+				_log.Log(LOG_STATUS, "FCM: Client Email not configured. Please configure in Settings > Notifications.");
+			if (m_FCMPrivateKey.empty())
+				_log.Log(LOG_STATUS, "FCM: Private Key not configured. Please configure in Settings > Notifications.");
+			if (m_FCMProjectId.empty())
+				_log.Log(LOG_STATUS, "FCM: Project ID not configured. Please configure in Settings > Notifications.");
+		}
+		return false;
 	}
 
-	return false;
+	m_GAPI_FCM_issuer = m_FCMClientEmail;
+	m_GAPI_FCM_privkey = m_FCMPrivateKey;
+
+	if (m_GAPI_FCM_issuer.empty() || m_GAPI_FCM_privkey.empty() || m_FCMProjectId.empty())
+	{
+		_log.Log(LOG_ERROR, "FCM: Invalid configuration - missing required fields (client_email, private_key, or project_id)");
+		return false;
+	}
+
+	m_GAPI_FCM_PostURL = GAPI_FCM_POST_URL_BASE;
+	stdreplace(m_GAPI_FCM_PostURL, "##PROJECTID##", m_FCMProjectId);
+
+	return true;
 }
 
 bool CNotificationFCM::SendMessageImplementation(
@@ -220,7 +232,7 @@ bool CNotificationFCM::SendMessageImplementation(
 				if (!root["error"].empty())
 				{
 					Json::Value jsonError = root["error"];
-					_log.Log(LOG_ERROR, "FCM: Could not send message! Errorcode %d (%s)", jsonError["code"].asInt(), jsonError["message"].asCString());
+					_log.Log(LOG_ERROR, "FCM: Could not send message for device (%s)! Errorcode %d (%s)", mobileDevice[2].c_str(), jsonError["code"].asInt(), jsonError["message"].asCString());
 				}
 				else
 				{

@@ -70,15 +70,14 @@ void CDomoticzHardwareBase::EnableOutputLog(const bool bEnableLog)
 
 void CDomoticzHardwareBase::StartHeartbeatThread()
 {
-	StartHeartbeatThread("Domoticz_HBWork");
+	StartHeartbeatThread(std::string("Domoticz_" + m_Name + "_HBWork").c_str());
 }
 
-void CDomoticzHardwareBase::StartHeartbeatThread(const char* ThreadName)
+void CDomoticzHardwareBase::StartHeartbeatThread(const std::string& szThreadName)
 {
 	m_Heartbeatthread = std::make_shared<std::thread>([this] { Do_Heartbeat_Work(); });
-	SetThreadName(m_Heartbeatthread->native_handle(), ThreadName);
+	SetThreadName(m_Heartbeatthread->native_handle(), szThreadName.c_str());
 }
-
 
 void CDomoticzHardwareBase::StopHeartbeatThread()
 {
@@ -94,19 +93,9 @@ void CDomoticzHardwareBase::StopHeartbeatThread()
 
 void CDomoticzHardwareBase::Do_Heartbeat_Work()
 {
-	int secCounter = 0;
-	int hbCounter = 0;
-	while (!IsStopRequested(200))
+	while (!IsStopRequested(12 * 1000))
 	{
-		secCounter++;
-		if (secCounter == 5)
-		{
-			secCounter = 0;
-			hbCounter++;
-			if (hbCounter % 12 == 0) {
-				mytime(&m_LastHeartbeat);
-			}
-		}
+		mytime(&m_LastHeartbeat);
 	}
 }
 
@@ -309,7 +298,7 @@ void CDomoticzHardwareBase::SendTempBaroSensor(const uint8_t NodeID, const int B
 	sDecodeRXMessage(this, (const unsigned char *)&tsensor, defaultname.c_str(), BatteryLevel, nullptr);
 }
 
-void CDomoticzHardwareBase::SendSetPointSensor(const uint8_t ID1, const uint8_t ID2, const uint8_t ID3, const uint8_t ID4, const uint8_t Unit, const float Value, const std::string& defaultname)
+void CDomoticzHardwareBase::SendSetPointSensor(const uint8_t ID1, const uint8_t ID2, const uint8_t ID3, const uint8_t ID4, const uint8_t Unit, const int BatteryLevel, const float Value, const std::string& defaultname)
 {
 	_tSetpoint setpoint;
 	setpoint.subtype = sTypeSetpoint;
@@ -319,6 +308,7 @@ void CDomoticzHardwareBase::SendSetPointSensor(const uint8_t ID1, const uint8_t 
 	setpoint.id4 = ID4;
 	setpoint.dunit = Unit;
 	setpoint.value = Value;
+	setpoint.battery_level = BatteryLevel;
 	sDecodeRXMessage(this, (const unsigned char *)&setpoint, defaultname.c_str(), -1, nullptr);
 }
 
@@ -501,7 +491,7 @@ bool CDomoticzHardwareBase::GetWindSensorValue(const int NodeID, int& WindDir, f
 	return bExists;
 }
 
-void CDomoticzHardwareBase::SendWattMeter(const uint8_t NodeID, const uint8_t ChildID, const int BatteryLevel, const float musage, const std::string& defaultname, const int RssiLevel /* =12 */)
+void CDomoticzHardwareBase::SendWattMeter(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const float musage, const std::string& defaultname, const int RssiLevel /* =12 */)
 {
 	if ((musage < -m_sql.m_max_kwh_usage) || (musage > m_sql.m_max_kwh_usage))
 	{
@@ -510,10 +500,11 @@ void CDomoticzHardwareBase::SendWattMeter(const uint8_t NodeID, const uint8_t Ch
 		return;
 	}
 	_tUsageMeter umeter;
-	umeter.id1 = 0;
-	umeter.id2 = 0;
-	umeter.id3 = 0;
-	umeter.id4 = NodeID;
+
+	umeter.id1 = (uint8_t)((NodeID & 0xFF000000) >> 24);
+	umeter.id2 = (uint8_t)((NodeID & 0xFF0000) >> 16);
+	umeter.id3 = (uint8_t)((NodeID & 0xFF00) >> 8);
+	umeter.id4 = (uint8_t)NodeID & 0xFF;
 	umeter.dunit = ChildID;
 	umeter.rssi = RssiLevel;
 	umeter.fusage = musage;
@@ -770,17 +761,17 @@ void CDomoticzHardwareBase::SendCurrentSensor(const int NodeID, const int Batter
 
 	int at10 = ground(std::abs(Current1 * 10.0F));
 	tsen.CURRENT.ch1h = (BYTE)(at10 / 256);
-	at10 -= (tsen.TEMP.temperatureh * 256);
+	at10 -= (tsen.CURRENT.ch1h * 256);
 	tsen.CURRENT.ch1l = (BYTE)(at10);
 
 	at10 = ground(std::abs(Current2 * 10.0F));
 	tsen.CURRENT.ch2h = (BYTE)(at10 / 256);
-	at10 -= (tsen.TEMP.temperatureh * 256);
+	at10 -= (tsen.CURRENT.ch2h * 256);
 	tsen.CURRENT.ch2l = (BYTE)(at10);
 
 	at10 = ground(std::abs(Current3 * 10.0F));
 	tsen.CURRENT.ch3h = (BYTE)(at10 / 256);
-	at10 -= (tsen.TEMP.temperatureh * 256);
+	at10 -= (tsen.CURRENT.ch3h * 256);
 	tsen.CURRENT.ch3l = (BYTE)(at10);
 
 	sDecodeRXMessage(this, (const unsigned char *)&tsen.CURRENT, defaultname.c_str(), BatteryLevel, nullptr);
@@ -1049,7 +1040,7 @@ void CDomoticzHardwareBase::SendSelectorSwitch(const int NodeID, const uint8_t C
 {
 	/*if (std::size_t index = LevelActions.find(sValue) == std::string::npos)
 	{ 
-	   Log(LOG_ERROR,"Value %s not supported by Selector Switch %s, it needs %s ",sValue.c_str() , defaultname.c_str(), LevelActions.c_str() ); 
+	   Log(LOG_ERROR,"Value %s not supported by Selector Switch %s, it needs %s",sValue.c_str() , defaultname.c_str(), LevelActions.c_str() ); 
 	   return; // did not find sValue in LevelAction string so exit with warning
 	}*/
 
@@ -1166,7 +1157,7 @@ int CDomoticzHardwareBase::MigrateSelectorSwitch(const int NodeID, const uint8_t
  *
  * @param  {int} NodeID              : As normal, device ID
  * @param  {uint8_t} ChildID         : As normal, device unit code
- * @param  {_eSwitchType} switchtype : Blind switch type (STYPE_Blinds, STYPE_BlindsPercentage, STYPE_VenetianBlindsUS, STYPE_VenetianBlindsEU or STYPE_BlindsPercentageWithStop)
+ * @param  {_eSwitchType} switchtype : Blind switch type (STYPE_Blinds, STYPE_BlindsPercentage, STYPE_VenetianBlindsUS, STYPE_VenetianBlindsEU or STYPE_BlindsPercentageWithStop, or STYPE_BlindsWithStop)
  * @param  {bool} bDeviceUsed        : true : device appeard on switches screen
  * @param  {bool} bReversePosition   : true : reverse slider position
  * @param  {bool} bReverseState      : true : reverse Open/Closed state
@@ -1179,7 +1170,14 @@ int CDomoticzHardwareBase::MigrateSelectorSwitch(const int NodeID, const uint8_t
  */
 void CDomoticzHardwareBase::CreateBlindSwitch(int NodeID, uint8_t ChildID, _eSwitchType switchtype, bool bDeviceUsed, bool bReversePosition, bool bReverseState, uint8_t cmnd, uint8_t level, const std::string &defaultName, const std::string &userName, int32_t batteryLevel, uint8_t rssiLevel)
 {
-	if (switchtype != STYPE_Blinds && switchtype != STYPE_BlindsPercentage && switchtype != STYPE_VenetianBlindsUS && switchtype != STYPE_VenetianBlindsEU && switchtype != STYPE_BlindsPercentageWithStop)
+	if (
+		switchtype != STYPE_Blinds
+		&& switchtype != STYPE_BlindsWithStop
+		&& switchtype != STYPE_BlindsPercentage
+		&& switchtype != STYPE_VenetianBlindsUS
+		&& switchtype != STYPE_VenetianBlindsEU
+		&& switchtype != STYPE_BlindsPercentageWithStop
+		)
 	{
 	   Log(LOG_ERROR, "Node %08X (%s), invalid switch type %u", NodeID, defaultName.c_str(), uint32_t(switchtype));
 	   return;

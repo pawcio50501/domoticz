@@ -19,7 +19,7 @@ define(['app', 'log/Chart', 'log/CounterLogParams', 'log/CounterLogEnergySeriesS
                     plotOptions: {
                     },
                     tooltip: {
-						headerFormat: '{point.x:%A, %B %d, %Y %H:00}<br/>',
+						headerFormat: '{point.x:%A, %B %d, %Y %H:%M}<br/>',
                         outside: true,
 						crosshairs: true,
 						shared: true,
@@ -85,7 +85,6 @@ define(['app', 'log/Chart', 'log/CounterLogParams', 'log/CounterLogEnergySeriesS
                         title: {
                             text: $.t('Power') + ' (' + chart.valueUnits.power(chart.valueMultipliers.m1) + ')'
                         },
-                        min: 0,
                         opposite: true
                     }
                 ];

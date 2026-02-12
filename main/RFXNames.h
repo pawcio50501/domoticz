@@ -24,8 +24,9 @@ enum _eSwitchType
 	STYPE_DoorLock = 19,
 	STYPE_DoorLockInverted = 20,
 	STYPE_BlindsPercentageWithStop = 21,
+	STYPE_BlindsWithStop = 22,
 
-	STYPE_END = STYPE_BlindsPercentageWithStop + 1 //always set this to highest numer + 1
+	STYPE_END = STYPE_BlindsWithStop + 1 //always set this to highest numer + 1
 };
 
 enum _eMeterType
@@ -147,7 +148,7 @@ enum _eHardwareTypes {
 	HTYPE_KMTronic433,			//50
 	HTYPE_Pinger,				//51
 	HTYPE_NEST,					//52
-	HTYPE_THERMOSMART,			//53
+	HTYPE_NOT_USED,				//53
 	HTYPE_Netatmo,				//54
 	HTYPE_Kodi,					//55
 	HTYPE_ANNATHERMOSTAT,		//56
@@ -231,6 +232,7 @@ enum _eNotificationTypes
 	NTYPE_TEMPERATURE = 0,
 	NTYPE_HUMIDITY,
 	NTYPE_RAIN,
+	NTYPE_RAINRATE,
 	NTYPE_UV,
 	NTYPE_WIND,
 	NTYPE_USAGE,

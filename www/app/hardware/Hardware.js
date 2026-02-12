@@ -11,6 +11,7 @@ define(['app'], function (app) {
 		'The Things Network (MQTT/CayenneLPP) with LAN interface': ['MQTTParams', 2],
 		'MQTT Auto Discovery Client Gateway with LAN interface': ['MQTTParams', 3],
 		'RFLink Gateway MQTT': ['MQTTParams', 4],
+		'Tado Thermostat': 'TadoParams',
 	};
 
 	app.controller('HardwareController', function ($scope, $rootScope, $timeout, $http) {
@@ -481,6 +482,10 @@ define(['app'], function (app) {
 
 				if (text.indexOf("Denkovi") >= 0) {
 					Mode1 = $("#hardwarecontent #divmodeldenkoviusbdevices #combomodeldenkoviusbdevices option:selected").val();
+				}
+
+				if (text.indexOf("EnOcean") >= 0 && text.indexOf("(ESP3)") >= 0) {
+					Mode1 = $("#hardwarecontent #divenocean #usebaseid").prop("checked") ? 1 : 0;
 				}
 
 				if (text.indexOf("USBtin") >= 0) {
@@ -1209,7 +1214,7 @@ define(['app'], function (app) {
 			}
 			else if (text.indexOf("Toon") >= 0) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				var agreement = $("#hardwarecontent #divenecotoon #agreement").val();
 				$.ajax({
 					url: "json.htm?type=command&param=updatehardware&htype=" + hardwaretype +
@@ -1233,7 +1238,7 @@ define(['app'], function (app) {
 			}
 			else if (text.indexOf("Tesla") >= 0) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				var vinnr = $("#hardwarecontent #divtesla #vinnr").val();
 				var apikey = $("#hardwarecontent #divtesla #apikey").val();
 				var activeinterval = parseInt($("#hardwarecontent #divtesla #activeinterval").val());
@@ -1274,7 +1279,7 @@ define(['app'], function (app) {
 			}
 			else if (text.indexOf("Mercedes") >= 0) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				var vinnr = $("#hardwarecontent #divmercedes #vinnr").val();
 				var activeinterval = parseInt($("#hardwarecontent #divmercedes #activeinterval").val());
 				if (activeinterval < 1) {
@@ -1312,12 +1317,10 @@ define(['app'], function (app) {
 				(text.indexOf("ICY") >= 0) ||
 				(text.indexOf("Atag") >= 0) ||
 				(text.indexOf("Nest Th") >= 0 && text.indexOf("OAuth") === -1) ||
-				(text.indexOf("PVOutput") >= 0) ||
-				(text.indexOf("Thermosmart") >= 0) ||
-				(text.indexOf("Tado") >= 0)
+				(text.indexOf("PVOutput") >= 0)
 			) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				$.ajax({
 					url: "json.htm?type=command&param=updatehardware&htype=" + hardwaretype +
 					"&loglevel=" + logLevel +
@@ -1438,6 +1441,8 @@ define(['app'], function (app) {
 				var clientid = $("#hardwarecontent #divnetatmo #clientid").val();
 				var clientsecret = $("#hardwarecontent #divnetatmo #clientsecret").val();
 				var scope = $("#hardwarecontent #divnetatmo #scope").val();
+				var refreshtoken = (typeof $scope.refreshToken == 'undefined' ? "" : $scope.refreshToken);
+				var accesstoken = (typeof $scope.refreshToken == 'undefined' ? "" : $scope.refreshToken);
 
 				if (clientid == "" || clientsecret == "") {
 					alert("Please enter a valid client ID and secret for your app from the Netatmo website!");
@@ -1456,7 +1461,7 @@ define(['app'], function (app) {
 					"&password=" + encodeURIComponent(scope) +
 					"&enabled=" + bEnabled +
 					"&idx=" + idx +
-					"&extra=" + encodeURIComponent($scope.refreshToken) +
+					"&extra=" + encodeURIComponent(refreshtoken) +
 					"&datatimeout=" + datatimeout +
 					"&Mode1=" + $scope.loginRequired + "&Mode2=" + Mode2 + "&Mode3=" + Mode3 + "&Mode4=" + Mode4 + "&Mode5=" + Mode5 + "&Mode6=" + Mode6,
 					async: false,
@@ -1557,7 +1562,7 @@ define(['app'], function (app) {
 			}
 			else if (text.indexOf("Evohome via Web") >= 0) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 
 				var Pollseconds = parseInt($("#hardwarecontent #divevohomeweb #updatefrequencyevohomeweb").val());
 				if ( Pollseconds < 10 ) {
@@ -1635,7 +1640,7 @@ define(['app'], function (app) {
 				}
 
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				$.ajax({
 					url: "json.htm?type=command&param=updatehardware&htype=" + hardwaretype +
 					"&loglevel=" + logLevel +
@@ -2110,6 +2115,10 @@ define(['app'], function (app) {
 					Mode1 = $("#hardwarecontent #divmodeldenkoviusbdevices #combomodeldenkoviusbdevices option:selected").val();
 				}
 
+				if (text.indexOf("EnOcean") >= 0 && text.indexOf("(ESP3)") >= 0) {
+					Mode1 = $("#hardwarecontent #divenocean #usebaseid").prop("checked") ? 1 : 0;
+				}
+
 				$.ajax({
 					url: "json.htm?type=command&param=addhardware&htype=" + hardwaretype +
 					"&loglevel=" + logLevel +
@@ -2400,7 +2409,7 @@ define(['app'], function (app) {
 					return;
 				}
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				var extra = "";
 				var Mode1 = "";
 				var Mode2 = "";
@@ -2743,6 +2752,7 @@ define(['app'], function (app) {
 				var clientid = $("#hardwarecontent #divnetatmo #clientid").val();
 				var clientsecret = $("#hardwarecontent #divnetatmo #clientsecret").val();
 				var scope = $("#hardwarecontent #divnetatmo #scope").val();
+				var refreshtoken = (typeof $scope.refreshToken == 'undefined' ? "" : $scope.refreshToken);
 
 				if (clientid == "" || clientsecret == "") {
 					alert("Please enter a valid client ID and secret for your app from the Netatmo website!");
@@ -2753,7 +2763,7 @@ define(['app'], function (app) {
 					return;
 				}
 
-				if (typeof $scope.refreshToken == 'undefined' || $scope.refreshToken == "") {
+				if (refreshtoken == "") {
 					alert("Please login before adding a new Netatmo device");
 					return;
 				}
@@ -2839,7 +2849,7 @@ define(['app'], function (app) {
 			}
 			else if (text.indexOf("Toon") >= 0) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				var agreement = encodeURIComponent($("#hardwarecontent #divenecotoon #agreement").val());
 				$.ajax({
 					url: "json.htm?type=command&param=addhardware&htype=" + hardwaretype +
@@ -2862,7 +2872,7 @@ define(['app'], function (app) {
 			}
 			else if (text.indexOf("Tesla") >= 0) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				var vinnr = encodeURIComponent($("#hardwarecontent #divtesla #vinnr").val());
 				var apikey = $("#hardwarecontent #divtesla #apikey").val();
 				var activeinterval = parseInt($("#hardwarecontent #divtesla #activeinterval").val());
@@ -2902,7 +2912,7 @@ define(['app'], function (app) {
 			}
 			else if (text.indexOf("Mercedes") >= 0) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				var vinnr = encodeURIComponent($("#hardwarecontent #divmercedes #vinnr").val());
 				var activeinterval = parseInt($("#hardwarecontent #divmercedes #activeinterval").val());
 				if (activeinterval < 1) {
@@ -2940,12 +2950,10 @@ define(['app'], function (app) {
 				(text.indexOf("Atag") >= 0) ||
 				(text.indexOf("Nest Th") >= 0 && text.indexOf("OAuth") === -1) ||
 				(text.indexOf("PVOutput") >= 0) ||
-				(text.indexOf("Thermosmart") >= 0) ||
-				(text.indexOf("Tado") >= 0) ||
 				(text.indexOf("HTTP") >= 0)
 			) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				$.ajax({
 					url: "json.htm?type=command&param=addhardware&htype=" + hardwaretype +
 					"&loglevel=" + logLevel +
@@ -2966,7 +2974,7 @@ define(['app'], function (app) {
 			}
 			else if (text.indexOf("Evohome via Web") >= 0) {
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 				var Pollseconds = parseInt($("#hardwarecontent #divevohomeweb #updatefrequencyevohomeweb").val());
 				if ( Pollseconds < 10 ) {
 					Pollseconds = 60;
@@ -3027,7 +3035,7 @@ define(['app'], function (app) {
 				}
 
 				var username = $("#hardwarecontent #divlogin #username").val();
-				var password = encodeURIComponent($("#hardwarecontent #divlogin #password").val());
+				var password = $("#hardwarecontent #divlogin #password").val();
 
 				$.ajax({
 					url: "json.htm?type=command&param=addhardware&htype=" + hardwaretype +
@@ -3922,16 +3930,16 @@ define(['app'], function (app) {
 
 		EnableUpdateAndDeleteButtons = function (enableFlag,hrefUpdate = "", hrefDelete = "") {
 			if (enableFlag){
-				$('#updelclr #hardwareupdate').attr("class", "btnstyle3");
 				$("#updelclr #hardwareupdate").attr("href", hrefUpdate);
-				$('#updelclr #hardwaredelete').attr("class", "btnstyle3");
 				$("#updelclr #hardwaredelete").attr("href", hrefDelete);
+				$('#updelclr #hardwareupdate').show();
+				$('#updelclr #hardwaredelete').show();
 			}
 			else {
-				$('#updelclr #hardwareupdate').attr("class", "btnstyle3-dis");
 				$("#updelclr #hardwareupdate").removeAttr("href");
-				$('#updelclr #hardwaredelete').attr("class", "btnstyle3-dis");
 				$("#updelclr #hardwaredelete").removeAttr("href");
+				$('#updelclr #hardwareupdate').hide();
+				$('#updelclr #hardwaredelete').hide();
 			}
 		}
 
@@ -4057,7 +4065,7 @@ define(['app'], function (app) {
 								HwTypeStr += '<br>Version: ' + item.version;
 								HwTypeStr += ' ' + hardwareSetupLink;
 							}
-							else if ((HwTypeStr.indexOf("OpenTherm") >= 0) || (HwTypeStr.indexOf("Thermosmart") >= 0)) {
+							else if (HwTypeStr.indexOf("OpenTherm") >= 0) {
 								HwTypeStr += '<br>Version: ' + item.version;
 								HwTypeStr += ' <span class="label label-info lcursor" onclick="EditOpenTherm(' + item.idx + ',\'' + item.Name + '\',' + item.Mode1 + ',' + item.Mode2 + ',' + item.Mode3 + ',' + item.Mode4 + ',' + item.Mode5 + ',' + item.Mode6 + ');">' + $.t("Setup") + '</span>';
 							}
@@ -4367,6 +4375,8 @@ define(['app'], function (app) {
 
 							} else if (data["Type"].indexOf("Denkovi") >= 0) {
 								$("#hardwarecontent #divmodeldenkoviusbdevices #combomodeldenkoviusbdevices").val(data["Mode1"]);
+							} else if (data["Type"].indexOf("EnOcean") >= 0 && data["Type"].indexOf("(ESP3)") >= 0) {
+								$("#hardwarecontent #divenocean #usebaseid").prop("checked", data["Mode1"] > 0 );
 							}
 						}
 						else if ((((data["Type"].indexOf("LAN") >= 0) || (data["Type"].indexOf("Eco Devices") >= 0) || data["Type"].indexOf("MySensors Gateway with MQTT") >= 0 || data["Type"].indexOf("RFLink Gateway MQTT") >= 0) &&
@@ -4613,7 +4623,7 @@ define(['app'], function (app) {
 						else if (data["Type"].indexOf("Netatmo") >= 0) {
 
 							var splittedUserName = data["Username"].split(":");
-							var scopes = data["Password"];;
+							var scopes = data["Password"];
 
 							if (scopes.indexOf("_") > 0) 	// Old or new format?
 								scopes = scopes.split(",");	// New format: This field contains one or more scopes
@@ -4624,6 +4634,7 @@ define(['app'], function (app) {
 							$("#hardwarecontent #hardwareparamsnetatmo #clientid").val(splittedUserName[0]);
 							$("#hardwarecontent #hardwareparamsnetatmo #clientsecret").val(splittedUserName[1]);
 							$("#hardwarecontent #hardwareparamsnetatmo #scope").val(scopes);
+
 							$("#hardwarecontent #hardwareparamsnetatmo #netatmologin").off("click");
 							$("#hardwarecontent #hardwareparamsnetatmo #netatmologin").on("click", function(){javascript:OnNetatmoLogin(idx)});
 							EnableNetatmoLoginButton (false);
@@ -4686,8 +4697,6 @@ define(['app'], function (app) {
 							(data["Type"].indexOf("MySensors Gateway with MQTT") >= 0) ||
 							(data["Type"].indexOf("Netatmo") >= 0) ||
 							(data["Type"].indexOf("HTTP") >= 0) ||
-							(data["Type"].indexOf("Thermosmart") >= 0) ||
-							(data["Type"].indexOf("Tado") >= 0) ||
 							(data["Type"].indexOf("Tesla") >= 0) ||
 							(data["Type"].indexOf("Mercedes") >= 0) ||
 							(data["Type"].indexOf("Logitech Media Server") >= 0) ||
@@ -4754,20 +4763,22 @@ define(['app'], function (app) {
 		}
 
 		expandScope = function (scopeArray, separator) {
+			//Netatmo Scopes
 			var scopeGroups = { 
-				station_R :			'read_station',
-				thermostat_RW :			'read_thermostat write_thermostat',
-				camera_RWA :			'read_camera write_camera access_camera',
-				doorbell_RA :			'read_doorbell access_doorbell',
-				presence_RWA :			'read_presence write_presence access_presence',
+				station_R :					'read_station',
+				thermostat_RW :				'read_thermostat write_thermostat',
+				camera_RWA :				'read_camera write_camera access_camera',
+				doorbell_RA :				'read_doorbell access_doorbell',
+				presence_RWA :				'read_presence write_presence access_presence',
 				carbonmonoxidedetector_R :	'read_carbonmonoxidedetector',
-				smokedetector_R :		'read_smokedetector',
-				homecoach_R :			'read_homecoach',
-				magellan_RW :			'read_magellan write_magellan',
-				bubendorff_RW :			'read_bubendorff write_bubendorff',
-				smarther_RW :			'read_smarther write_smarther',
-				mx_RW :				'read_mx write_mx',
-				mhs1_RW :			'read_mhs1 write_mhs1'
+				smokedetector_R :			'read_smokedetector',
+				homecoach_R :				'read_homecoach',
+				magellan_RW :				'read_magellan write_magellan',
+				bubendorff_RW :				'read_bubendorff write_bubendorff',
+				smarther_RW :				'read_smarther write_smarther',
+				mx_RW :						'read_mx write_mx',
+				mhs1_RW :					'read_mhs1 write_mhs1',
+				camerapro_RWA :				'read_camerapro write_camerapro access_camerapro'
 			};
 
 			var result = "";
@@ -4870,24 +4881,25 @@ define(['app'], function (app) {
 
 								const parsedJsonData = JSON.parse(data);
 								$scope.refreshToken = parsedJsonData.refresh_token;
+								$scope.accessToken  = parsedJsonData.access_token;
 								if ($scope.refreshToken == "") {
 									alert('Access denied: Failed to receive a valid token from server: ' + decodeJsonValues(xhr.responseText), ', ');
 									console.log('Error: Access denied: Failed to receive a valid token from server: ' + data);
-									$scope.loginRequired = true; //Still need to login
+									$scope.loginRequired = true;     //Still need to login
 								}
 								else
-									$scope.loginRequired = false //Login done: Notify server
+									$scope.loginRequired = false     //Login done: Notify server
 							} else {
 								alert('Access denied: Failed to receive a valid reponse from server (' + xhr.status + "): " + decodeJsonValues(xhr.responseText), ', ');
 								console.log(`Error: Access denied: Failed to receive a valid reponse from server:  ${xhr.status}`);
-								$scope.loginRequired = true; //Still need to login
+								$scope.loginRequired = true;             //Still need to login
 							}
 							var href = $("#updelclr #hardwareupdate").attr("href");
 							if (typeof href == 'undefined') {
-								AddHardware ();	//Is Selected device, update
+								AddHardware ();	                         //Is not a selected device. so must be new
 							}
 							else
-								UpdateHardware (idx, 0, 0, 0, 0, 0, 0);	//Is not a selected device. so must be new
+								UpdateHardware (idx, 0, 0, 0, 0, 0, 0);	 //Is Selected device, update
 						}
 
 						var body = "grant_type=authorization_code"
@@ -5060,12 +5072,14 @@ define(['app'], function (app) {
 			$("#hardwarecontent #divremote").hide();
 			$("#hardwarecontent #divlogin").hide();
 			$("#hardwarecontent #divhttppoller").hide();
+			$("#hardwarecontent #divenocean").hide();
 
 			// Handle plugins 1st because all the text indexof logic below will have unpredictable impacts for plugins
 			// Python Plugins have the plugin name, not the hardware type id, as the value
 			if (!$.isNumeric($("#hardwarecontent #hardwareparamstable #combotype option:selected").val())) {
 				$("#hardwarecontent #extrahw").val("");
 				$("#hardwarecontent #divextrahwparams").empty();
+				$("#hardwarecontent #divextrahwparams").hide();
 				$("#hardwarecontent #divpythonplugin .plugin").hide();
 				var plugin = $("#hardwarecontent #hardwareparamstable #combotype option:selected").attr("id");
 				$("#hardwarecontent #divpythonplugin .plugin").each(function () { if ($(this).attr("id") === plugin) $(this).show(); });
@@ -5075,10 +5089,12 @@ define(['app'], function (app) {
 
 			if (extraHWTable[text]) {
 				loadExtraHWCode(extraHWTable[text], data);
+				$("#hardwarecontent #divextrahwparams").show();
 				return;
 			} else {
 				$("#hardwarecontent #extrahw").val("");
 				$("#hardwarecontent #divextrahwparams").empty();
+				$("#hardwarecontent #divextrahwparams").hide();
 			}
 
 			if (text.indexOf("eHouse") >= 0) {
@@ -5128,6 +5144,9 @@ define(['app'], function (app) {
 				}
 				if (text.indexOf("Denkovi") >= 0) {
 					$("#hardwarecontent #divmodeldenkoviusbdevices").show();
+				}
+				if (text.indexOf("EnOcean") >= 0 && text.indexOf("(ESP3)") >= 0) {
+					$("#hardwarecontent #divenocean").show();
 				}
 				$("#hardwarecontent #divserial").show();
 			}
@@ -5269,9 +5288,7 @@ define(['app'], function (app) {
 				(text.indexOf("ICY") >= 0) ||
 				(text.indexOf("Atag") >= 0) ||
 				(text.indexOf("Nest Th") >= 0 && text.indexOf("OAuth") === -1) ||
-				(text.indexOf("PVOutput") >= 0) ||
-				(text.indexOf("Thermosmart") >= 0) ||
-				(text.indexOf("Tado") >= 0)
+				(text.indexOf("PVOutput") >= 0)
 			) {
 				$("#hardwarecontent #divlogin").show();
 			}
@@ -5395,6 +5412,12 @@ define(['app'], function (app) {
 				"oTableTools": {
 					"sRowSelect": "single",
 				},
+				columnDefs: [
+					{
+					targets: 1, // first column (0-based index)
+					render: $.fn.dataTable.render.text()
+					}
+				],
 				"aaSorting": [[0, "desc"]],
 				"bSortClasses": false,
 				"bProcessing": true,
