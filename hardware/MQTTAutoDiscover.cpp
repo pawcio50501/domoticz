@@ -2156,35 +2156,66 @@ bool MQTTAutoDiscover::GuessSensorTypeValue(_tMQTTASensor* pSensor, uint8_t& dev
 		|| (szUnit == "wm")
 		)
 	{
-		if (pSensor->last_value.empty())
-			return false;
-
 		devType = pTypeGeneral;
 		subType = sTypeKwh;
 
-		double multiply = 1000.0F;
+		double fUsage = 0;
+		double multiply = 1000.0;
 
 		if (szUnit == "wh")
 			multiply = 1.0;
 		else if (szUnit == "wm")
 			multiply = 1.0 / 60.0;
 
-		bool bTotalIncreasing = (pSensor->state_class == "total_increasing");
+		double dkWh = atof(pSensor->last_value.c_str()) * multiply;
 
-		double dkWh = atof(pSensor->last_value.c_str());
+		// Log(LOG_ERROR, "[PK] dkWh %lf", dkWh);
 
-		if (bTotalIncreasing)
+		// Zero could be the first ever value received.
+		// Or it could also be that the middleware sends 0 when it has not received it before
+		if (dkWh == 0 || pSensor->state_class == "total_increasing")
 		{
-			dkWh = m_kwh_counter_helper[pSensor->unique_id].CheckTotalCounter(this, pSensor->unique_id, 1, dkWh);
+			double dPrevkWh = pSensor->prev_value;
+
+			// Log(LOG_ERROR, "[PK] pSensor->prev_value %lf", pSensor->prev_value);
+			
+			if (!pSensor->last_received != 0)
+			{
+				// Log(LOG_ERROR, "[PK] last_received time");
+				
+				auto result = m_sql.safe_query("SELECT sValue,StrParam1 FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q') AND (Type==%d) AND (Subtype==%d)",
+					m_HwdID, pSensor->unique_id.c_str(), devType, subType);
+				if (!result.empty()) {
+					std::vector<std::string> strarray;
+					StringSplit(result[0][0], ";", strarray);
+					if (strarray.size() == 2)
+						dPrevkWh = atof(strarray[1].c_str());
+
+					// For total_increasing sensors, the epoch is stored in StrParam1
+					//if (!result[0][1].empty())
+					//	pSensor->epoch = atof(result[0][1].c_str());
+				}
+			}
+
+			// GuessSensorTypeValue() is sometimes invoked with empty sValue to do
+			// only what its name implies, nothing more. Do not bump the epoch when
+			// when that happens; just use the previous value.
+			if (dkWh == 0)
+			{
+				// Log(LOG_ERROR, "[PK] use prev value");
+				dkWh = dPrevkWh;
+			}
 		}
 		pSensor->prev_value = dkWh;
-		double dUsage = 0;
+
+		// Log(LOG_ERROR, "[PK] resulting dkWh %lf", dkWh);
+
 		_tMQTTASensor* pWattSensor = get_auto_discovery_sensor_WATT_unit(pSensor);
 		if (pWattSensor && pWattSensor->last_received != 0)
 		{
-			dUsage = atof(pWattSensor->sValue.c_str());
+			fUsage = atof(pWattSensor->sValue.c_str());
 		}
-		sValue = std_format("%.3f;%.3f", dUsage, dkWh * multiply);
+		sValue = std_format("%.3f;%.3f", fUsage, dkWh);
 	}
 	else if (
 		(szUnit == "lx")
