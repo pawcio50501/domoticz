@@ -130,15 +130,15 @@ double CounterHelper::CheckTotalCounter(const double mtotal, bool& bLooped)
 		}
 		// else: counter recovered to expected value, the drop was temporary - no offset needed
 	}
-	else if ((rTotal < m_nLastCounterValue) && (m_nLastCounterValue != 0))
+	/*else if ((rTotal < m_nLastCounterValue) && (m_nLastCounterValue != 0))
 	{
 		// Counter value decreased - potential reset, but wait for next reading to confirm
-		// m_bPendingReset = true;
+		m_bPendingReset = true;
 		m_pendingOffset = m_nLastCounterValue;
 
 		// Return last known good value while waiting for confirmation
 		return m_nLastCounterValue;
-	}
+	}*/
 
 	m_nLastCounterValue = rTotal;
 	return rTotal;
